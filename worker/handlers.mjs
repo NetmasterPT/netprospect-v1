@@ -191,7 +191,9 @@ export function makeFineHandlers(ctx, js) {
       const ex = await client.request(readItems('sites_platforms', { filter: { site: { _eq: job.siteId }, platform: { _eq: pid } }, fields: ['id'], limit: 1 }));
       if (!ex.length) await client.request(createItem('sites_platforms', { site: job.siteId, platform: pid }));
     }
-    await pub(SUBJECTS.score, { domain: job.domain, siteId: job.siteId }, `score:${job.domain}`);
+    // No backfill de cms em massa, NÃO re-scorar por-job (a cascata satura); DOMAIN_HEALTH_SKIP_SCORE
+    // salta e corre-se `score-leads.js` UMA vez no fim (batch). Igual ao ssl/whois.
+    if (!SKIP_DH_SCORE) await pub(SUBJECTS.score, { domain: job.domain, siteId: job.siteId }, `score:${job.domain}`);
     return 'ack';
   }
 

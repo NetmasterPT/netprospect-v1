@@ -188,7 +188,8 @@ services:
     restart: unless-stopped
     command: ['-js', '-sd', '/data']
     ports:
-      - '${NATS_BIND:-127.0.0.1}:4222:4222'
+      - '127.0.0.1:4222:4222'
+      - '${TAILNET_IP}:4222:4222'   # frota (tailnet) — NATS sem auth → NUNCA público
     volumes:
       - ./.data/nats:/data
 
@@ -201,6 +202,7 @@ services:
     command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '128mb', '--maxmemory-policy', 'allkeys-lru']
     ports:
       - '127.0.0.1:6379:6379'
+      - '${TAILNET_IP}:6379:6379'   # telemetria da frota (tailnet)
 
   # MinIO (S3) — snapshots de páginas partilhados entre jobs finos (Fase B) +
   # histórico versionado p/ deteção de mudanças (Fase E). API 9000, consola 9001
@@ -214,6 +216,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
     ports:
       - '127.0.0.1:9000:9000'
+      - '${TAILNET_IP}:9000:9000'   # snapshots p/ os workers da frota (tailnet)
       - '127.0.0.1:9001:9001'
     volumes:
       - ./.data/minio:/data

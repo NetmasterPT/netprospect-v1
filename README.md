@@ -200,6 +200,37 @@ name `netprospect`). It is deliberately separate from Netmaster's *production*
 Directus (project `netmaster-app`, port 8055) — different project name, network,
 volumes and host ports, so the two never collide.
 
+### Deployment topologies
+
+NetProspect runs the **same containers/code** in two shapes — pick by scale:
+
+**A — Single Docker host** *(simplest; the default `docker/docker-compose.yml`)*
+Everything on one box: Postgres, Directus, dashboard, NATS, Redis, MinIO, workers. Great for building
+the corpus and moderate throughput. **Limit:** Postgres shares CPU + disk I/O with the crawlers and
+ClickHouse — measured, **Postgres is ~70 % of the load (~8–9 of 12 cores)** while the workers are cheap
+and network-bound (~1.7 cores). So the DB becomes the ceiling as you add workers.
+
+**B — Dedicated DB host + distributed worker fleet** ⭐ *(recommended at scale)*
+- A **dedicated Proxmox LXC CT (or VM) for Postgres + PgBouncer + Tailscale** — the "fat DB host".
+  Runbook: [`docs/runbook-db-host.md`](docs/runbook-db-host.md).
+- The **app stack** (Directus, dashboard, NATS, Redis, MinIO, `worker-writer`) stays on the Docker host,
+  pointed at the DB host **over the Tailnet**.
+- **Worker VMs** (Docker + Tailscale) spread across a 2nd Proxmox host + free-tier clouds — 1 IP each,
+  so each also carries its own email-verify / WHOIS-RDAP quota. Runbook: [`docs/runbook-worker-vms.md`](docs/runbook-worker-vms.md).
+
+**Why the dedicated DB host is the recommendation:** the load is **~70 % Postgres, which is *central* and
+can't be distributed**; the workers are cheap and *distributable*. So spreading workers alone doesn't
+relieve the bottleneck — separating (and scaling) the DB does. A dedicated host gives Postgres its own
+**cores + local NVMe** (no noisy-neighbour contention with crawlers/ClickHouse), **PgBouncer** multiplexes
+dozens of fleet workers into a bounded connection pool (`A1`), the workers write **direct to Postgres**
+bypassing the Directus REST tax (`A2`), and **Tailscale** keeps it all private (NATS has no auth → tailnet-only).
+A **Proxmox LXC CT** is the sweet spot — **near-native I/O (critical for WAL fsync), ZFS snapshots, easy
+core/RAM pinning**; a dedicated VM is the portable alternative. Scale plan: `.claude/plans/dev/postgres-scaling-and-whois-rdap.md`.
+
+> **Recommended DB-host resources:** **12–16 vCPU · ≥64 GB RAM · local NVMe** (ZFS `recordsize=16K`, `lz4`).
+> Postgres tuned to the RAM (`shared_buffers ~16 GB`, `effective_cache_size ~44 GB`, `synchronous_commit=off`,
+> `wal_compression=on`). Full tuning + a ~10 GB `pg_dump | pg_restore` migration in the runbook above.
+
 ### Services & ports
 
 Every container we run, with its **published host port** (or why it has none). Two

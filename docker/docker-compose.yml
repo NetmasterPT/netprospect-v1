@@ -329,6 +329,9 @@ services:
       ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-10}
       CONTACTS_CONCURRENCY: ${CONTACTS_CONCURRENCY:-5}
       DOMAIN_HEALTH_CONC: ${DOMAIN_HEALTH_CONC:-8}
+      # fingerprint (cms) é CPU/fetch-pesado — concorrência própria (desacoplada). Subir p/ acelerar
+      # o backfill de cms quando há folga de CPU; baixar se saturar. N_workers × este valor = parses.
+      FINGERPRINT_CONC: ${FINGERPRINT_CONC:-4}
       SCORE_CONC: ${SCORE_CONC:-12}
       # Saltar o score recompute por-job do backfill ssl/whois (caminho 2 — drena barato).
       DOMAIN_HEALTH_SKIP_SCORE: ${DOMAIN_HEALTH_SKIP_SCORE:-}

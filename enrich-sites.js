@@ -19,6 +19,8 @@ import { domainToASCII, pathToFileURL } from 'node:url';
 import { getDomain } from 'tldts';
 import { readItems, createItem, updateItem } from '@directus/sdk';
 import { makeClient } from './lib/directus.js';
+// A2+ — hot-path do enrich via upserts PG diretos (contorna o Directus, o gargalo medido).
+import { pgEnabled, pgUpsertSite, pgUpsertCompany, pgEnsurePlatforms } from './lib/pgwrite.js';
 import { makeGeoIP } from './lib/geoip.js';
 import { detectPlatforms, detectCDN, extractLang, extractContacts } from './lib/fingerprints.js';
 import { tldToCountry } from './lib/phone.js';
@@ -265,40 +267,9 @@ export async function upsertSite(client, rec, platformIdBySlug, knownDomains) {
   const gEmail = rec.general_email && rec.general_email.length <= 150 ? rec.general_email : null;
   const gPhone = rec.general_phone && rec.general_phone.length <= 40 ? rec.general_phone : null;
   const coName = clip(rec.name || org, 255);
-  let companyId = null;
-  const foundCo = await client.request(
-    readItems('companies', { filter: { org_domain: { _eq: org } }, fields: ['id', 'name', 'website', 'general_email', 'general_phone', 'country'], limit: 1 })
-  );
-  if (foundCo.length) {
-    // Empresa já existe (outro site do mesmo dono): preenche só os campos vazios.
-    const c = foundCo[0];
-    companyId = c.id;
-    const patch = {};
-    if (!c.name && coName) patch.name = coName;
-    if (!c.website) patch.website = clip(org);
-    if (!c.general_email && gEmail) patch.general_email = gEmail;
-    if (!c.general_phone && gPhone) patch.general_phone = gPhone;
-    if (!c.country && rec.ip_country) patch.country = clip(rec.ip_country, 10);
-    if (Object.keys(patch).length) await client.request(updateItem('companies', companyId, patch));
-  } else {
-    const coPayload = {
-      org_domain: clip(org), name: coName, website: clip(org),
-      general_email: gEmail, general_phone: gPhone, country: clip(rec.ip_country, 10),
-      source: 'website_crawl',
-    };
-    try {
-      companyId = (await client.request(createItem('companies', coPayload))).id;
-    } catch (e) {
-      // Corrida de concorrência: outro worker criou a mesma empresa entretanto.
-      if (!isUniqueErr(e)) throw e;
-      const again = await client.request(readItems('companies', { filter: { org_domain: { _eq: org } }, fields: ['id'], limit: 1 }));
-      if (again.length) companyId = again[0].id;
-      else throw e;
-    }
-  }
-
-  // 2) Site (chaveado por domain)
-  const sitePayload = {
+  const pids = rec.matched.filter((s) => platformIdBySlug[s]).map((s) => platformIdBySlug[s]);
+  // 2) Site (chaveado por domain) — payload parametrizado pelo companyId.
+  const buildSite = (companyId) => ({
     domain: clip(rec.domain),
     hosting_ip: clip(rec.hosting_ip, 45), ptr: clip(rec.ptr), asn: rec.asn, isp: clip(rec.isp),
     ip_country: clip(rec.ip_country, 10), ip_city: clip(rec.ip_city, 120),
@@ -309,7 +280,6 @@ export async function upsertSite(client, rec, platformIdBySlug, knownDomains) {
     primary_platform: rec.primary_slug ? platformIdBySlug[rec.primary_slug] || null : null,
     discovered_via: 'common_crawl',
     checked_at: new Date().toISOString(),
-    // Auditoria barata (Fase 1)
     has_email: rec.has_email, has_phone: rec.has_phone,
     social: rec.social,
     social_facebook: rec.social_facebook, social_instagram: rec.social_instagram,
@@ -321,26 +291,46 @@ export async function upsertSite(client, rec, platformIdBySlug, knownDomains) {
     business_city: clip(rec.business_city, 120), business_region: clip(rec.business_region, 120),
     business_address: clip(rec.business_address),
     cheap_checked_at: new Date().toISOString(),
-  };
-  const foundSite = await client.request(readItems('sites', { filter: { domain: { _eq: rec.domain } }, fields: ['id'], limit: 1 }));
-  let siteId;
-  if (foundSite.length) {
-    siteId = foundSite[0].id;
-    await client.request(updateItem('sites', siteId, sitePayload));
-  } else {
-    siteId = (await client.request(createItem('sites', sitePayload))).id;
-  }
+  });
 
-  // 3) Ligações M2M sites_platforms (só as que faltam)
-  const wantSlugs = rec.matched.filter((s) => platformIdBySlug[s]);
-  if (wantSlugs.length) {
-    const existing = await client.request(readItems('sites_platforms', { filter: { site: { _eq: siteId } }, fields: ['platform'], limit: -1 }));
-    const havePlat = new Set(existing.map((j) => j.platform));
-    for (const slug of wantSlugs) {
-      const pid = platformIdBySlug[slug];
-      if (!havePlat.has(pid)) {
-        await client.request(createItem('sites_platforms', { site: siteId, platform: pid }));
+  let siteId;
+  if (pgEnabled()) {
+    // A2+ — DIRETO no PG (ON CONFLICT): 3 statements, ZERO Directus (o gargalo medido do enrich).
+    const companyId = await pgUpsertCompany({ org_domain: clip(org), name: coName, website: clip(org), general_email: gEmail, general_phone: gPhone, country: clip(rec.ip_country, 10), source: 'website_crawl' });
+    siteId = await pgUpsertSite(buildSite(companyId));
+    await pgEnsurePlatforms(siteId, pids);
+  } else {
+    // --- Caminho Directus (original; fallback com DIRECT_PG_WRITE off) ---
+    let companyId = null;
+    const foundCo = await client.request(
+      readItems('companies', { filter: { org_domain: { _eq: org } }, fields: ['id', 'name', 'website', 'general_email', 'general_phone', 'country'], limit: 1 })
+    );
+    if (foundCo.length) {
+      const c = foundCo[0]; companyId = c.id;
+      const patch = {};
+      if (!c.name && coName) patch.name = coName;
+      if (!c.website) patch.website = clip(org);
+      if (!c.general_email && gEmail) patch.general_email = gEmail;
+      if (!c.general_phone && gPhone) patch.general_phone = gPhone;
+      if (!c.country && rec.ip_country) patch.country = clip(rec.ip_country, 10);
+      if (Object.keys(patch).length) await client.request(updateItem('companies', companyId, patch));
+    } else {
+      const coPayload = { org_domain: clip(org), name: coName, website: clip(org), general_email: gEmail, general_phone: gPhone, country: clip(rec.ip_country, 10), source: 'website_crawl' };
+      try { companyId = (await client.request(createItem('companies', coPayload))).id; }
+      catch (e) {
+        if (!isUniqueErr(e)) throw e;
+        const again = await client.request(readItems('companies', { filter: { org_domain: { _eq: org } }, fields: ['id'], limit: 1 }));
+        if (again.length) companyId = again[0].id; else throw e;
       }
+    }
+    const sitePayload = buildSite(companyId);
+    const foundSite = await client.request(readItems('sites', { filter: { domain: { _eq: rec.domain } }, fields: ['id'], limit: 1 }));
+    if (foundSite.length) { siteId = foundSite[0].id; await client.request(updateItem('sites', siteId, sitePayload)); }
+    else { siteId = (await client.request(createItem('sites', sitePayload))).id; }
+    if (pids.length) {
+      const existing = await client.request(readItems('sites_platforms', { filter: { site: { _eq: siteId } }, fields: ['platform'], limit: -1 }));
+      const havePlat = new Set(existing.map((j) => j.platform));
+      for (const pid of pids) { if (!havePlat.has(pid)) await client.request(createItem('sites_platforms', { site: siteId, platform: pid })); }
     }
   }
 

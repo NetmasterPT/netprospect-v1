@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap">
+<link rel="stylesheet" href="tokens/netprospect.css">
+<script src="_ds/netmaster-design-system-afcc6f5c-433f-4078-8dbe-f97343007c6b/_ds_bundle.js"></script>
+</helmet>
+<dc-import name="Shell" active="directory" hint-size="100%,100%">
+<div style="padding:18px 26px 34px; max-width:1240px;">
+
+  <!-- breadcrumb -->
+  <div style="display:flex; align-items:center; gap:7px; font-size:12px; color:var(--np-text-3); margin-bottom:16px;">
+    <a href="Directory.dc.html" style="color:var(--np-text-3); text-decoration:none;" style-hover="color:var(--np-brand-ink)">Diretório</a>
+    <span style="color:var(--np-text-faint);">/</span>
+    <span style="color:var(--np-text-2); font-weight:600;">padariacentral.pt</span>
+  </div>
+
+  <!-- header -->
+  <div style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); padding:20px 22px; display:flex; align-items:flex-start; justify-content:space-between; gap:20px; flex-wrap:wrap;">
+    <div style="min-width:0;">
+      <div style="display:flex; align-items:center; gap:11px;">
+        <span style="width:11px; height:11px; border-radius:999px; background:var(--np-ok-mark); box-shadow:0 0 0 4px rgba(34,197,94,0.16);"></span>
+        <h1 style="margin:0; font-size:26px; font-weight:800; letter-spacing:-0.02em; color:var(--np-text);">padariacentral.pt</h1>
+        <a href="https://padariacentral.pt" style="display:inline-flex; color:var(--np-text-faint);" style-hover="color:var(--np-brand-ink)">{{ extIcon }}</a>
+      </div>
+      <div style="margin-top:6px; font-size:14px; color:var(--np-text-2);">Padaria Central Lda · Lisboa, Portugal</div>
+      <div style="margin-top:14px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="{{ qual.style }}">{{ qual.icon }}{{ qual.label }}</span>
+        <span style="display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 11px; font-size:12px; font-weight:600; color:var(--np-text-2); background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:999px;"><span style="width:8px; height:8px; border-radius:3px; background:var(--cat-woocommerce);"></span>WooCommerce</span>
+        <span style="display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 11px; font-size:12px; font-weight:600; color:var(--np-ok); background:var(--np-ok-soft); border:1px solid var(--np-ok-soft-bd); border-radius:999px; white-space:nowrap;">{{ powerIcon }}Live · HTTP 200</span>
+        <span style="display:inline-flex; align-items:center; gap:6px; height:26px; padding:0 11px; font-size:12px; font-weight:600; color:var(--np-text-2); background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:999px;">{{ globeIcon }}PT</span>
+      </div>
+    </div>
+    <div style="display:flex; align-items:center; gap:9px;">
+      <button style="display:inline-flex; align-items:center; gap:7px; height:38px; padding:0 14px; border-radius:var(--np-radius); border:1px solid var(--np-border); background:var(--np-surface); color:var(--np-text-2); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;" style-hover="border-color:var(--np-border-2); color:var(--np-text)">{{ downloadIcon }} Exportar</button>
+      <button style="display:inline-flex; align-items:center; gap:7px; height:38px; padding:0 16px; border-radius:var(--np-radius); border:none; background:var(--np-brand-fill); color:#fff; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; box-shadow:var(--np-shadow-brand);" style-hover="background:var(--np-brand-hover)">{{ plusIcon }} Adicionar a segmento</button>
+    </div>
+  </div>
+
+  <!-- two-column body -->
+  <div style="margin-top:16px; display:grid; grid-template-columns:1.55fr 1fr; gap:16px; align-items:start;">
+
+    <!-- LEFT -->
+    <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
+      <!-- hosting -->
+      <section style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); overflow:hidden;">
+        <div style="padding:15px 18px 13px; border-bottom:1px solid var(--np-divider); display:flex; align-items:center; gap:9px;">
+          <span style="display:inline-flex; width:28px; height:28px; border-radius:8px; background:var(--np-brand-soft); color:var(--np-brand); align-items:center; justify-content:center;">{{ serverIcon }}</span>
+          <h2 style="margin:0; font-size:16px; font-weight:800; color:var(--np-text);">Alojamento & infraestrutura</h2>
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--np-border);">
+          <sc-for list="{{ hosting }}" as="h" hint-placeholder-count="6">
+            <div style="background:var(--np-surface); padding:13px 16px;">
+              <div style="font-size:10px; color:var(--np-text-faint); text-transform:uppercase; letter-spacing:0.06em;">{{ h.k }}</div>
+              <div style="margin-top:3px; font-size:13px; font-weight:600; color:var(--np-text); word-break:break-all;">{{ h.v }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <!-- tech + subdomains -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+        <section style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); padding:16px 18px;">
+          <h2 style="margin:0 0 12px; font-size:14px; font-weight:800; color:var(--np-text);">Tech stack detetada</h2>
+          <div style="display:flex; flex-wrap:wrap; gap:7px;">
+            <sc-for list="{{ tech }}" as="t" hint-placeholder-count="5"><span style="font-size:12px; font-weight:600; color:var(--np-text-2); background:var(--np-surface-2); border:1px solid var(--np-border); padding:5px 11px; border-radius:999px;">{{ t }}</span></sc-for>
+          </div>
+        </section>
+        <section style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); padding:16px 18px;">
+          <h2 style="margin:0 0 12px; font-size:14px; font-weight:800; color:var(--np-text);">Subdomínios <span style="color:var(--np-text-faint); font-weight:600;">({{ subCount }})</span></h2>
+          <div style="display:flex; flex-direction:column; gap:7px;">
+            <sc-for list="{{ subdomains }}" as="s" hint-placeholder-count="2"><div style="font-size:12px; font-family:ui-monospace,monospace; color:var(--np-text-2); padding:6px 10px; background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:var(--np-radius-sm);">{{ s }}</div></sc-for>
+          </div>
+        </section>
+      </div>
+
+      <!-- linked sites -->
+      <section style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); padding:16px 18px;">
+        <h2 style="margin:0 0 12px; font-size:14px; font-weight:800; color:var(--np-text);">Sites da mesma empresa</h2>
+        <sc-for list="{{ linked }}" as="l" hint-placeholder-count="2">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid var(--np-divider);">
+            <div style="display:flex; align-items:center; gap:9px;">
+              <span style="width:8px; height:8px; border-radius:999px; background:{{ l.dot }};"></span>
+              <span style="font-size:13px; font-weight:700; color:var(--np-text);">{{ l.domain }}</span>
+              <span style="display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:600; color:var(--np-text-3);"><span style="width:8px; height:8px; border-radius:3px; background:{{ l.pColor }};"></span>{{ l.platform }}</span>
+            </div>
+            <span style="display:inline-flex; color:var(--np-text-faint);">{{ chevRightIcon }}</span>
+          </div>
+        </sc-for>
+      </section>
+    </div>
+
+    <!-- RIGHT -->
+    <div style="display:flex; flex-direction:column; gap:16px; min-width:0;">
+      <!-- outreach -->
+      <section style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); padding:16px 18px;">
+        <h2 style="margin:0 0 12px; font-size:14px; font-weight:800; color:var(--np-text);">Outreach</h2>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:12px;">
+          <sc-for list="{{ outreachSteps }}" as="st" hint-placeholder-count="4"><button onClick="{{ st.onClick }}" style="{{ st.style }}">{{ st.icon }}{{ st.label }}</button></sc-for>
+        </div>
+        <textarea placeholder="Nota interna…" style="width:100%; min-height:80px; resize:vertical; padding:10px 12px; border:1px solid var(--np-border); border-radius:var(--np-radius); background:var(--np-surface-2); color:var(--np-text); font-family:inherit; font-size:13px; outline:none;">Enviado e-mail de apresentação a 06/06. Aguardar resposta da Ana.</textarea>
+      </section>
+
+      <!-- contacts -->
+      <section style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); padding:16px 18px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <h2 style="margin:0; font-size:14px; font-weight:800; color:var(--np-text);">Contactos <span style="color:var(--np-text-faint); font-weight:600;">({{ contactCount }})</span></h2>
+          <button style="display:inline-flex; align-items:center; gap:5px; height:28px; padding:0 10px; border:1px solid var(--np-border); background:var(--np-surface-2); color:var(--np-text-2); border-radius:var(--np-radius-sm); font-family:inherit; font-size:11px; font-weight:700; cursor:pointer;">{{ plusIcon2 }} Enriquecer</button>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:9px;">
+          <sc-for list="{{ contacts }}" as="c" hint-placeholder-count="3">
+            <div style="border:1px solid var(--np-border); border-radius:var(--np-radius); padding:12px; background:var(--np-surface);">
+              <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:8px;">
+                <div style="display:flex; align-items:center; gap:9px; min-width:0;">
+                  <span style="width:32px; height:32px; border-radius:999px; background:var(--np-surface-3); color:var(--np-text-2); font-size:11px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;">{{ c.initials }}</span>
+                  <div style="min-width:0;">
+                    <div style="font-size:13px; font-weight:700; color:var(--np-text);">{{ c.name }}</div>
+                    <span style="{{ c.roleStyle }}">{{ c.role }}</span>
+                  </div>
+                </div>
+                <span style="{{ c.verif.style }}">{{ c.verif.icon }}{{ c.verif.label }}</span>
+              </div>
+              <div style="margin-top:9px; display:flex; flex-direction:column; gap:5px;">
+                <a href="{{ c.mailto }}" style="display:flex; align-items:center; gap:7px; font-size:12px; color:var(--np-text-2); text-decoration:none;" style-hover="color:var(--np-brand-ink)">{{ mailIcon }}<span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ c.email }}</span></a>
+                <sc-if value="{{ c.phone }}" hint-placeholder-val=""><a href="{{ c.tel }}" style="display:flex; align-items:center; gap:7px; font-size:12px; color:var(--np-text-2); text-decoration:none;" style-hover="color:var(--np-brand-ink)">{{ phoneIcon }}{{ c.phone }}</a></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:11px; padding:10px 12px; background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:var(--np-radius); font-size:12px; color:var(--np-text-3); line-height:1.5;">
+          <span style="font-weight:700; color:var(--np-text-2);">Geral:</span><br>geral@padariacentral.pt · +351 21 314 55 20
+        </div>
+      </section>
+
+      <!-- gdpr -->
+      <section style="background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); padding:14px 16px; display:flex; gap:10px;">
+        <span style="display:inline-flex; color:var(--np-text-faint); flex:0 0 auto;">{{ shieldIcon }}</span>
+        <div style="font-size:11px; color:var(--np-text-3); line-height:1.55;">Base legal RGPD: <strong style="color:var(--np-text-2);">interesse legítimo B2B</strong>. Dados recolhidos por <em>crawl + WHOIS</em> em 14/05/2026. Direito ao apagamento disponível a pedido.</div>
+      </section>
+    </div>
+  </div>
+</div>
+</dc-import>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:940}}">
+class Component extends DCLogic {
+  state = { outreach: 'contacted' };
+
+  ic(name, size = 14) {
+    const P = {
+      check: ['M20 6 9 17l-5-5'], power: ['M12 2v10', 'M6.3 6.3a8 8 0 1 0 11.4 0'],
+      globe: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z', 'M2 12h20', 'M12 2a15 15 0 0 1 0 20', 'M12 2a15 15 0 0 0 0 20'],
+      ext: ['M15 3h6v6', 'M10 14 21 3', 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'],
+      download: ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'], plus: ['M12 5v14', 'M5 12h14'],
+      server: ['M4 4h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z', 'M4 14h16a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4a1 1 0 0 1 1-1Z', 'M7 7h.01', 'M7 17h.01'],
+      chevR: ['m9 18 6-6-6-6'], mail: ['M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z', 'm22 7-10 6L2 7'],
+      phone: ['M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z'],
+      shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z'],
+      clock: ['M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0', 'M12 7v5l3 2'], send: ['M22 2 11 13', 'M22 2 15 22l-4-9-9-4 20-7Z'], reply: ['M9 17 4 12l5-5', 'M20 18v-2a4 4 0 0 0-4-4H4'],
+    };
+    const paths = (P[name] || []).map((d, i) => React.createElement('path', { key: i, d }));
+    return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block', flex: '0 0 auto' } }, paths);
+  }
+  badge(color, soft, bd, icon, label, size) {
+    return { style: { display: 'inline-flex', alignItems: 'center', gap: '5px', height: (size || 24) + 'px', padding: '0 10px', fontSize: '11px', fontWeight: 700, color: `var(${color})`, background: `var(${soft})`, border: `1px solid var(${bd})`, borderRadius: '999px', whiteSpace: 'nowrap' }, icon: this.ic(icon, 12), label };
+  }
+  verifBadge(v) {
+    if (v === 'verified') return this.badge('--np-ok', '--np-ok-soft', '--np-ok-soft-bd', 'check', 'Verificado', 22);
+    if (v === 'catchall') return this.badge('--np-warn', '--np-warn-soft', '--np-warn-soft-bd', 'clock', 'Catch-all', 22);
+    if (v === 'role') return this.badge('--np-info', '--np-info-soft', '--np-info-soft-bd', 'globe', 'Role-based', 22);
+    return this.badge('--np-neutral', '--np-neutral-soft', '--np-neutral-soft-bd', 'clock', 'Não verif.', 22);
+  }
+
+  renderVals() {
+    const hosting = [
+      { k: 'IP', v: '51.83.42.19' }, { k: 'PTR', v: 'vps-1a2b.ovh.net' }, { k: 'ASN / ISP', v: 'AS16276 · OVHcloud' },
+      { k: 'Host', v: 'OVHcloud' }, { k: 'Local', v: 'Lisboa, PT' }, { k: 'CDN', v: 'Cloudflare' },
+    ];
+    const tech = ['WooCommerce 8.2', 'WordPress 6.4', 'PHP 8.1', 'MySQL 8', 'MB WAY', 'Multibanco', 'Cloudflare', 'Google Analytics 4'];
+    const contacts = [
+      ['Ana Ferreira', 'CEO', 'ana.ferreira@padariacentral.pt', 'verified', '+351 91 222 33 44'],
+      ['Tiago Sousa', 'Manager', 'tiago@padariacentral.pt', 'role', ''],
+      ['DPO', 'DPO', 'dpo@padariacentral.pt', 'catchall', ''],
+    ].map(([name, role, email, verif, phone]) => ({
+      name, role, email, phone, initials: name.split(' ').map(w => w[0]).slice(0, 2).join(''),
+      mailto: 'mailto:' + email, tel: phone ? 'tel:' + phone.replace(/\s/g, '') : '', verif: this.verifBadge(verif),
+      roleStyle: { display: 'inline-block', marginTop: '2px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--np-text-3)', background: 'var(--np-surface-2)', border: '1px solid var(--np-border)', padding: '1px 7px', borderRadius: '999px' },
+    }));
+    const linked = [
+      { domain: 'padariacentral.com', platform: 'WordPress', pColor: 'var(--cat-wordpress)', dot: 'var(--np-ok-mark)' },
+      { domain: 'encomendas.padariacentral.pt', platform: 'WooCommerce', pColor: 'var(--cat-woocommerce)', dot: 'var(--np-neutral-mark)' },
+    ].map(l => ({ ...l, chevRightIcon: this.ic('chevR', 15) }));
+
+    const outreachSteps = ['new', 'to-contact', 'contacted', 'replied'].map(k => {
+      const labels = { new: 'Novo', 'to-contact': 'A contactar', contacted: 'Contactado', replied: 'Respondeu' };
+      const icons = { new: 'plus', 'to-contact': 'clock', contacted: 'send', replied: 'reply' };
+      const active = this.state.outreach === k;
+      return { label: labels[k], icon: this.ic(icons[k], 12), onClick: () => this.setState({ outreach: k }),
+        style: { display: 'inline-flex', alignItems: 'center', gap: '5px', flex: 1, justifyContent: 'center', height: '36px', padding: '0 4px', borderRadius: 'var(--np-radius-sm)', border: `1px solid ${active ? 'var(--np-brand-soft-bd)' : 'var(--np-border)'}`, background: active ? 'var(--np-brand-soft)' : 'var(--np-surface-2)', color: active ? 'var(--np-brand-ink)' : 'var(--np-text-3)', fontFamily: 'inherit', fontSize: '11px', fontWeight: 700, cursor: 'pointer' } };
+    });
+
+    return {
+      qual: this.badge('--np-ok', '--np-ok-soft', '--np-ok-soft-bd', 'check', 'Qualificado', 26),
+      extIcon: this.ic('ext', 16), powerIcon: this.ic('power', 12), globeIcon: this.ic('globe', 12),
+      downloadIcon: this.ic('download', 15), plusIcon: this.ic('plus', 14), plusIcon2: this.ic('plus', 12),
+      serverIcon: this.ic('server', 16), chevRightIcon: this.ic('chevR', 15),
+      mailIcon: this.ic('mail', 13), phoneIcon: this.ic('phone', 13), shieldIcon: this.ic('shield', 15),
+      hosting, tech, subdomains: ['loja.padariacentral.pt', 'blog.padariacentral.pt'], subCount: 2,
+      contacts, contactCount: 3, linked, outreachSteps,
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap">
+<link rel="stylesheet" href="tokens/netprospect.css">
+<script src="_ds/netmaster-design-system-afcc6f5c-433f-4078-8dbe-f97343007c6b/_ds_bundle.js"></script>
+</helmet>
+<dc-import name="Shell" active="contacts" hint-size="100%,100%">
+<div style="display:flex; flex-direction:column; height:calc(100vh - var(--np-topbar-h)); overflow:hidden;">
+
+  <!-- header -->
+  <div style="flex:0 0 auto; padding:18px 24px 14px; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+    <div>
+      <div style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--np-brand-ink);">Decisores</div>
+      <h1 style="margin:3px 0 2px; font-size:22px; font-weight:800; letter-spacing:-0.01em; color:var(--np-text);">Contactos</h1>
+      <div style="font-size:13px; color:var(--np-text-3);"><strong style="color:var(--np-text-2);">{{ resultCount }}</strong> pessoas · <strong style="color:var(--np-ok);">22 470</strong> com e-mail verificado</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <button style="display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 12px; border-radius:var(--np-radius); border:1px solid var(--np-border); background:var(--np-surface); color:var(--np-text-2); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;" style-hover="border-color:var(--np-border-2); color:var(--np-text)">{{ mailIcon }} Sequência de e-mail</button>
+      <button style="display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 16px; border-radius:var(--np-radius); border:none; background:var(--np-brand-fill); color:#fff; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; box-shadow:var(--np-shadow-brand);" style-hover="background:var(--np-brand-hover)">{{ downloadIcon }} Exportar CSV</button>
+    </div>
+  </div>
+
+  <!-- filter bar -->
+  <div style="flex:0 0 auto; padding:0 24px; position:relative; z-index:var(--np-z-dropdown);">
+    <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap; padding:12px 14px; background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card);">
+      <div style="flex:1 1 240px; min-width:200px; display:flex; align-items:center; gap:8px; height:36px; padding:0 12px; background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:var(--np-radius); color:var(--np-text-3);">
+        <span style="display:inline-flex;">{{ searchIcon }}</span>
+        <input value="{{ searchValue }}" onInput="{{ onSearch }}" placeholder="Procurar nome, e-mail ou empresa…" style="flex:1; border:none; background:transparent; outline:none; font-family:inherit; font-size:13px; color:var(--np-text);" />
+      </div>
+      <sc-for list="{{ facets }}" as="f" hint-placeholder-count="2">
+        <div style="position:relative;">
+          <button onClick="{{ f.onClick }}" style="{{ f.btnStyle }}" style-hover="border-color:var(--np-border-2)">
+            <span>{{ f.label }}</span>
+            <sc-if value="{{ f.badge }}" hint-placeholder-val=""><span style="min-width:16px; height:16px; padding:0 4px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; border-radius:999px; background:var(--np-brand-fill); color:#fff;">{{ f.badge }}</span></sc-if>
+            <span style="display:inline-flex; opacity:0.6;">{{ chevIcon }}</span>
+          </button>
+          <sc-if value="{{ f.open }}" hint-placeholder-val="">
+            <div style="position:absolute; top:42px; left:0; min-width:210px; background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-md); box-shadow:var(--np-shadow-pop); padding:6px; z-index:var(--np-z-dropdown);">
+              <sc-for list="{{ f.options }}" as="o" hint-placeholder-count="4">
+                <button onClick="{{ o.onClick }}" style="width:100%; display:flex; align-items:center; gap:9px; padding:7px 9px; border:none; background:transparent; border-radius:var(--np-radius-sm); font-family:inherit; font-size:13px; color:var(--np-text-2); cursor:pointer; text-align:left;" style-hover="background:var(--np-surface-3)">
+                  <span style="width:16px; height:16px; border-radius:4px; border:1.5px solid {{ o.boxBorder }}; background:{{ o.boxBg }}; display:inline-flex; align-items:center; justify-content:center; color:#fff; flex:0 0 auto;">{{ o.check }}</span>
+                  <span style="flex:1;">{{ o.label }}</span>
+                  <span style="font-size:11px; color:var(--np-text-faint); font-variant-numeric:tabular-nums;">{{ o.count }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+      <label style="display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 12px; background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:var(--np-radius); font-size:13px; font-weight:600; color:var(--np-text-2); cursor:pointer;">
+        <span onClick="{{ toggleDM }}" style="{{ dmBox }}">{{ dmCheck }}</span> Só decisores
+      </label>
+    </div>
+  </div>
+
+  <!-- chips -->
+  <sc-if value="{{ hasChips }}" hint-placeholder-val="">
+    <div style="flex:0 0 auto; padding:12px 24px 4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      <span style="font-size:12px; font-weight:600; color:var(--np-text-faint);">Filtros:</span>
+      <sc-for list="{{ chips }}" as="ch" hint-placeholder-count="2">
+        <span style="display:inline-flex; align-items:center; gap:7px; height:28px; padding:0 6px 0 11px; background:var(--np-brand-soft); border:1px solid var(--np-brand-soft-bd); border-radius:999px; font-size:12px; font-weight:600; color:var(--np-brand-ink);">{{ ch.value }}<button onClick="{{ ch.onRemove }}" aria-label="Remover" style="width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; border:none; background:rgba(0,0,0,0.06); border-radius:999px; color:inherit; cursor:pointer; font-size:12px;">×</button></span>
+      </sc-for>
+      <button onClick="{{ clearAll }}" style="height:28px; padding:0 10px; border:none; background:transparent; color:var(--np-text-3); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; text-decoration:underline;">Limpar tudo</button>
+    </div>
+  </sc-if>
+
+  <!-- bulk -->
+  <sc-if value="{{ hasSelection }}" hint-placeholder-val="">
+    <div style="flex:0 0 auto; margin:12px 24px 0; padding:10px 14px; display:flex; align-items:center; gap:14px; background:var(--np-text); color:var(--np-text-inverse); border-radius:var(--np-radius-md); box-shadow:var(--np-shadow-raise);">
+      <span style="font-size:13px; font-weight:700;">{{ selCount }} selecionados</span>
+      <span style="width:1px; height:18px; background:rgba(150,150,150,0.4);"></span>
+      <button style="display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 12px; border:none; background:rgba(255,255,255,0.14); color:inherit; border-radius:var(--np-radius-sm); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer;" style-hover="background:rgba(255,255,255,0.24)">{{ mailIcon2 }} Adicionar à sequência</button>
+      <button style="display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 12px; border:none; background:rgba(255,255,255,0.14); color:inherit; border-radius:var(--np-radius-sm); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer;" style-hover="background:rgba(255,255,255,0.24)">{{ downloadIcon2 }} Exportar</button>
+      <div style="flex:1;"></div>
+      <button onClick="{{ clearSel }}" style="height:32px; padding:0 12px; border:none; background:transparent; color:rgba(255,255,255,0.75); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer;" style-hover="color:#fff">Limpar seleção</button>
+    </div>
+  </sc-if>
+
+  <!-- table -->
+  <div style="flex:1 1 auto; margin:12px 24px 0; min-height:0; background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg) var(--np-radius-lg) 0 0; box-shadow:var(--np-shadow-card); overflow:auto;">
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="">
+      <div style="padding:70px 20px; text-align:center;">
+        <div style="width:56px; height:56px; margin:0 auto 16px; border-radius:16px; background:var(--np-surface-3); display:flex; align-items:center; justify-content:center; color:var(--np-text-faint);">{{ emptyIcon }}</div>
+        <div style="font-size:16px; font-weight:800; color:var(--np-text);">Nenhum contacto encontrado</div>
+        <div style="margin:6px 0 16px; font-size:13px; color:var(--np-text-3);">Ajuste os filtros de cargo ou verificação.</div>
+        <button onClick="{{ clearAll }}" style="height:36px; padding:0 16px; border:1px solid var(--np-border); background:var(--np-surface); color:var(--np-text); border-radius:var(--np-radius); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer;">Limpar filtros</button>
+      </div>
+    </sc-if>
+    <sc-if value="{{ notEmpty }}" hint-placeholder-val="{{ true }}">
+    <table style="width:100%; border-collapse:separate; border-spacing:0; min-width:1080px;">
+      <thead>
+        <tr>
+          <th style="position:sticky; top:0; z-index:2; background:var(--np-surface-2); padding:0 8px 0 14px; height:42px; border-bottom:1px solid var(--np-border); width:44px;"><span onClick="{{ toggleAll }}" style="{{ headCbStyle }}">{{ headCbMark }}</span></th>
+          <sc-for list="{{ columns }}" as="col" hint-placeholder-count="6">
+            <th onClick="{{ col.onSort }}" style="{{ col.thStyle }}"><span style="display:inline-flex; align-items:center; gap:5px;">{{ col.label }}<span style="color:{{ col.sortColor }};">{{ col.sortIcon }}</span></span></th>
+          </sc-for>
+          <th style="position:sticky; top:0; z-index:2; background:var(--np-surface-2); border-bottom:1px solid var(--np-border); width:48px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <sc-for list="{{ rows }}" as="r" hint-placeholder-count="12">
+          <tr tabindex="0" onKeyDown="{{ r.onKey }}" style="{{ r.rowStyle }}" style-hover="background:var(--np-surface-3)" style-focus="outline:2px solid var(--np-brand); outline-offset:-2px">
+            <td onClick="{{ r.onToggle }}" style="padding:0 8px 0 14px; border-bottom:1px solid var(--np-divider);"><span style="{{ r.cbStyle }}">{{ r.cbMark }}</span></td>
+            <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider);">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="width:32px; height:32px; border-radius:999px; background:{{ r.avatarBg }}; color:#fff; font-size:11px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;">{{ r.initials }}</span>
+                <span style="font-size:13px; font-weight:700; color:var(--np-text); white-space:nowrap;">{{ r.name }}</span>
+              </div>
+            </td>
+            <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider);"><span style="{{ r.roleBadge.style }}">{{ r.roleBadge.icon }}{{ r.role }}</span></td>
+            <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider);">
+              <div style="display:flex; align-items:center; gap:9px;">
+                <a href="{{ r.mailto }}" style="font-size:12px; color:var(--np-text-2); text-decoration:none; white-space:nowrap;" style-hover="color:var(--np-brand-ink)">{{ r.email }}</a>
+                <span style="{{ r.verif.style }}">{{ r.verif.icon }}{{ r.verif.label }}</span>
+              </div>
+            </td>
+            <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider); font-size:12px; color:var(--np-text-2); white-space:nowrap;">{{ r.phone }}</td>
+            <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider);"><a href="CompanyDetail.dc.html" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--np-text-2); text-decoration:none; white-space:nowrap;" style-hover="color:var(--np-brand-ink)"><span style="width:8px; height:8px; border-radius:3px; background:{{ r.pColor }};"></span>{{ r.company }}</a></td>
+            <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider); font-size:11px; color:var(--np-text-faint); white-space:nowrap;">{{ r.source }}</td>
+            <td style="padding:8px 10px; border-bottom:1px solid var(--np-divider); text-align:right;"><a href="CompanyDetail.dc.html" style="display:inline-flex; color:var(--np-text-faint);" style-hover="color:var(--np-brand-ink)">{{ chevRightIcon }}</a></td>
+          </tr>
+        </sc-for>
+      </tbody>
+    </table>
+    </sc-if>
+  </div>
+
+  <!-- pagination -->
+  <div style="flex:0 0 auto; margin:0 24px 0; padding:11px 16px; background:var(--np-surface-2); border:1px solid var(--np-border); border-top:none; border-radius:0 0 var(--np-radius-lg) var(--np-radius-lg); display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <div style="font-size:12px; color:var(--np-text-3);">A mostrar <strong style="color:var(--np-text-2);">1–25</strong> de <strong style="color:var(--np-text-2);">{{ resultCount }}</strong></div>
+    <div style="display:flex; align-items:center; gap:4px;">
+      <button style="{{ pageArrow }}">‹</button>
+      <sc-for list="{{ pages }}" as="pg" hint-placeholder-count="5"><button style="{{ pg.style }}">{{ pg.label }}</button></sc-for>
+      <button style="{{ pageArrow }}">›</button>
+    </div>
+  </div>
+</div>
+</dc-import>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:940}}">
+class Component extends DCLogic {
+  state = { q: '', sort: { key: 'name', dir: 'asc' }, filters: { role: [], verif: [] }, dm: false, openFacet: null, selected: {} };
+
+  ic(name, size = 12) {
+    const P = {
+      search: ['M11 11m-8 0a8 8 0 1 0 16 0a8 8 0 1 0-16 0', 'm21 21-4.3-4.3'], chev: ['m6 9 6 6 6-6'], chevR: ['m9 18 6-6-6-6'],
+      check: ['M20 6 9 17l-5-5'], mail: ['M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z', 'm22 7-10 6L2 7'],
+      download: ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'], globe: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z', 'M2 12h20', 'M12 2a15 15 0 0 1 0 20', 'M12 2a15 15 0 0 0 0 20'],
+      clock: ['M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0', 'M12 7v5l3 2'], dash: ['M5 12h14'], star: ['M12 2l3 6.5 7 .9-5 4.8 1.3 7L12 18l-6.6 3.2L6.7 14l-5-4.8 7-.9L12 2Z'],
+      users: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0'],
+    };
+    const paths = (P[name] || []).map((d, i) => React.createElement('path', { key: i, d }));
+    return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block', flex: '0 0 auto' } }, paths);
+  }
+  badge(color, soft, bd, icon, label) {
+    return { style: { display: 'inline-flex', alignItems: 'center', gap: '4px', height: '20px', padding: '0 8px', fontSize: '10px', fontWeight: 700, color: `var(${color})`, background: `var(${soft})`, border: `1px solid var(${bd})`, borderRadius: '999px', whiteSpace: 'nowrap' }, icon: this.ic(icon, 11), label };
+  }
+  verifBadge(v) {
+    if (v === 'verified') return this.badge('--np-ok', '--np-ok-soft', '--np-ok-soft-bd', 'check', 'Verificado');
+    if (v === 'catchall') return this.badge('--np-warn', '--np-warn-soft', '--np-warn-soft-bd', 'clock', 'Catch-all');
+    if (v === 'role') return this.badge('--np-info', '--np-info-soft', '--np-info-soft-bd', 'globe', 'Role-based');
+    return this.badge('--np-neutral', '--np-neutral-soft', '--np-neutral-soft-bd', 'dash', 'Não verif.');
+  }
+  roleBadge(role) {
+    const dm = ['CEO', 'CTO', 'CMO', 'CFO', 'COO', 'Founder'].includes(role);
+    return {
+      style: { display: 'inline-flex', alignItems: 'center', gap: '4px', height: '22px', padding: '0 9px', fontSize: '11px', fontWeight: 700, borderRadius: '999px', whiteSpace: 'nowrap',
+        color: dm ? 'var(--np-brand-ink)' : 'var(--np-text-3)', background: dm ? 'var(--np-brand-soft)' : 'var(--np-surface-2)', border: `1px solid ${dm ? 'var(--np-brand-soft-bd)' : 'var(--np-border)'}` },
+      icon: dm ? this.ic('star', 10) : '',
+    };
+  }
+
+  data() {
+    const C = 'var(--cat-';
+    return [
+      ['Ana Ferreira', 'CEO', 'ana.ferreira@padariacentral.pt', 'verified', '+351 91 222 33 44', 'Padaria Central', C + 'woocommerce)', 'PT', 'crawl+WHOIS'],
+      ['Sanne de Vries', 'Founder', 's.devries@bloomdesign.nl', 'verified', '+31 6 1122 3344', 'Bloom Design', C + 'wordpress)', 'NL', 'crawl'],
+      ['Mark Jansen', 'CTO', 'mark@bloomdesign.nl', 'unverified', '—', 'Bloom Design', C + 'wordpress)', 'NL', 'crawl'],
+      ['Erik Lund', 'CEO', 'erik@kaffesthlm.se', 'catchall', '—', 'Kaffe Sthlm', C + 'shopify)', 'SE', 'crawl'],
+      ['Ingrid Hansen', 'CMO', 'ingrid@nordiskmobler.no', 'verified', '+47 900 11 223', 'Nordisk Møbler', C + 'prestashop)', 'NO', 'crawl+enrich'],
+      ['Lars Berg', 'CEO', 'lars.berg@nordiskmobler.no', 'verified', '—', 'Nordisk Møbler', C + 'prestashop)', 'NO', 'crawl+enrich'],
+      ['Aino Virtanen', 'CTO', 'aino@helsinkitech.fi', 'unverified', '—', 'Helsinki Tech', C + 'custom)', 'FI', 'crawl'],
+      ['Juho Mäki', 'CFO', 'j.maki@helsinkitech.fi', 'catchall', '—', 'Helsinki Tech', C + 'custom)', 'FI', 'crawl'],
+      ['Rita Nunes', 'CEO', 'rita@lojaverde.pt', 'verified', '+351 96 555 12 12', 'Loja Verde', C + 'woocommerce)', 'PT', 'crawl+WHOIS'],
+      ['Noa Bakker', 'Founder', 'noa@studioamsterdam.nl', 'catchall', '—', 'Studio Amsterdam', C + 'squarespace)', 'NL', 'crawl'],
+      ['Sofia Nilsson', 'CEO', 'sofia@malmostore.se', 'verified', '+46 70 111 22 33', 'Malmö Store', C + 'wordpress)', 'SE', 'crawl+enrich'],
+      ['Anders Ek', 'COO', 'anders@malmostore.se', 'verified', '—', 'Malmö Store', C + 'wordpress)', 'SE', 'crawl+enrich'],
+      ['Pedro Costa', 'CEO', 'pedro@bragadigital.pt', 'unverified', '—', 'Braga Digital', C + 'wordpress)', 'PT', 'crawl'],
+      ['Mika Laine', 'CEO', 'mika@tamperefood.fi', 'verified', '+358 40 111 222', 'Tampere Food', C + 'woocommerce)', 'FI', 'crawl+enrich'],
+      ['Sanna Koski', 'CFO', 'sanna@tamperefood.fi', 'verified', '—', 'Tampere Food', C + 'woocommerce)', 'FI', 'crawl+enrich'],
+      ['GDPR Office', 'DPO', 'gdpr@malmostore.se', 'role', '—', 'Malmö Store', C + 'wordpress)', 'SE', 'crawl'],
+    ].map((a, i) => ({ id: i + 1, name: a[0], role: a[1], email: a[2], verif: a[3], phone: a[4], company: a[5], pColor: a[6], country: a[7], source: a[8] }));
+  }
+
+  onSearch = (e) => this.setState({ q: e.target.value });
+  toggleFilter(facet, val) { const arr = this.state.filters[facet]; const next = arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val]; this.setState({ filters: { ...this.state.filters, [facet]: next } }); }
+  clearAll = () => this.setState({ filters: { role: [], verif: [] }, q: '', dm: false });
+  sortBy(key) { const c = this.state.sort; this.setState({ sort: { key, dir: c.key === key && c.dir === 'asc' ? 'desc' : 'asc' } }); }
+  toggleRow(id) { const s = { ...this.state.selected }; if (s[id]) delete s[id]; else s[id] = true; this.setState({ selected: s }); }
+
+  filtered() {
+    const q = this.state.q.trim().toLowerCase(), f = this.state.filters;
+    let rows = this.data().filter(r => {
+      if (q && !(r.name.toLowerCase().includes(q) || r.email.toLowerCase().includes(q) || r.company.toLowerCase().includes(q))) return false;
+      if (f.role.length && !f.role.includes(r.role)) return false;
+      if (f.verif.length && !f.verif.includes(r.verif)) return false;
+      if (this.state.dm && !['CEO', 'CTO', 'CMO', 'CFO', 'COO', 'Founder'].includes(r.role)) return false;
+      return true;
+    });
+    const { key, dir } = this.state.sort, s = dir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => String(a[key]).localeCompare(String(b[key])) * s);
+    return rows;
+  }
+
+  renderVals() {
+    const rowsData = this.filtered();
+    const selected = this.state.selected, selCount = Object.keys(selected).length;
+    const avatarPalette = ['var(--cat-wordpress)', 'var(--cat-prestashop)', 'var(--cat-drupal)', 'var(--cat-joomla)', 'var(--cat-woocommerce)'];
+
+    const facetDefs = [
+      { key: 'role', label: 'Cargo', opts: [['CEO', 5], ['CTO', 2], ['CMO', 1], ['CFO', 2], ['COO', 1], ['Founder', 2], ['Manager', 0], ['DPO', 1]] },
+      { key: 'verif', label: 'Verificação', opts: [['verified', 8], ['catchall', 3], ['role', 1], ['unverified', 3]] },
+    ];
+    const verifLabels = { verified: 'Verificado', catchall: 'Catch-all', role: 'Role-based', unverified: 'Não verif.' };
+    const facets = facetDefs.map(fd => {
+      const active = this.state.filters[fd.key], open = this.state.openFacet === fd.key;
+      return {
+        label: fd.label, badge: active.length ? String(active.length) : '', open,
+        onClick: () => this.setState({ openFacet: open ? null : fd.key }),
+        btnStyle: { display: 'inline-flex', alignItems: 'center', gap: '7px', height: '36px', padding: '0 11px', borderRadius: 'var(--np-radius)', border: `1px solid ${active.length ? 'var(--np-brand-soft-bd)' : 'var(--np-border)'}`, background: active.length ? 'var(--np-brand-soft)' : 'var(--np-surface-2)', color: active.length ? 'var(--np-brand-ink)' : 'var(--np-text-2)', fontFamily: 'inherit', fontSize: '13px', fontWeight: 600, cursor: 'pointer' },
+        options: fd.opts.map(([label, count]) => {
+          const on = active.includes(label);
+          return { label: fd.key === 'verif' ? verifLabels[label] : label, count, onClick: () => this.toggleFilter(fd.key, label), check: on ? this.ic('check', 11) : '', boxBg: on ? 'var(--np-brand-fill)' : 'transparent', boxBorder: on ? 'var(--np-brand-fill)' : 'var(--np-border-2)' };
+        }),
+      };
+    });
+
+    const verifLabels2 = { verified: 'Verificado', catchall: 'Catch-all', role: 'Role-based', unverified: 'Não verif.' };
+    const chips = [];
+    this.state.filters.role.forEach(v => chips.push({ value: v, onRemove: () => this.toggleFilter('role', v) }));
+    this.state.filters.verif.forEach(v => chips.push({ value: verifLabels2[v], onRemove: () => this.toggleFilter('verif', v) }));
+    if (this.state.dm) chips.push({ value: 'Só decisores', onRemove: () => this.setState({ dm: false }) });
+
+    const colDefs = [['name', 'Nome'], ['role', 'Cargo'], ['email', 'E-mail'], ['phone', 'Telefone'], ['company', 'Empresa'], ['source', 'Fonte']];
+    const st = this.state.sort;
+    const columns = colDefs.map(([key, label]) => {
+      const s = st.key === key;
+      return { label, onSort: () => this.sortBy(key), sortIcon: s ? (st.dir === 'asc' ? '▲' : '▼') : '↕', sortColor: s ? 'var(--np-brand)' : 'var(--np-text-faint)',
+        thStyle: { position: 'sticky', top: 0, zIndex: 2, background: 'var(--np-surface-2)', padding: '0 14px', height: '42px', borderBottom: '1px solid var(--np-border)', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--np-text-3)', cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' } };
+    });
+
+    const rows = rowsData.map((r, i) => {
+      const on = !!selected[r.id];
+      return {
+        name: r.name, role: r.role, email: r.email, phone: r.phone === '—' ? '—' : r.phone, company: r.company, source: r.source, pColor: r.pColor,
+        initials: r.name.split(' ').map(w => w[0]).slice(0, 2).join(''), avatarBg: avatarPalette[i % avatarPalette.length],
+        mailto: 'mailto:' + r.email, roleBadge: this.roleBadge(r.role), verif: this.verifBadge(r.verif),
+        rowStyle: { background: on ? 'var(--np-surface-sel)' : 'transparent', transition: 'background var(--np-dur-fast)' },
+        cbStyle: this.cb(on), cbMark: on ? this.ic('check', 12) : '', onToggle: (e) => { e.stopPropagation(); this.toggleRow(r.id); },
+        onKey: (e) => { if (e.key === 'ArrowDown') { e.preventDefault(); if (e.currentTarget.nextElementSibling) e.currentTarget.nextElementSibling.focus(); } else if (e.key === 'ArrowUp') { e.preventDefault(); if (e.currentTarget.previousElementSibling) e.currentTarget.previousElementSibling.focus(); } },
+        chevRightIcon: this.ic('chevR', 15),
+      };
+    });
+    const allChecked = rowsData.length > 0 && rowsData.every(r => selected[r.id]);
+
+    const pages = [1, 2, 3, '…', 2477].map(n => ({ label: n, style: { minWidth: '32px', height: '32px', padding: '0 8px', border: `1px solid ${n === 1 ? 'var(--np-brand-fill)' : 'var(--np-border)'}`, background: n === 1 ? 'var(--np-brand-fill)' : 'var(--np-surface)', color: n === 1 ? '#fff' : (n === '…' ? 'var(--np-text-faint)' : 'var(--np-text-2)'), borderRadius: 'var(--np-radius-sm)', fontFamily: 'inherit', fontSize: '12px', fontWeight: 700, cursor: 'pointer' } }));
+
+    return {
+      resultCount: rowsData.length === this.data().length ? '61 903' : this.fmt(rowsData.length),
+      searchValue: this.state.q, onSearch: this.onSearch,
+      searchIcon: this.ic('search', 16), chevIcon: this.ic('chev', 14), mailIcon: this.ic('mail', 15), mailIcon2: this.ic('mail', 13), downloadIcon: this.ic('download', 15), downloadIcon2: this.ic('download', 13),
+      facets, chips, hasChips: chips.length > 0, clearAll: this.clearAll,
+      toggleDM: () => this.setState({ dm: !this.state.dm }), dmBox: this.cb(this.state.dm), dmCheck: this.state.dm ? this.ic('check', 12) : '',
+      hasSelection: selCount > 0, selCount, clearSel: () => this.setState({ selected: {} }),
+      columns, rows, isEmpty: rowsData.length === 0, notEmpty: rowsData.length > 0, emptyIcon: this.ic('users', 26),
+      toggleAll: () => { const all = rowsData.every(r => selected[r.id]); const s = {}; if (!all) rowsData.forEach(r => s[r.id] = true); this.setState({ selected: s }); },
+      allChecked, headCbStyle: this.cb(allChecked), headCbMark: allChecked ? this.ic('check', 12) : '',
+      pages, pageArrow: { width: '32px', height: '32px', border: '1px solid var(--np-border)', background: 'var(--np-surface)', color: 'var(--np-text-2)', borderRadius: 'var(--np-radius-sm)', fontSize: '16px', cursor: 'pointer', lineHeight: 1 },
+      chevRightIcon: this.ic('chevR', 16),
+    };
+  }
+  fmt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  cb(on) { return { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '17px', height: '17px', borderRadius: '5px', border: `1.5px solid ${on ? 'var(--np-brand-fill)' : 'var(--np-border-2)'}`, background: on ? 'var(--np-brand-fill)' : 'transparent', color: '#fff', cursor: 'pointer', flex: '0 0 auto' }; }
+}
+</script>
+</body>
+</html>

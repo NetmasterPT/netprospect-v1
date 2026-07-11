@@ -1,0 +1,61 @@
+/* ==================================================================
+   NetMaster — Spacing, radius, shadows, layout
+   8px base grid. Sharp 2px radius on chrome buttons, soft 12–16px on
+   cards & icon tiles, full pills for badges. Shadows are restrained:
+   a hairline drop on cards, a soft lift on hover, and a red glow that
+   only the primary CTA earns.
+   ================================================================== */
+
+:root {
+  /* Spacing scale (8px base) */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --space-20: 80px;     /* section gutter / vertical rhythm */
+  --space-24: 96px;
+  --space-32: 128px;
+
+  /* Layout */
+  --container-max: 1280px;
+  --container-pad: 80px;     /* desktop side gutter */
+  --section-y: 96px;         /* vertical section padding */
+
+  /* Radius */
+  --radius-xs: 2px;    /* chrome buttons, top-bar CTA  */
+  --radius-sm: 6px;    /* inputs, small chips          */
+  --radius-md: 8px;    /* buttons                      */
+  --radius-lg: 12px;   /* cards                        */
+  --radius-xl: 16px;   /* large cards, icon tiles      */
+  --radius-2xl: 24px;
+  --radius-full: 999px;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.05), 0 10px 15px rgba(0,0,0,0.08);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,0.10), 0 20px 40px rgba(0,0,0,0.06);
+  --shadow-card: 0 1px 2px rgba(0,0,0,0.05);
+
+  /* Brand glow — reserved for the primary CTA */
+  --shadow-brand: 0 6px 16px rgba(234,11,42,0.20);
+  --shadow-brand-lg: 0 10px 28px rgba(234,11,42,0.40);
+
+  /* Borders */
+  --border-width: 1px;
+  --border-hairline: 1px solid var(--border-subtle);
+
+  /* Motion */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1); /* @kind other */
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1); /* @kind other */
+  --dur-fast: 120ms; /* @kind other */
+  --dur: 200ms; /* @kind other */
+  --dur-slow: 320ms; /* @kind other */
+}

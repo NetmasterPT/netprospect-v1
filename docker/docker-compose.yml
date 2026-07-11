@@ -1,0 +1,491 @@
+# Stack isolado do NetProspect (Postgres + Directus).
+#
+# É PROPOSITADAMENTE separado da instância Directus de produção do
+# netmaster-app (projeto `netmaster-app`, porta 8055). Aqui usamos:
+#   - nome de projeto próprio  -> rede e volumes com prefixo `netprospect_`
+#   - porta 8056 no host       -> não colide com a 8055 já em uso
+#   - Postgres NÃO publicado    -> evita a 5432 já ocupada por outros containers
+#
+# Arranque:  docker compose -f docker/docker-compose.yml up -d
+name: netprospect
+
+services:
+  postgres:
+    image: postgis/postgis:16-3.4-alpine
+    restart: unless-stopped
+    # Tuning p/ a máquina (125G RAM, 12 vCPU): o default (shared_buffers 128MB, work_mem
+    # 4MB) estrangulava o Directus sob concorrência (3 host jobs + workers) → 503 "under
+    # pressure". Isto dá folga p/ MUITO mais calls simultâneas. Ajustar se a RAM for precisa
+    # noutro lado. shm_size p/ os parallel workers.
+    shm_size: 2gb
+    command:
+      - postgres
+      - -c
+      - shared_buffers=12GB
+      - -c
+      - effective_cache_size=64GB
+      - -c
+      - work_mem=48MB
+      - -c
+      - maintenance_work_mem=2GB
+      - -c
+      - max_connections=200
+      - -c
+      - max_worker_processes=12
+      - -c
+      - max_parallel_workers=8
+      - -c
+      - max_parallel_workers_per_gather=4
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - max_wal_size=8GB
+      - -c
+      - wal_buffers=64MB
+      - -c
+      - synchronous_commit=off
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./.data/postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # PgBouncer (transaction pooling) — NÃO é para o Directus (que precisa de estado de
+  # sessão: timezone/SET, que o modo transaction descarta). É para o CAMINHO DE ESCRITA
+  # DIRETA dos workers (A2, flag DIRECT_PG_WRITE) e para a FROTA REMOTA: dezenas de VMs a
+  # abrir ligações ao Postgres afogam-no (cada backend = processo). O PgBouncer multiplexa
+  # centenas de clientes em ~25-40 backends reais. Autocommit/upserts simples = seguros em
+  # transaction mode. Exposto em 127.0.0.1:6432 (tailnet p/ a frota: pôr PGB_BIND=<ip-ts>).
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_NAME: ${POSTGRES_DB}
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: '1000'
+      DEFAULT_POOL_SIZE: '25'
+      MIN_POOL_SIZE: '5'
+      RESERVE_POOL_SIZE: '5'
+      MAX_DB_CONNECTIONS: '40'
+      SERVER_RESET_QUERY: DISCARD ALL
+      # o driver pg envia estes na ligação; em transaction mode têm de ser ignorados
+      IGNORE_STARTUP_PARAMETERS: extra_float_digits,search_path,options,application_name
+      ADMIN_USERS: ${POSTGRES_USER}
+      STATS_USERS: ${POSTGRES_USER}
+    ulimits:
+      nofile: { soft: 65536, hard: 65536 }  # 1000 clientes → ~1062 fds; o default 1024 não chega
+    ports:
+      - '${PGB_BIND:-127.0.0.1}:6432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} || exit 1']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  directus:
+    image: directus/directus:11.3.5
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      KEY: ${DIRECTUS_KEY}
+      SECRET: ${DIRECTUS_SECRET}
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+      # Token estático atribuído ao admin no bootstrap do Directus v11.
+      # É com este token que bootstrap-directus.js e enrich-sites.js autenticam.
+      ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+      DB_CLIENT: pg
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Pool de ligações ao Postgres — default ~10 é o TETO real de queries simultâneas
+      # (os host jobs + workers batem tudo via REST). Subido p/ mais concorrência.
+      DB_POOL_MIN: '4'
+      DB_POOL_MAX: '40'
+      CACHE_ENABLED: 'false'
+      TELEMETRY: 'false'
+      # Limitador de pressão mais tolerante: várias pipelines (enrich/extract) em
+      # paralelo bloqueiam o event loop com queries grandes; o default 500ms
+      # devolvia 503 "Under pressure". Damos mais folga (a instância é isolada).
+      PRESSURE_LIMITER_MAX_EVENT_LOOP_DELAY: '1500'
+      PRESSURE_LIMITER_MAX_EVENT_LOOP_UTILIZATION: '0.99'
+      PUBLIC_URL: ${DIRECTUS_PUBLIC_URL:-http://localhost:8056}
+      CORS_ENABLED: 'true'
+      CORS_ORIGIN: 'true'
+    volumes:
+      - ./.data/directus:/directus/uploads
+    ports:
+      - '${DIRECTUS_PORT:-8056}:8055'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8055/server/health']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # Dashboard / Diretório de Empresas (Node + Express) — consulta o Directus do
+  # lado do servidor. Atrás do Authentik/npmPlus em produção.
+  dashboard:
+    build: ../dashboard
+    restart: unless-stopped
+    depends_on:
+      - directus
+      - redis
+    environment:
+      PORT: '3000'
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+      # Cache (fail-soft) das agregações pesadas (/api/stats ~18 queries, contagens
+      # de segmentos). REDIS_URL vazio = desligado (tudo live). TTL curto p/ frescura.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      CACHE_TTL: ${CACHE_TTL:-60}
+      # Publica jobs de auditoria on-demand (POST /api/audit) — Fase 2b.
+      NATS_URL: nats://nats:4222
+      # Agentes IA (B4) — Ollama on-prem (perfil `audit`). Fail-soft se em baixo.
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
+      DIRECTUS_PUBLIC_URL: ${DIRECTUS_PUBLIC_URL:-http://localhost:8056}
+      # Analytics (Fase E) — timeline por site + view de gatilhos. Vazio = desligado.
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:+http://clickhouse:8123}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-clickhouse}
+      # Campanhas (Fase F) — só p/ o dashboard mostrar o modo (smtp vs dry-run).
+      SMTP_HOST: ${SMTP_HOST:-}
+    ports:
+      - '${DASHBOARD_PORT:-3001}:3000'
+    volumes:
+      # Config (ro) p/ a página Configuração ler RESUMOS (nº de chaves/proxies/ângulos).
+      # Os segredos são lidos server-side mas NUNCA servidos ao browser (só contagens).
+      - ../config:/app/config:ro
+
+  # Fila de jobs (NATS JetStream). Por omissão só em 127.0.0.1 (produtores enqueue-*.js
+  # no host). Para a FROTA REMOTA de workers (VMs cloud) alcançar a fila, expor na
+  # interface TAILNET: pôr NATS_BIND=<ip-tailscale-deste-host> no docker/.env (NUNCA
+  # 0.0.0.0 sem firewall — NATS não tem auth aqui). Ver docs/distributed-fleet.md.
+  nats:
+    image: nats:2.10-alpine
+    restart: unless-stopped
+    command: ['-js', '-sd', '/data']
+    ports:
+      - '${NATS_BIND:-127.0.0.1}:4222:4222'
+    volumes:
+      - ./.data/nats:/data
+
+  # Cache (Redis) — acelera as agregações pesadas do dashboard (/api/stats etc.).
+  # SÓ cache: sem persistência (--save '' + appendonly no), LRU quando cheio. O
+  # dashboard é fail-soft (Redis em baixo → corre tudo live). Só em 127.0.0.1.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '128mb', '--maxmemory-policy', 'allkeys-lru']
+    ports:
+      - '127.0.0.1:6379:6379'
+
+  # MinIO (S3) — snapshots de páginas partilhados entre jobs finos (Fase B) +
+  # histórico versionado p/ deteção de mudanças (Fase E). API 9000, consola 9001
+  # (ambas só em 127.0.0.1; workers alcançam via minio:9000 na rede interna).
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ['server', '/data', '--console-address', ':9001']
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-netprospect}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+    ports:
+      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9001:9001'
+    volumes:
+      - ./.data/minio:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+
+  # Worker replicável da pipeline (enrich + contactos; auditoria pesada na 2b).
+  #   docker compose -f docker/docker-compose.yml up -d --build worker
+  #   docker compose -f docker/docker-compose.yml up -d --scale worker=3 worker
+  worker:
+    build:
+      context: ..
+      dockerfile: worker/Dockerfile
+    restart: unless-stopped
+    init: true  # PID 1 = tini, reap dos zombies do Chromium (Lighthouse/GMB)
+    depends_on:
+      directus:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      pgbouncer:
+        condition: service_started
+    environment:
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+      DIRECTUS_ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+      NATS_URL: nats://nats:4222
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
+      MINIO_URL: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-netprospect}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+      MINIO_BUCKET: ${MINIO_BUCKET:-snapshots}
+      # Analytics (Fase E) — vazio = no-op; definir p/ escrever observações/change events.
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:+http://clickhouse:8123}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-clickhouse}
+      METRICS_THROTTLE_MIN: ${METRICS_THROTTLE_MIN:-60}
+      POSTHOG_HOST: ${POSTHOG_HOST:-}
+      POSTHOG_KEY: ${POSTHOG_KEY:-}
+      # Heavy image: só faz os roles pesados (browser/security/ai) quando AUDIT_ENABLED.
+      WORKER_ROLES: ${WORKER_ROLES:-browser,security,ai}
+      EGRESS_PROXY: ${EGRESS_PROXY:-}
+      WPSCAN_API_TOKEN: ${WPSCAN_API_TOKEN:-}
+      AUDIT_ENABLED: ${AUDIT_ENABLED:-false}
+      GMB_ENABLED: ${GMB_ENABLED:-false}
+      ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-10}
+      CONTACTS_CONCURRENCY: ${CONTACTS_CONCURRENCY:-5}
+      CHROME_PATH: /usr/bin/chromium
+      # A2 — escrita direta no PG (default off; ligar por worker se preciso).
+      DIRECT_PG_WRITE: ${DIRECT_PG_WRITE_HEAVY:-}
+      PG_WRITE_HOST: ${PG_WRITE_HOST:-pgbouncer}
+      PG_WRITE_PORT: ${PG_WRITE_PORT:-5432}
+      PG_WRITE_USER: ${POSTGRES_USER}
+      PG_WRITE_PASSWORD: ${POSTGRES_PASSWORD}
+      PG_WRITE_DB: ${POSTGRES_DB}
+    volumes:
+      - ../data/geoip:/app/data/geoip:ro
+      - ../data/tranco:/app/data/tranco:ro
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}
+
+  # Worker BASE (Fase B) — imagem LEVE (634MB, sem Chromium/Nuclei/WPScan) p/ os
+  # jobs finos leves (fetch/dns/geoip/fingerprint/contacts/social/…/score). Escala
+  # à parte do worker pesado. `--scale worker-base=N`.
+  worker-base:
+    build:
+      context: ..
+      dockerfile: worker/Dockerfile.base
+    restart: unless-stopped
+    init: true
+    depends_on:
+      directus:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      pgbouncer:
+        condition: service_started
+    environment:
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+      DIRECTUS_ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+      NATS_URL: nats://nats:4222
+      # Telemetria de workers (heartbeat + contadores + logs recentes) → dashboard /workers.
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      MINIO_URL: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-netprospect}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+      MINIO_BUCKET: ${MINIO_BUCKET:-snapshots}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:+http://clickhouse:8123}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-clickhouse}
+      METRICS_THROTTLE_MIN: ${METRICS_THROTTLE_MIN:-60}
+      POSTHOG_HOST: ${POSTHOG_HOST:-}
+      POSTHOG_KEY: ${POSTHOG_KEY:-}
+      # Campanhas (Fase F) — geração (Ollama-se-disponível/fallback) + envio (SMTP/dry-run).
+      OLLAMA_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      CAMPAIGN_TRACK_BASE: ${CAMPAIGN_TRACK_BASE:-}
+      CAMPAIGN_UNSUB_EMAIL: ${CAMPAIGN_UNSUB_EMAIL:-}
+      WORKER_ROLES: base
+      EGRESS_PROXY: ${EGRESS_PROXY:-}
+      ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-10}
+      CONTACTS_CONCURRENCY: ${CONTACTS_CONCURRENCY:-5}
+      DOMAIN_HEALTH_CONC: ${DOMAIN_HEALTH_CONC:-8}
+      SCORE_CONC: ${SCORE_CONC:-12}
+      # Saltar o score recompute por-job do backfill ssl/whois (caminho 2 — drena barato).
+      DOMAIN_HEALTH_SKIP_SCORE: ${DOMAIN_HEALTH_SKIP_SCORE:-}
+      # A2 — escrita DIRETA no PG (via PgBouncer) p/ sites/companies, contornando o Directus
+      # REST no hot-path. DIRECT_PG_WRITE=true liga. Off (default) = comportamento idêntico.
+      DIRECT_PG_WRITE: ${DIRECT_PG_WRITE:-}
+      PG_WRITE_HOST: ${PG_WRITE_HOST:-pgbouncer}
+      PG_WRITE_PORT: ${PG_WRITE_PORT:-5432}
+      PG_WRITE_USER: ${POSTGRES_USER}
+      PG_WRITE_PASSWORD: ${POSTGRES_PASSWORD}
+      PG_WRITE_DB: ${POSTGRES_DB}
+      PG_WRITE_POOL: ${PG_WRITE_POOL:-6}
+      # Part B — router WHOIS: WhoisXML best-effort p/ .pt (csv de keys; free 1000/mês/key).
+      # Vazio = tier inerte (o router usa só RDAP/port-43). RDAP/rate-limit têm defaults.
+      WHOISXML_API_KEYS: ${WHOISXML_API_KEYS:-}
+      RDAP_RATE_PER_SEC: ${RDAP_RATE_PER_SEC:-5}
+    volumes:
+      - ../data/geoip:/app/data/geoip:ro
+      - ../data/tranco:/app/data/tranco:ro
+    deploy:
+      replicas: ${WORKER_BASE_REPLICAS:-2}
+
+  # A3 — pool de WRITERS (write-behind). Corre perto do Postgres, puxa jobs.result.site,
+  # coalesce por id + 1 UPDATE por flush. Só faz sentido com WRITE_BEHIND=true nos workers.
+  # Off por omissão (WRITER_REPLICAS=0); ligar: WRITER_REPLICAS=1 + WRITE_BEHIND=true.
+  worker-writer:
+    build:
+      context: ..
+      dockerfile: worker/Dockerfile.base
+    restart: unless-stopped
+    init: true
+    depends_on:
+      pgbouncer:
+        condition: service_started
+      nats:
+        condition: service_started
+    environment:
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+      DIRECTUS_ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+      NATS_URL: nats://nats:4222
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+      WORKER_ROLES: writer
+      DIRECT_PG_WRITE: 'true'
+      WRITE_BEHIND: ${WRITE_BEHIND:-}
+      PG_WRITE_HOST: ${PG_WRITE_HOST:-pgbouncer}
+      PG_WRITE_PORT: ${PG_WRITE_PORT:-5432}
+      PG_WRITE_USER: ${POSTGRES_USER}
+      PG_WRITE_PASSWORD: ${POSTGRES_PASSWORD}
+      PG_WRITE_DB: ${POSTGRES_DB}
+      PG_WRITE_POOL: ${WRITER_PG_POOL:-4}
+      WRITER_BATCH: ${WRITER_BATCH:-500}
+    deploy:
+      replicas: ${WRITER_REPLICAS:-0}
+
+  # Ollama (classificação de atividade, Fase 2b). Só arranca com o perfil `audit`:
+  #   docker compose -f docker/docker-compose.yml --profile audit up -d ollama ollama-init
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ['audit']
+    restart: unless-stopped
+    volumes:
+      - ./.data/ollama:/root/.ollama
+
+  # One-shot: puxa o modelo Gemma para o volume do Ollama e sai.
+  ollama-init:
+    image: ollama/ollama:latest
+    profiles: ['audit']
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
+    entrypoint: ['/bin/sh', '-c', 'sleep 4; ollama pull "$${OLLAMA_MODEL}"']
+    restart: 'no'
+
+  # Egresso via EXIT NODE Tailscale (Fase C) — diversidade de IP p/ GMB e
+  # enumeração de subdomínios. Modo USERSPACE: expõe um proxy HTTP em :1055 que sai
+  # pelo exit node ${TS_EXIT_NODE}. Os workers põem EGRESS_PROXY=http://tailscale-egress:1055.
+  # Só arranca com o perfil `egress`:
+  #   docker compose -f docker/docker-compose.yml --profile egress up -d tailscale-egress
+  # POOL de IPs: correr várias instâncias (TS_EXIT_NODE diferente) + grupos de worker
+  # a apontar a cada uma. Para rotear TODO o egresso (incl. o Postgres do crt.sh),
+  # usar antes um sidecar em modo KERNEL + `network_mode: service:<sidecar>` no worker
+  # (ver README §Phase C).
+  tailscale-egress:
+    image: tailscale/tailscale:latest
+    profiles: ['egress']
+    restart: unless-stopped
+    hostname: np-egress
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_USERSPACE: 'true'
+      TS_EXTRA_ARGS: --exit-node=${TS_EXIT_NODE:-} --exit-node-allow-lan-access --advertise-tags=tag:egress
+      TS_OUTBOUND_HTTP_PROXY_LISTEN: 0.0.0.0:1055
+      TS_STATE_DIR: /var/lib/tailscale
+    volumes:
+      - ./.data/tailscale-egress:/var/lib/tailscale
+
+  # Exposição via Tailscale (opcional). Só arranca com o perfil `tailscale`:
+  #   docker compose -f docker/docker-compose.yml --profile tailscale up -d
+  # Junta este host à tailnet como `${TS_HOSTNAME}` e faz `tailscale serve` a
+  # proxy da tailnet (HTTPS) -> http://directus:8055 (mesma rede docker).
+  # O npmPlus (noutra VM, na tailnet) aponta o subdomínio de netmaster.pt para
+  # https://${TS_HOSTNAME}.<tua-tailnet>.ts.net . O Directus continua acessível
+  # localmente em :8056 (não é preciso publicar portas na tailnet).
+  tailscale:
+    image: tailscale/tailscale:latest
+    profiles: ['tailscale']
+    hostname: ${TS_HOSTNAME:-netprospect-directus}
+    restart: unless-stopped
+    depends_on:
+      - directus
+    environment:
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_EXTRA_ARGS: --advertise-tags=tag:directus
+    volumes:
+      - ./.data/tailscale:/var/lib/tailscale
+      - ./.data/tailscale/serve.json:/config/serve.json:ro
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    cap_add:
+      - net_admin
+      - sys_module
+
+  # --- ANALYTICS (Fase E) -----------------------------------------------------
+  # ClickHouse: séries temporais de observações + change_events (deteção de
+  # mudança / gatilhos de venda). 1 container, ~1-2 GB RAM. Perfil `analytics`
+  # (NÃO arranca por omissão). Só a porta HTTP 8123 publicada em 127.0.0.1; a
+  # nativa 9000 fica interna (não colide com o MinIO, que publica a 9000 no host).
+  #   docker compose -f docker/docker-compose.yml --profile analytics up -d clickhouse
+  #   CLICKHOUSE_URL=http://localhost:8123 node bootstrap-clickhouse.js
+  # Os workers escrevem via http://clickhouse:8123 (definir CLICKHOUSE_URL no .env).
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine
+    restart: unless-stopped
+    profiles: ['analytics']
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-clickhouse}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: '1'
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    ports:
+      - '127.0.0.1:8123:8123'
+    volumes:
+      - ./.data/clickhouse:/var/lib/clickhouse
+      - ../db/clickhouse-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./clickhouse-config/listen-ipv4.xml:/etc/clickhouse-server/config.d/listen-ipv4.xml:ro
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:8123/ping']
+      interval: 15s
+      timeout: 5s
+      retries: 5
+

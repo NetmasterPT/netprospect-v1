@@ -1,0 +1,16 @@
+{
+  "name": "netprospect-dashboard",
+  "version": "1.0.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "dependencies": {
+    "csv-parse": "^7.0.1",
+    "express": "^4.21.2",
+    "multer": "^2.2.0",
+    "nats": "^2.29.3",
+    "redis": "^6.1.0"
+  }
+}

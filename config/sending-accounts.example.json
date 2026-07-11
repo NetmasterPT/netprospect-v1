@@ -1,0 +1,31 @@
+[
+  {
+    "_comment": "Outreach Fase 2 — mailboxes de ENVIO. Copiar para config/sending-accounts.json (gitignored). host = o docker-mailserver da VM de envio (NUNCA IPs de produção). warmup_max = teto do warmup (o daily_cap sobe até aqui). Estado (sent_today/warmup_stage) fica no Directus sending_accounts. Ver docs/outreach-ops/03-sending-fleet.md.",
+    "id": "send1",
+    "host": "mail.secondary-domain-1.tld",
+    "port": 587,
+    "secure": false,
+    "user": "goncalo@secondary-domain-1.tld",
+    "pass": "CHANGE_ME",
+    "from_email": "goncalo@secondary-domain-1.tld",
+    "from_name": "Gonçalo Pedro",
+    "domain": "secondary-domain-1.tld",
+    "ip": "203.0.113.20",
+    "provider": "self",
+    "warmup_max": 50
+  },
+  {
+    "id": "send2",
+    "host": "mail.secondary-domain-2.tld",
+    "port": 465,
+    "secure": true,
+    "user": "comercial@secondary-domain-2.tld",
+    "pass": "CHANGE_ME",
+    "from_email": "comercial@secondary-domain-2.tld",
+    "from_name": "Netmaster",
+    "domain": "secondary-domain-2.tld",
+    "ip": "203.0.113.21",
+    "provider": "self",
+    "warmup_max": 50
+  }
+]

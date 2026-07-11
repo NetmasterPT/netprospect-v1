@@ -1,0 +1,9 @@
+{
+  "_comment": "Copiar para config/whois-providers.json (gitignored). Tier WhoisXML do router WHOIS — best-effort só para .pt (sem RDAP público + port-43 do DNS.pt filtra IPs de datacenter) e fallback de expiry. Free = 1000 req/mês por key → várias contas somam quota. Round-robin pelas keys. Alternativa: env WHOISXML_API_KEYS (csv). Priorizado por lead_score no enqueue.",
+  "whoisxml": {
+    "apiKeys": [
+      "YOUR_WHOISXML_API_KEY_1",
+      "YOUR_WHOISXML_API_KEY_2"
+    ]
+  }
+}

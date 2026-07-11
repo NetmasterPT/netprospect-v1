@@ -1,0 +1,1216 @@
+<!doctype html>
+<html lang="pt" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NetProspect</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="netprospect.css" />
+<script>
+  // Tema antes do paint (evita flash). Default: dark.
+  (function () { try { document.documentElement.setAttribute('data-theme', localStorage.getItem('np-theme') || 'dark'); } catch (e) {} })();
+</script>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { background: var(--np-bg); color: var(--np-text); font-family: var(--np-font); font-size: var(--np-fs-body); line-height: var(--np-lh-body); }
+  a { color: inherit; text-decoration: none; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; } ::-webkit-scrollbar-thumb { background: var(--np-border-2); border-radius: 999px; } ::-webkit-scrollbar-track { background: transparent; }
+  .tnum { font-variant-numeric: tabular-nums; }
+  .muted { color: var(--np-text-3); } .faint { color: var(--np-text-faint); }
+  svg { display: block; }
+
+  /* Top bar */
+  .np-topbar { position: sticky; top: 0; z-index: var(--np-z-nav); height: var(--np-topbar-h); background: var(--np-chrome); border-bottom: 1px solid var(--np-chrome-border); display: flex; align-items: center; gap: var(--np-s5); padding: 0 var(--np-s5); color: var(--np-chrome-text); display: flex; justify-content: space-between; }
+  .np-brand { display: flex; align-items: center; gap: 10px; }
+  .np-brandmark { width: 28px; height: 28px; border-radius: 8px; background: var(--np-brand-fill); box-shadow: var(--np-shadow-brand); display: grid; place-items: center; }
+  .np-brandmark i { width: 12px; height: 12px; border: 2.5px solid #fff; transform: rotate(45deg); border-radius: 2px; }
+  .np-word { font-weight: 800; font-size: 16px; letter-spacing: -0.01em; }
+  .np-pilltag { font-size: 9px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--np-chrome-text-2); border: 1px solid var(--np-chrome-border); padding: 2px 6px; border-radius: 999px; }
+  .np-tsearch { flex: 1; max-width: 520px; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 12px; background: rgba(255,255,255,0.06); border: 1px solid var(--np-chrome-border); border-radius: var(--np-radius); color: var(--np-chrome-text-2); font-size: 13px; }
+  .np-tsearch input { flex: 1; background: none; border: none; color: var(--np-chrome-text); font: inherit; outline: none; }
+  .np-kbd { font-size: 10px; border: 1px solid var(--np-chrome-border); border-radius: 4px; padding: 1px 5px; }
+  .np-mic { width: 26px; height: 26px; display: grid; place-items: center; border: none; background: transparent; color: var(--np-chrome-text-2); border-radius: 6px; cursor: pointer; }
+  .np-mic:hover { background: rgba(255,255,255,0.10); color: var(--np-chrome-text); }
+  .np-mic.rec { color: #fff; background: var(--np-brand-fill); animation: micpulse 1s infinite; }
+  @keyframes micpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  /* Sidebar colapsada (só ícones) */
+  .np-shell.nav-collapsed .np-nav { flex-basis: var(--np-nav-w-collapsed); width: var(--np-nav-w-collapsed); padding-left: 8px; padding-right: 8px; }
+  .np-shell.nav-collapsed .np-nav-row { justify-content: center; padding: 0; }
+  .np-shell.nav-collapsed .np-nav-row span, .np-shell.nav-collapsed .np-nav-eyebrow { display: none; }
+  .np-iconbtn { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--np-radius); border: 1px solid var(--np-chrome-border); background: transparent; color: var(--np-chrome-text-2); cursor: pointer; position: relative; margin-right: 10px; }
+  .np-iconbtn:hover { background: var(--np-chrome-2); color: var(--np-chrome-text); }
+  .np-themebtn { width: auto; padding: 0 12px; gap: 6px; display: flex; align-items: center; font: inherit; font-size: 12px; font-weight: 600; }
+  .np-avatar { width: 30px; height: 30px; border-radius: 999px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 12px; background: linear-gradient(135deg, #EA0B2A, #F2B234); }
+
+  /* Shell */
+  .np-shell { display: flex; align-items: flex-start; }
+  .np-nav { position: sticky; top: var(--np-topbar-h); flex: 0 0 var(--np-nav-w); width: var(--np-nav-w); height: calc(100vh - var(--np-topbar-h)); background: var(--np-chrome); border-right: 1px solid var(--np-chrome-border); overflow-y: auto; padding: var(--np-s4) var(--np-s3); color: var(--np-chrome-text-2); }
+  .np-nav-eyebrow { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--np-chrome-text-2); padding: 0 10px; margin: var(--np-s4) 0 var(--np-s2); }
+  .np-nav-row { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: var(--np-radius); font-size: 13px; font-weight: 500; color: var(--np-chrome-text-2); cursor: pointer; margin-bottom: 2px; }
+  .np-nav-row:hover { background: var(--np-chrome-2); color: var(--np-chrome-text); }
+  .np-nav-row.is-active { color: var(--np-chrome-text); background: var(--np-chrome-2); box-shadow: inset 3px 0 0 var(--np-brand); font-weight: 700; }
+  .np-nav-row.is-active svg { color: var(--np-brand); }
+  .np-nav-count { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--np-chrome-text-2); }
+  .np-nav-dot { width: 8px; height: 8px; border-radius: 999px; }
+  .np-fresh { margin-top: var(--np-s4); background: rgba(255,255,255,0.04); border: 1px solid var(--np-chrome-border); border-radius: var(--np-radius); padding: 10px 12px; font-size: 11px; }
+  .np-fresh .d { width: 7px; height: 7px; border-radius: 999px; background: var(--np-ok-mark); box-shadow: 0 0 0 3px rgba(34,197,94,0.18); display: inline-block; margin-right: 6px; }
+
+  .np-main { flex: 1 1 auto; min-width: 0; min-height: calc(100vh - var(--np-topbar-h)); padding: var(--np-s6) 26px; }
+  .np-eyebrow { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--np-brand-ink); font-weight: 700; }
+  .np-h1 { font-size: var(--np-fs-display); font-weight: 800; letter-spacing: -0.02em; margin: 4px 0 2px; }
+  .np-sub { color: var(--np-text-3); font-size: 13px; }
+  .np-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; flex-wrap: wrap; }
+
+  /* Cards */
+  .np-card { background: var(--np-surface); border: 1px solid var(--np-border); border-radius: var(--np-radius-lg); box-shadow: var(--np-shadow-card); }
+  .np-card-h { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--np-divider); }
+  .np-card-h h2 { font-size: var(--np-fs-h1); font-weight: 800; margin: 0; }
+  .np-card-b { padding: 16px 18px; }
+  .np-grid { display: grid; gap: 16px; }
+
+  /* KPI */
+  .np-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(184px, 1fr)); gap: 14px; margin-bottom: 18px; }
+  .np-kpi { background: var(--np-surface); border: 1px solid var(--np-border); border-radius: var(--np-radius-lg); padding: 15px 16px; box-shadow: var(--np-shadow-card); transition: transform var(--np-dur) var(--np-ease), border-color var(--np-dur); }
+  a.np-kpi:hover { transform: translateY(-2px); border-color: var(--np-brand-soft-bd); }
+  .np-kpi-l { display: flex; align-items: center; gap: 8px; color: var(--np-text-3); font-size: 12px; }
+  .np-kpi-ic { width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; background: var(--np-brand-soft); color: var(--np-brand); }
+  .np-kpi-v { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; margin-top: 8px; }
+
+  /* Buttons */
+  .np-btn { display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 14px; border-radius: var(--np-radius-sm); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; border: 1px solid var(--np-border); background: var(--np-surface-2); color: var(--np-text); }
+  .np-btn:hover { border-color: var(--np-border-2); }
+  .np-btn--primary { background: var(--np-brand-fill); color: var(--np-on-brand); border-color: transparent; box-shadow: var(--np-shadow-brand); }
+  .np-btn--primary:hover { background: var(--np-brand-hover); }
+  .np-btn--sm { height: 30px; padding: 0 10px; font-size: 12px; }
+  .np-seg { display: inline-flex; background: var(--np-surface-2); border: 1px solid var(--np-border); border-radius: var(--np-radius); padding: 2px; gap: 2px; }
+  .np-seg button { height: 26px; padding: 0 12px; border: none; background: none; color: var(--np-text-3); font: inherit; font-size: 12px; font-weight: 600; border-radius: 6px; cursor: pointer; }
+  .np-seg button.on { background: var(--np-surface); color: var(--np-text); box-shadow: var(--np-shadow-card); }
+
+  /* Badges + chips */
+  .np-badge { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; border-radius: 999px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .np-badge.ok { color: var(--np-ok); background: var(--np-ok-soft); border: 1px solid var(--np-ok-soft-bd); }
+  .np-badge.warn { color: var(--np-warn); background: var(--np-warn-soft); border: 1px solid var(--np-warn-soft-bd); }
+  .np-badge.info { color: var(--np-info); background: var(--np-info-soft); border: 1px solid var(--np-info-soft-bd); }
+  .np-badge.neutral { color: var(--np-neutral); background: var(--np-neutral-soft); border: 1px solid var(--np-neutral-soft-bd); }
+  .np-badge.brand { color: var(--np-brand-ink); background: var(--np-brand-soft); border: 1px solid var(--np-brand-soft-bd); }
+  .np-chip { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--np-text-2); background: var(--np-surface-2); border: 1px solid var(--np-border); }
+  .np-dot { width: 8px; height: 8px; border-radius: 999px; flex: 0 0 auto; }
+
+  /* Tables */
+  .np-tablewrap { overflow: auto; }
+  table.np-table { width: 100%; border-collapse: collapse; }
+  .np-table th { position: sticky; top: 0; z-index: 2; background: var(--np-surface-2); height: 42px; text-align: left; padding: 0 var(--np-cell-x); font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--np-text-3); font-weight: 700; border-bottom: 1px solid var(--np-border); white-space: nowrap; }
+  .np-table td { height: var(--np-row-h); padding: 0 var(--np-cell-x); border-bottom: 1px solid var(--np-divider); font-size: 13px; white-space: nowrap; }
+  .np-table tbody tr { cursor: pointer; }
+  .np-table tbody tr:hover { background: var(--np-surface-3); }
+  .np-table tbody tr.sel { background: var(--np-surface-sel); }
+
+  /* Filter bar */
+  .np-filterbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 14px; }
+  .np-input { height: 36px; padding: 0 12px; border: 1px solid var(--np-border); border-radius: var(--np-radius-sm); background: var(--np-surface-2); color: var(--np-text); font: inherit; font-size: 13px; outline: none; }
+  .np-input:focus { border-color: var(--np-brand); box-shadow: 0 0 0 3px var(--np-focus); }
+  .np-fld { display: flex; flex-direction: column; gap: 5px; }
+  .np-fld > span { font-size: 11.5px; color: var(--np-text-2); font-weight: 600; }
+  .np-fld > .np-input { width: 100%; box-sizing: border-box; }
+  .np-facet { position: relative; }
+  .np-facet > button { height: 36px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--np-border); border-radius: var(--np-radius-sm); background: var(--np-surface-2); color: var(--np-text-2); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+  .np-facet.on > button { border-color: var(--np-brand-soft-bd); background: var(--np-brand-soft); color: var(--np-brand-ink); }
+  .np-facet-dd { position: absolute; top: 42px; left: 0; min-width: 210px; background: var(--np-surface); border: 1px solid var(--np-border); border-radius: var(--np-radius); box-shadow: var(--np-shadow-pop); z-index: var(--np-z-dropdown); padding: 6px; max-height: 320px; overflow: auto; }
+  .np-opt { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: 6px; font-size: 13px; cursor: pointer; }
+  .np-opt:hover { background: var(--np-surface-3); }
+  .np-opt .c { margin-left: auto; color: var(--np-text-3); font-size: 12px; }
+  .np-chiprow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 14px 12px; }
+  .np-fchip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 6px 0 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--np-brand-ink); background: var(--np-brand-soft); border: 1px solid var(--np-brand-soft-bd); }
+  .np-fchip button { border: none; background: none; color: inherit; cursor: pointer; display: grid; place-items: center; }
+
+  /* Bars / funnel */
+  .np-bar-row { display: grid; grid-template-columns: 128px 1fr 84px 46px; align-items: center; gap: 10px; margin: 8px 0; }
+  .np-bar-lab { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--np-text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .np-bar-track { height: 14px; background: var(--np-track); border-radius: var(--np-radius-sm); overflow: hidden; }
+  .np-bar-fill { height: 100%; border-radius: var(--np-radius-sm); transition: width var(--np-dur-slow) var(--np-ease); }
+  .np-bar-v { font-size: 12.5px; font-weight: 700; text-align: right; }
+  .np-bar-p { font-size: 11px; color: var(--np-text-3); text-align: right; }
+  .np-funnel-row { margin: 10px 0; }
+  .np-funnel-track { height: 26px; background: var(--np-track); border-radius: var(--np-radius-sm); overflow: hidden; }
+
+  /* Pager */
+  .np-pager { display: flex; align-items: center; gap: 10px; padding: 12px 14px; color: var(--np-text-3); font-size: 13px; }
+  .np-pager button { height: 32px; min-width: 32px; padding: 0 10px; border: 1px solid var(--np-border); background: var(--np-surface); color: var(--np-text); border-radius: var(--np-radius-sm); cursor: pointer; font: inherit; }
+  .np-pager button.on { background: var(--np-brand-fill); color: #fff; border-color: transparent; }
+  .np-pager button:disabled { opacity: 0.4; cursor: default; }
+
+  /* Drawer */
+  .np-scrim { position: fixed; inset: var(--np-topbar-h) 0 0 0; background: var(--np-overlay); z-index: var(--np-z-drawer-scrim); opacity: 0; pointer-events: none; transition: opacity var(--np-dur); }
+  .np-scrim.open { opacity: 1; pointer-events: auto; }
+  .np-drawer { position: fixed; top: var(--np-topbar-h); right: 0; width: var(--np-drawer-w); max-width: 92vw; height: calc(100vh - var(--np-topbar-h)); background: var(--np-surface); box-shadow: var(--np-shadow-drawer); z-index: var(--np-z-drawer); transform: translateX(100%); transition: transform var(--np-dur-slow) var(--np-ease); overflow-y: auto; }
+  .np-drawer.open { transform: none; }
+  .np-drawer-h { background: var(--np-surface-2); padding: 16px 18px; border-bottom: 1px solid var(--np-divider); }
+  .np-kv { display: grid; grid-template-columns: 92px 1fr; gap: 1px 10px; background: var(--np-border); border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow: hidden; }
+  .np-kv .k, .np-kv .v { background: var(--np-surface); padding: 8px 10px; font-size: 12.5px; }
+  .np-kv .k { color: var(--np-text-3); }
+  .np-sec-t { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--np-text-3); font-weight: 700; margin: 18px 0 8px; }
+  .np-contact { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--np-divider); }
+  .np-mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
+  .np-empty { text-align: center; padding: 48px 20px; color: var(--np-text-3); }
+</style>
+</head>
+<body>
+<header class="np-topbar">
+  <div style="display:flex;align-items:center">
+    <button class="np-iconbtn" id="hambtn" title="Menu (abrir/fechar)"><span data-ic="menu"></span></button>
+    <a class="np-brand" href="#/overview"><span class="np-brandmark"><i></i></span><span class="np-word">Net<span style="color:var(--np-brand)">Prospect</span></span></a>
+  </div>
+  <form class="np-tsearch" id="gsearchform"><span data-ic="search"></span><input id="gsearch" placeholder="Procurar domínios ou empresas… (Enter)" autocomplete="off" /><button type="button" class="np-mic" id="micbtn" title="Falar (voz → texto)"><span data-ic="mic"></span></button></form>
+  <div style="display:flex;align-items:center">
+    <button class="np-iconbtn" id="refreshbtn" title="Atualizar agora"><span data-ic="refresh"></span></button>
+    <button class="np-iconbtn np-themebtn" id="themebtn"></button>
+    <button class="np-iconbtn" id="bellbtn" title="Notificações"><span data-ic="bell"></span></button>
+    <button class="np-iconbtn" id="importbtn" title="Importar dados (CSV)"><span data-ic="upload"></span></button>
+    <button class="np-iconbtn" id="setbtn" title="Definições"><span data-ic="gear"></span></button>
+    <div style="display:flex;align-items:center;gap:8px;margin-left:6px"><span class="np-avatar">RA</span><div style="font-size:12px;line-height:1.2"><div style="font-weight:700;color:var(--np-chrome-text)">Rui Almeida</div><div style="color:var(--np-chrome-text-2)">Sales · Admin</div></div></div>
+  </div>
+</header>
+<div class="np-shell">
+  <nav class="np-nav" id="nav"></nav>
+  <main class="np-main" id="view"></main>
+</div>
+<div class="np-scrim" id="scrim"></div>
+<aside class="np-drawer" id="drawer"></aside>
+
+<script>
+// ---------- helpers ----------
+const $ = (s, r = document) => r.querySelector(s);
+const el = (h) => { const t = document.createElement('template'); t.innerHTML = h.trim(); return t.content.firstChild; };
+const fmt = (n) => (n == null ? '—' : String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ' '));
+const esc = (s) => (s ?? '').toString().replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const pct = (a, b) => (b ? (a / b * 100) : 0);
+async function api(p, opts) { const r = await fetch(p, opts); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || r.status); return r.json(); }
+const CAT = (slug) => `var(--cat-${(slug || 'custom').toLowerCase()}, var(--cat-custom))`;
+
+// Lucide-ish icons (24 viewBox)
+const ICONS = {
+  search: 'M11 19a8 8 0 100-16 8 8 0 000 16zM21 21l-4.3-4.3',
+  bell: 'M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 01-3.4 0',
+  sun: 'M12 17a5 5 0 100-10 5 5 0 000 10zM12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4',
+  moon: 'M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z',
+  overview: 'M3 3h8v8H3zM13 3h8v5h-8zM13 12h8v9h-8zM3 13h8v8H3z',
+  directory: 'M3 21h18M5 21V7l7-4 7 4v14M9 9h.01M13 9h.01M9 13h.01M13 13h.01M9 17h.01M13 17h.01',
+  contacts: 'M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2M9 11a4 4 0 100-8 4 4 0 000 8M23 21v-2a4 4 0 00-3-3.9M16 3.1a4 4 0 010 7.8',
+  segments: 'M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z',
+  gear: 'M12 15a3 3 0 100-6 3 3 0 000 6zM19.4 15a1.7 1.7 0 00.3 1.9l.1.1a2 2 0 11-2.8 2.8l-.1-.1a1.7 1.7 0 00-2.9 1.2V21a2 2 0 11-4 0v-.1A1.7 1.7 0 006.8 19a1.7 1.7 0 00-1.9.3l-.1.1a2 2 0 11-2.8-2.8l.1-.1A1.7 1.7 0 003 13.6H3a2 2 0 110-4h.1A1.7 1.7 0 005 6.8l-.1-.1a2 2 0 112.8-2.8l.1.1a1.7 1.7 0 001.9.3H10a1.7 1.7 0 001-1.5V3a2 2 0 114 0v.1a1.7 1.7 0 001 1.5 1.7 1.7 0 001.9-.3l.1-.1a2 2 0 112.8 2.8l-.1.1a1.7 1.7 0 00-.3 1.9V9a1.7 1.7 0 001.5 1H21a2 2 0 110 4h-.1a1.7 1.7 0 00-1.5 1z',
+  power: 'M18.4 6.6a9 9 0 11-12.8 0M12 2v10',
+  check: 'M20 6L9 17l-5-5',
+  x: 'M18 6L6 18M6 6l12 12',
+  chevD: 'M6 9l6 6 6-6', chevR: 'M9 18l6-6-6-6',
+  ext: 'M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6M15 3h6v6M10 14L21 3',
+  mail: 'M4 4h16a2 2 0 012 2v12a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2zM22 6l-10 7L2 6',
+  phone: 'M22 16.9v3a2 2 0 01-2.2 2 19.8 19.8 0 01-8.6-3 19.5 19.5 0 01-6-6 19.8 19.8 0 01-3-8.6A2 2 0 014.1 2h3a2 2 0 012 1.7c.1.9.3 1.8.6 2.7a2 2 0 01-.5 2.1L8.1 9.9a16 16 0 006 6l1.4-1.1a2 2 0 012.1-.5c.9.3 1.8.5 2.7.6a2 2 0 011.7 2z',
+  shield: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z',
+  download: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3',
+  upload: 'M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12',
+  briefcase: 'M20 7H4a2 2 0 00-2 2v9a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2zM16 21V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v16',
+  globe: 'M12 22a10 10 0 100-20 10 10 0 000 20zM2 12h20M12 2a15 15 0 010 20 15 15 0 010-20z',
+  clock: 'M12 22a10 10 0 100-20 10 10 0 000 20zM12 6v6l4 2',
+  dash: 'M5 12h14', star: 'M12 2l3 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.9 21l1.2-6.8-5-4.9 6.9-1z',
+  server: 'M20 4H4a2 2 0 00-2 2v3a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zM20 13H4a2 2 0 00-2 2v3a2 2 0 002 2h16a2 2 0 002-2v-3a2 2 0 00-2-2zM6 7h.01M6 16h.01',
+  plus: 'M12 5v14M5 12h14',
+  menu: 'M3 12h18M3 6h18M3 18h18',
+  mic: 'M12 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3zM19 10a7 7 0 01-14 0M12 17v4M8 21h8',
+  activity: 'M22 12h-4l-3 9L9 3l-3 9H2',
+  refresh: 'M23 4v6h-6M1 20v-6h6M3.5 9a9 9 0 0114.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0020.5 15',
+  trash: 'M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M10 11v6M14 11v6',
+  send: 'M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z',
+  sparkles: 'M12 3l1.6 4.8L18 9.5l-4.4 1.7L12 16l-1.6-4.8L6 9.5l4.4-1.7zM19 14l.9 2.6L22 17.5l-2.1.9L19 21l-.9-2.6L16 17.5l2.1-.9z',
+  sliders: 'M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6',
+};
+function ic(name, size = 16) { return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="${ICONS[name] || ''}"/></svg>`; }
+document.querySelectorAll('[data-ic]').forEach((n) => n.innerHTML = ic(n.dataset.ic));
+
+// ---------- theme ----------
+function paintTheme() { const dark = document.documentElement.getAttribute('data-theme') !== 'light'; $('#themebtn').innerHTML = dark ? ic('sun') : ic('moon'); }
+$('#themebtn').onclick = () => { const t = document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light'; document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('np-theme', t); } catch (e) {} paintTheme(); };
+paintTheme();
+
+// ---------- sidebar colapsável (hambúrguer) ----------
+const shellEl = document.querySelector('.np-shell');
+function applyNav() { const c = localStorage.getItem('np-nav') === 'collapsed'; shellEl.classList.toggle('nav-collapsed', c); }
+try { applyNav(); } catch (e) {}
+$('#hambtn').onclick = () => { const c = shellEl.classList.toggle('nav-collapsed'); try { localStorage.setItem('np-nav', c ? 'collapsed' : 'open'); } catch (e) {} };
+$('#setbtn').onclick = () => { location.hash = '#/settings'; };
+$('#importbtn').onclick = () => { location.hash = '#/import'; };
+$('#refreshbtn').onclick = () => { const b = $('#refreshbtn'); b.classList.add('rec'); Promise.resolve(route()).finally(() => setTimeout(() => b.classList.remove('rec'), 400)); };
+
+// ---------- pesquisa global + voz (Speech-to-Text) ----------
+function goSearch(q) { q = (q || '').trim(); if (!q) return; location.hash = '#/directory?q=' + encodeURIComponent(q); }
+$('#gsearchform').addEventListener('submit', (e) => { e.preventDefault(); goSearch($('#gsearch').value); });
+(function setupMic() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const btn = $('#micbtn');
+  if (!SR) { btn.title = 'Reconhecimento de voz não suportado neste browser'; btn.style.opacity = '0.5'; return; }
+  const rec = new SR(); rec.lang = 'pt-PT'; rec.interimResults = true; rec.continuous = false;
+  let listening = false;
+  rec.onresult = (ev) => { const txt = Array.from(ev.results).map((r) => r[0].transcript).join(''); $('#gsearch').value = txt; };
+  rec.onend = () => { listening = false; btn.classList.remove('rec'); const v = $('#gsearch').value.trim(); if (v) goSearch(v); };
+  rec.onerror = () => { listening = false; btn.classList.remove('rec'); };
+  btn.onclick = () => { if (listening) { rec.stop(); return; } try { rec.start(); listening = true; btn.classList.add('rec'); $('#gsearch').value = ''; $('#gsearch').placeholder = 'A ouvir…'; } catch (e) {} };
+})();
+
+// ---------- status badges ----------
+function qualBadge(q) { return q ? `<span class="np-badge ok">${ic('check', 13)}Qualificado</span>` : `<span class="np-badge neutral">${ic('dash', 13)}Não qualif.</span>`; }
+function verifBadge(status, verified) {
+  if (verified || status === 'valid') return `<span class="np-badge ok">${ic('check', 13)}Verificado</span>`;
+  if (status === 'catch_all') return `<span class="np-badge warn">${ic('clock', 13)}Catch-all</span>`;
+  if (status === 'role') return `<span class="np-badge info">${ic('globe', 13)}Role-based</span>`;
+  if (status === 'invalid' || status === 'no_mx') return `<span class="np-badge neutral">${ic('x', 13)}Inválido</span>`;
+  return `<span class="np-badge neutral">${ic('dash', 13)}Não verif.</span>`;
+}
+function liveBadge(live, http) { return live ? `<span class="np-badge ok">${ic('power', 12)}Live</span>` : `<span class="np-badge neutral">${ic('x', 12)}Offline</span>`; }
+const DM = new Set(['CEO', 'CTO', 'CMO', 'CFO', 'COO', 'Founder']);
+
+// ---------- nav ----------
+let STATS = null;
+async function renderNav(active) {
+  const t = STATS?.totals || {};
+  const item = (id, icon, label, count) => `<div class="np-nav-row ${active === id ? 'is-active' : ''}" onclick="location.hash='#/${id}'">${ic(icon, 17)}<span>${label}</span>${count != null ? `<span class="np-nav-count tnum">${fmt(count)}</span>` : ''}</div>`;
+  $('#nav').innerHTML = `
+    <div class="np-nav-eyebrow">Explorar</div>
+    ${item('overview', 'overview', 'Visão geral')}
+    ${item('directory', 'directory', 'Negócios', t.sites)}
+    ${item('contacts', 'contacts', 'Contactos', t.contacts)}
+    ${item('clients', 'briefcase', 'Clientes')}
+    <div class="np-nav-eyebrow">Sistema</div>
+    ${item('workers', 'server', 'Workers')}
+    ${item('queues', 'activity', 'Filas')}
+    ${item('agents', 'sparkles', 'Agentes IA')}
+    ${item('isps', 'globe', 'ISPs / alojamento')}
+    ${item('triggers', 'activity', 'Gatilhos')}
+    ${item('campaigns', 'send', 'Campanhas')}
+    ${item('segments', 'segments', 'Segmentos')}
+    ${item('config', 'sliders', 'Configuração')}`;
+}
+
+// ---------- bars ----------
+function barRows(items, colorFn, showPct = true) {
+  const max = Math.max(1, ...items.map((i) => i.count));
+  const total = items.reduce((a, i) => a + i.count, 0);
+  return items.map((i) => `<div class="np-bar-row">
+    <span class="np-bar-lab">${i.dot ? `<span class="np-dot" style="background:${colorFn(i)}"></span>` : ''}${esc(i.name)}</span>
+    <div class="np-bar-track"><div class="np-bar-fill" style="width:${pct(i.count, max).toFixed(1)}%;background:${colorFn(i)}"></div></div>
+    <span class="np-bar-v tnum">${fmt(i.count)}</span>
+    ${showPct ? `<span class="np-bar-p tnum">${pct(i.count, total).toFixed(0)}%</span>` : '<span></span>'}
+  </div>`).join('');
+}
+
+// ========== OVERVIEW ==========
+async function viewOverview() {
+  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  const s = await api('/api/stats'); STATS = s; renderNav('overview');
+  const t = s.totals;
+  const kpi = (icon, label, v, href) => `<a class="np-kpi" href="${href}" style="display:block"><div class="np-kpi-l"><span class="np-kpi-ic">${ic(icon, 15)}</span>${label}</div><div class="np-kpi-v tnum">${fmt(v)}</div></a>`;
+  const platColor = (i) => CAT(i.slug);
+  const funnel = [{ name: 'Total de sites', count: t.sites, c: 'var(--np-neutral-mark)' }, { name: 'Sites live', count: t.live, c: 'var(--cat-wordpress)' }, { name: 'Qualificados', count: t.qualified, c: 'var(--np-ok-mark)' }];
+  $('#view').innerHTML = `
+    <div class="np-head"><div><div class="np-eyebrow">Inteligência de mercado</div><h1 class="np-h1">Visão geral</h1><div class="np-sub">Base de <b>${fmt(t.sites)}</b> domínios · .pt · .nl · .se · .fi · .no</div></div>
+      <button class="np-btn">${ic('download', 15)}Exportar</button></div>
+    <div class="np-kpis">
+      ${kpi('directory', 'Sites', t.sites, '#/directory')}${kpi('power', 'Live', t.live, '#/directory?live=true')}${kpi('check', 'Qualificados', t.qualified, '#/directory?qualified=true')}
+      ${kpi('server', 'Empresas', t.companies, '#/directory')}${kpi('contacts', 'Contactos', t.contacts, '#/contacts')}${kpi('mail', 'E-mails verif.', t.verifiedEmails, '#/contacts?verif=valid')}
+    </div>
+    <div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(390px,1fr))">
+      <section class="np-card"><div class="np-card-h"><h2>Funil de qualificação</h2></div><div class="np-card-b">
+        ${funnel.map((f) => `<div class="np-funnel-row"><div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px"><span class="np-bar-lab">${f.name}</span><span class="tnum" style="font-weight:700">${fmt(f.count)} · ${pct(f.count, t.sites).toFixed(0)}%</span></div><div class="np-funnel-track"><div class="np-bar-fill" style="height:100%;width:${pct(f.count, t.sites).toFixed(1)}%;background:${f.c}"></div></div></div>`).join('')}
+      </div></section>
+      <section class="np-card"><div class="np-card-h"><h2>Plataforma detetada</h2></div><div class="np-card-b">${barRows(s.byPlatform.map((p) => ({ ...p, dot: true })), platColor)}</div></section>
+    </div>
+    <div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(390px,1fr));margin-top:16px">
+      <section class="np-card"><div class="np-card-h"><h2>Onde os prospetos estão alojados</h2></div><div class="np-card-b">${barRows(s.byIsp, (i) => i.count >= 10000 ? 'var(--np-brand)' : 'var(--cat-wordpress)', false)}</div></section>
+      <section class="np-card"><div class="np-card-h"><h2>Geografia</h2></div><div class="np-card-b" style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+        <div><div class="np-sec-t" style="margin-top:0">Países</div>${barRows(s.byCountry, () => 'var(--np-info-mark)', false)}</div>
+        <div><div class="np-sec-t" style="margin-top:0">Cidades</div>${barRows((s.byCity || []).slice(0, 8), () => 'var(--np-info-mark)', false)}</div>
+      </div></section>
+    </div>`;
+}
+
+// ========== DIRECTORY ==========
+const DState = { q: '', qualified: '', platform: '', country: '', live: '', has_email: '', has_phone: '', city: '', cpanel: '', fb: '', ig: '', li: '', tw: '', gmb: '', load: '', spf: '', dmarc: '', traffic: '', industry: '', page: 1, openFacet: null, sel: new Set() };
+function parseHashQuery() { const h = location.hash.split('?')[1] || ''; return Object.fromEntries(new URLSearchParams(h)); }
+
+// --- Facetas de auditoria (partilhadas por Negócios e Contactos) ---
+const AUDIT_KEYS = ['has_email', 'has_phone', 'dm', 'lead_min', 'city', 'cpanel', 'fb', 'ig', 'li', 'tw', 'gmb', 'load', 'spf', 'dmarc', 'traffic', 'industry', 'seo_max', 'mobile', 'security', 'sev', 'wpvuln', 'ssl_expiring', 'domain_expiring', 'cms_outdated', 'isp', 'client'];
+const INDUSTRIES = [['restauracao', 'Restauração'], ['retalho', 'Retalho'], ['saude', 'Saúde'], ['construcao', 'Construção'], ['imobiliario', 'Imobiliário'], ['turismo', 'Turismo'], ['juridico', 'Jurídico'], ['contabilidade', 'Contabilidade'], ['automovel', 'Automóvel'], ['beleza', 'Beleza'], ['educacao', 'Educação'], ['ti', 'TI'], ['marketing', 'Marketing'], ['industria', 'Indústria'], ['agricultura', 'Agricultura'], ['transportes', 'Transportes'], ['desporto', 'Desporto'], ['moda', 'Moda'], ['casa', 'Casa'], ['financeiro', 'Financeiro'], ['associacao', 'Associação'], ['outros', 'Outros']];
+const SP14 = '<span style="width:14px;display:inline-block"></span>';
+function auditParse(st, qp) { for (const k of AUDIT_KEYS) st[k] = qp[k] || ''; }
+function auditToParams(st, p) { for (const k of AUDIT_KEYS) if (st[k]) p.set(k, st[k]); }
+// px = prefixo dos handlers ('dir' | 'con'). Botões multi-valor mantêm o dropdown aberto.
+function auditFacetsHtml(st, px) {
+  const dd = (key, label, active, inner) => `<div class="np-facet ${active ? 'on' : ''}"><button onclick="${px}Facet('${key}')">${label} ${ic('chevD', 14)}</button>${st.openFacet === key ? `<div class="np-facet-dd">${inner}</div>` : ''}</div>`;
+  const chk = (on) => on ? ic('check', 14) : SP14;
+  const bOpt = (k, label) => `<div class="np-opt" onclick="${px}Tv('${k}','true')">${chk(!!st[k])} ${label}</div>`;
+  const vOpt = (k, v, label) => `<div class="np-opt" onclick="${px}Tv('${k}','${v}')">${chk(st[k] === v)} ${label}</div>`;
+  const cOpt = (k, v, label) => `<div class="np-opt" onclick="${px}Tc('${k}','${v}')">${chk((st[k] || '').split(',').includes(v))} ${label}</div>`;
+  const sub = (t) => `<div class="np-opt" style="opacity:.55;pointer-events:none;font-size:10.5px;text-transform:uppercase;letter-spacing:.05em">${t}</div>`;
+  const trafficActive = !!st.traffic;
+  const auditActive = st.seo_max || st.mobile || st.security || st.sev || st.wpvuln;
+  const leadActive = st.dm || st.lead_min;
+  return dd('lead', 'Qualidade', leadActive, bOpt('dm', 'Tem decisor') + sub('Lead score') + vOpt('lead_min', '40', '≥ 40') + vOpt('lead_min', '50', '≥ 50') + vOpt('lead_min', '60', '≥ 60') + vOpt('lead_min', '70', '≥ 70'))
+    + dd('contacto', 'Contacto', (st.has_email || st.has_phone), bOpt('has_email', 'Tem email') + bOpt('has_phone', 'Tem telefone'))
+    + dd('social', 'Social', (st.fb || st.ig || st.li || st.tw || st.gmb), bOpt('fb', 'Facebook') + bOpt('ig', 'Instagram') + bOpt('li', 'LinkedIn') + bOpt('tw', 'Twitter / X') + bOpt('gmb', 'Google Business'))
+    + dd('infra', 'Infra / Perf', (st.cpanel || st.load), bOpt('cpanel', 'cPanel') + sub('Velocidade') + cOpt('load', 'fast', 'Rápido') + cOpt('load', 'medium', 'Médio') + cOpt('load', 'slow', 'Lento') + cOpt('load', 'very_slow', 'Muito lento'))
+    + dd('emailauth', 'Email auth', (st.spf || st.dmarc), vOpt('spf', 'missing,weak,invalid', 'SPF com problemas') + vOpt('dmarc', 'missing,weak,invalid', 'DMARC com problemas'))
+    + dd('dominio', 'Domínio / SSL', (st.ssl_expiring || st.domain_expiring || st.cms_outdated), bOpt('ssl_expiring', 'Certificado a expirar (≤30d)') + bOpt('domain_expiring', 'Domínio a expirar (≤90d)') + bOpt('cms_outdated', 'CMS desatualizado'))
+    + dd('traffic', 'Tráfego', trafficActive, cOpt('traffic', 'top10k', 'Top 10k') + cOpt('traffic', 'top100k', 'Top 100k') + cOpt('traffic', 'top1m', 'Top 1M') + cOpt('traffic', 'unranked', 'Sem ranking'))
+    + dd('industry', 'Atividade', !!st.industry, INDUSTRIES.map(([v, l]) => vOpt('industry', v, l)).join(''))
+    + dd('audit', 'Auditoria', auditActive, vOpt('seo_max', '60', 'SEO fraco (<60)') + vOpt('mobile', 'bad', 'Mobile não-friendly') + vOpt('security', 'true', 'Com problemas de segurança') + sub('Severidade (Nuclei)') + cOpt('sev', 'high', 'Alta') + cOpt('sev', 'critical', 'Crítica') + vOpt('wpvuln', 'true', 'WordPress com vulns'))
+    + dd('clientela', 'Cliente', st.client, vOpt('client', 'true', 'É cliente') + vOpt('client', 'false', 'Não é cliente'));
+}
+function auditChips(st) {
+  const L = { has_email: 'Tem email', has_phone: 'Tem telefone', cpanel: 'cPanel', fb: 'Facebook', ig: 'Instagram', li: 'LinkedIn', tw: 'Twitter/X', gmb: 'Google Business', spf: 'SPF com problemas', dmarc: 'DMARC com problemas' };
+  const out = [];
+  if (st.dm) out.push(['dm', 'Tem decisor']);
+  if (st.lead_min) out.push(['lead_min', 'Lead ≥ ' + st.lead_min]);
+  for (const k of ['has_email', 'has_phone', 'cpanel', 'fb', 'ig', 'li', 'tw', 'gmb', 'spf', 'dmarc']) if (st[k]) out.push([k, L[k]]);
+  if (st.city) out.push(['city', 'Cidade: ' + st.city]);
+  if (st.load) out.push(['load', 'Velocidade: ' + st.load.replace(/,/g, ', ')]);
+  if (st.traffic) out.push(['traffic', 'Tráfego: ' + st.traffic.replace(/,/g, ', ')]);
+  if (st.industry) out.push(['industry', 'Atividade: ' + (INDUSTRIES.find((x) => x[0] === st.industry)?.[1] || st.industry)]);
+  if (st.seo_max) out.push(['seo_max', 'SEO fraco']);
+  if (st.mobile) out.push(['mobile', 'Mobile não-friendly']);
+  if (st.security) out.push(['security', 'Problemas de segurança']);
+  if (st.sev) out.push(['sev', 'Severidade: ' + st.sev.replace(/,/g, ', ')]);
+  if (st.wpvuln) out.push(['wpvuln', 'WordPress com vulns']);
+  if (st.ssl_expiring) out.push(['ssl_expiring', 'Certificado a expirar']);
+  if (st.domain_expiring) out.push(['domain_expiring', 'Domínio a expirar']);
+  if (st.cms_outdated) out.push(['cms_outdated', 'CMS desatualizado']);
+  if (st.isp) out.push(['isp', 'ISP: ' + st.isp]);
+  if (st.client) out.push(['client', st.client === 'true' ? 'É cliente' : 'Não é cliente']);
+  return out;
+}
+// Célula de sinais de prospeção para as tabelas.
+function signalsCell(s) {
+  const sig = (t, cls, title) => `<span class="np-badge ${cls}" style="height:18px;padding:0 5px;font-size:10px" title="${title}">${t}</span>`;
+  const b = [];
+  if (s.has_email) b.push(sig('@', 'ok', 'tem email'));
+  if (s.has_phone) b.push(sig('☎', 'ok', 'tem telefone'));
+  if (s.social_facebook) b.push(sig('f', 'brand', 'Facebook'));
+  if (s.social_instagram) b.push(sig('ig', 'brand', 'Instagram'));
+  if (s.social_linkedin) b.push(sig('in', 'brand', 'LinkedIn'));
+  if (s.social_twitter) b.push(sig('x', 'brand', 'Twitter/X'));
+  if (s.gmb) b.push(sig('G', 'brand', 'Google Business'));
+  if (s.is_cpanel) b.push(sig('cP', 'neutral', 'cPanel'));
+  if (['missing', 'weak', 'invalid'].includes(s.spf_status)) b.push(sig('SPF', 'warn', 'SPF: ' + s.spf_status));
+  if (['missing', 'weak', 'invalid'].includes(s.dmarc_status)) b.push(sig('DMARC', 'warn', 'DMARC: ' + s.dmarc_status));
+  if (s.ssl_days_left != null && s.ssl_days_left <= 30) b.push(sig('SSL', 'warn', 'certificado expira em ' + s.ssl_days_left + 'd'));
+  if (s.expiring_soon) b.push(sig('⏳', 'warn', 'domínio a expirar'));
+  if (s.cms_outdated) b.push(sig('CMS↓', 'warn', 'CMS desatualizado' + (s.cms_version ? ' (' + s.cms_version + ')' : '')));
+  return b.length ? `<div style="display:flex;gap:3px;flex-wrap:wrap">${b.join('')}</div>` : '<span class="muted">—</span>';
+}
+// Emblema de lead score (0-100) com cor por escalão.
+function leadBadge(score) {
+  if (score == null) return '<span class="muted">—</span>';
+  const cls = score >= 60 ? 'ok' : score >= 40 ? 'brand' : score >= 20 ? 'info' : 'neutral';
+  return `<span class="np-badge ${cls}" style="min-width:30px;justify-content:center" title="lead score">${score}</span>`;
+}
+async function viewDirectory() {
+  const qp = parseHashQuery();
+  DState.q = qp.q || ''; DState.qualified = qp.qualified || ''; DState.platform = qp.platform || ''; DState.country = qp.country || ''; DState.live = qp.live || ''; DState.page = +qp.page || 1;
+  auditParse(DState, qp);
+  if (!STATS) { STATS = await api('/api/stats'); }
+  renderNav('directory');
+  await paintDirectory();
+}
+function dirSyncHash() {
+  const p = new URLSearchParams();
+  if (DState.q) p.set('q', DState.q); if (DState.qualified) p.set('qualified', DState.qualified);
+  if (DState.platform) p.set('platform', DState.platform); if (DState.country) p.set('country', DState.country);
+  if (DState.live) p.set('live', DState.live);
+  auditToParams(DState, p);
+  if (DState.page > 1) p.set('page', DState.page);
+  history.replaceState(null, '', '#/directory' + (p.toString() ? '?' + p : ''));
+}
+async function paintDirectory() {
+  dirSyncHash();
+  const p = new URLSearchParams({ page: DState.page, limit: 25 });
+  if (DState.q) p.set('q', DState.q); if (DState.qualified) p.set('qualified', DState.qualified);
+  if (DState.platform) p.set('platform', DState.platform); if (DState.country) p.set('country', DState.country);
+  if (DState.live) p.set('live', DState.live);
+  auditToParams(DState, p);
+  const platforms = (STATS?.byPlatform || []).map((x) => ({ slug: x.slug, name: x.name, count: x.count }));
+  const chips = [];
+  if (DState.qualified) chips.push(['qualified', DState.qualified === 'true' ? 'Qualificado' : 'Não qualificado']);
+  if (DState.live) chips.push(['live', 'Live']);
+  if (DState.platform) chips.push(['platform', DState.platform]);
+  if (DState.country) chips.push(['country', 'País: ' + DState.country]);
+  chips.push(...auditChips(DState));
+  $('#view').innerHTML = `
+    <div class="np-head"><div><div class="np-eyebrow">Prospeção</div><h1 class="np-h1">Negócios</h1><div class="np-sub" id="dcount">A carregar…</div></div>
+      <div style="display:flex;gap:8px"><button class="np-btn" onclick="saveSegment()">${ic('segments', 15)}Guardar segmento</button><button class="np-btn" onclick="dirAuditAll()" id="auditallbtn">${ic('shield', 15)}Auditar audiência</button><button class="np-btn" onclick="dirExportCsv()">${ic('download', 15)}Exportar CSV</button></div></div>
+    <section class="np-card" style="margin-bottom:14px">
+      <div class="np-filterbar">
+        <input class="np-input" id="dq" style="min-width:220px" placeholder="Procurar domínio ou empresa…" value="${esc(DState.q)}"/>
+        <div class="np-facet ${DState.qualified ? 'on' : ''}"><button onclick="dirFacet('qualified')">Qualificado ${ic('chevD', 14)}</button>${DState.openFacet === 'qualified' ? `<div class="np-facet-dd">${['true', 'false'].map((v) => `<div class="np-opt" onclick="dirSet('qualified','${DState.qualified === v ? '' : v}')">${DState.qualified === v ? ic('check', 14) : SP14} ${v === 'true' ? 'Só qualificados' : 'Não qualificados'}</div>`).join('')}</div>` : ''}</div>
+        <div class="np-facet ${DState.platform ? 'on' : ''}"><button onclick="dirFacet('platform')">Plataforma ${ic('chevD', 14)}</button>${DState.openFacet === 'platform' ? `<div class="np-facet-dd">${platforms.map((pl) => `<div class="np-opt" onclick="dirSet('platform','${DState.platform === pl.slug ? '' : pl.slug}')"><span class="np-dot" style="background:${CAT(pl.slug)}"></span>${esc(pl.name)}<span class="c tnum">${fmt(pl.count)}</span></div>`).join('')}</div>` : ''}</div>
+        <div class="np-facet ${DState.country ? 'on' : ''}"><button onclick="dirFacet('country')">País ${ic('chevD', 14)}</button>${DState.openFacet === 'country' ? `<div class="np-facet-dd">${(STATS?.byCountry || []).map((c) => `<div class="np-opt" onclick="dirSet('country','${DState.country === c.name ? '' : c.name}')">${DState.country === c.name ? ic('check', 14) : SP14} ${esc(c.name)}<span class="c tnum">${fmt(c.count)}</span></div>`).join('')}</div>` : ''}</div>
+        ${auditFacetsHtml(DState, 'dir')}
+        <input class="np-input" id="dcity" style="width:150px" placeholder="Cidade do negócio…" value="${esc(DState.city)}"/>
+      </div>
+      ${chips.length ? `<div class="np-chiprow"><span class="muted" style="font-size:12px">Filtros:</span>${chips.map(([k, l]) => `<span class="np-fchip">${esc(l)}<button onclick="dirSet('${k}','')">${ic('x', 12)}</button></span>`).join('')}<button class="np-btn np-btn--sm" onclick="dirClear()">Limpar tudo</button></div>` : ''}
+    </section>
+    <section class="np-card"><div class="np-tablewrap"><table class="np-table" style="min-width:1320px"><thead><tr>
+      <th>Lead</th><th>Domínio</th><th>Empresa</th><th>Plataforma</th><th>ISP</th><th>Local negócio</th><th>Sinais</th><th>Contactos</th><th>Qualif.</th></tr></thead>
+      <tbody id="dbody"><tr><td colspan="9"><div class="np-empty">A carregar…</div></td></tr></tbody></table></div>
+      <div class="np-pager" id="dpager"></div>
+    </section>`;
+  const dq = $('#dq');
+  let dt; dq.oninput = () => { clearTimeout(dt); dt = setTimeout(() => { DState.q = dq.value.trim(); DState.page = 1; paintDirectory(); }, 400); };
+  const dcity = $('#dcity');
+  let dct; if (dcity) dcity.oninput = () => { clearTimeout(dct); dct = setTimeout(() => { DState.city = dcity.value.trim(); DState.page = 1; paintDirectory(); }, 450); };
+  const r = await api('/api/directory?' + p);
+  $('#dcount').innerHTML = `<b>${fmt(r.total)}</b> sites correspondem aos filtros · de ${fmt(STATS?.totals?.sites)}`;
+  $('#dbody').innerHTML = r.rows.map((s) => {
+    const plat = s.primary_platform;
+    const platHtml = plat ? `<span class="np-dot" style="display:inline-block;background:${CAT(plat.slug)}"></span> ${esc(plat.name)}` : '<span class="muted">—</span>';
+    const cc = s.contacts_count || 0;
+    const contacts = cc ? `${cc}${s.has_verified_email ? ' <span class="np-badge ok" style="height:18px">verif.</span>' : ''}` : '<span class="muted">sem</span>';
+    const localNeg = s.business_city ? `<b>${esc(s.business_city)}</b>` : `<span class="muted">${esc([s.ip_city, s.ip_country].filter(Boolean).join(' · ') || '—')}</span>`;
+    return `<tr onclick="openSite('${esc(s.domain)}')">
+      <td>${leadBadge(s.lead_score)}</td>
+      <td><span class="np-dot" style="display:inline-block;background:${s.is_live ? 'var(--np-ok-mark)' : 'var(--np-neutral-mark)'}"></span> <b>${esc(s.domain)}</b></td>
+      <td class="muted" style="max-width:180px;overflow:hidden;text-overflow:ellipsis">${esc(s.company?.name || s.company?.org_domain || '—')}</td>
+      <td>${platHtml}</td>
+      <td class="muted">${esc(s.isp || '—')}</td>
+      <td>${localNeg}</td>
+      <td>${signalsCell(s)}</td>
+      <td>${contacts}</td>
+      <td>${qualBadge(s.qualified)}</td></tr>`;
+  }).join('') || `<tr><td colspan="9"><div class="np-empty">Sem resultados.</div></td></tr>`;
+  const pages = Math.max(1, Math.ceil(r.total / r.limit));
+  $('#dpager').innerHTML = `<span>A mostrar <b>${fmt((r.page - 1) * r.limit + 1)}–${fmt(Math.min(r.page * r.limit, r.total))}</b> de <b>${fmt(r.total)}</b></span>
+    <span style="flex:1"></span><button ${r.page <= 1 ? 'disabled' : ''} onclick="dirPage(${r.page - 1})">‹</button><span class="tnum">Página ${r.page} / ${fmt(pages)}</span><button ${r.page >= pages ? 'disabled' : ''} onclick="dirPage(${r.page + 1})">›</button>`;
+}
+window.dirFacet = (k) => { DState.openFacet = DState.openFacet === k ? null : k; paintDirectory(); };
+window.dirSet = (k, v) => { DState[k] = v; DState.openFacet = null; DState.page = 1; paintDirectory(); };
+// Toggle de valor (mantém o dropdown aberto p/ escolher vários no mesmo grupo).
+window.dirTv = (k, v) => { DState[k] = DState[k] === v ? '' : v; DState.page = 1; paintDirectory(); };
+window.dirTc = (k, v) => { const s = new Set((DState[k] || '').split(',').filter(Boolean)); s.has(v) ? s.delete(v) : s.add(v); DState[k] = [...s].join(','); DState.page = 1; paintDirectory(); };
+window.dirClear = () => { DState.q = ''; DState.qualified = ''; DState.platform = ''; DState.country = ''; DState.live = ''; for (const k of AUDIT_KEYS) DState[k] = ''; DState.page = 1; paintDirectory(); };
+window.dirPage = (n) => { DState.page = n; paintDirectory(); };
+// Objeto de filtros (para CSV / segmentos / auditar-audiência).
+function dirFilters() { const f = {}; for (const k of ['q', 'qualified', 'platform', 'country', 'live']) if (DState[k]) f[k] = DState[k]; for (const k of AUDIT_KEYS) if (DState[k]) f[k] = DState[k]; return f; }
+window.dirExportCsv = () => { const p = new URLSearchParams(dirFilters()); window.location = '/api/directory.csv?' + p; };
+window.dirAuditAll = async () => {
+  const btn = $('#auditallbtn'); if (btn) { btn.disabled = true; btn.textContent = 'A enfileirar…'; }
+  try { const r = await api('/api/audit/segment', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filters: dirFilters() }) }); if (btn) btn.textContent = `${r.enqueued} em fila ✓`; }
+  catch (e) { if (btn) { btn.disabled = false; btn.textContent = 'Auditar audiência'; } alert('Fila indisponível: ' + e.message); }
+};
+
+// ========== SITE DRAWER ==========
+window.openSite = async (domain) => {
+  const d = $('#drawer'); d.classList.add('open'); $('#scrim').classList.add('open');
+  d.innerHTML = `<div class="np-empty">A carregar…</div>`;
+  try {
+    const { site, contacts, reports, directusPublicUrl } = await api('/api/site?domain=' + encodeURIComponent(domain));
+    const tech = (site.tech_detected || []).map((t) => `<span class="np-chip">${esc(t.name)}${t.version ? ' ' + esc(t.version) : ''}</span>`).join(' ') || '<span class="muted">—</span>';
+    // --- Auditoria & prospeção ---
+    const soc = site.social || {};
+    // Tolera shape novo (arrays por rede) e antigo (url único por rede).
+    const socLinks = ['facebook', 'instagram', 'linkedin', 'twitter'].flatMap((n) => {
+      const v = soc[n]; const urls = Array.isArray(v) ? v : (v ? [v] : []);
+      return urls.map((u, i) => `<a href="${esc(u)}" target="_blank" rel="noopener" class="np-chip">${n[0].toUpperCase() + n.slice(1)}${urls.length > 1 ? ' ' + (i + 1) : ''}</a>`);
+    }).join(' ');
+    const authBadge = (label, v) => v ? `<span class="np-badge ${v === 'ok' ? 'ok' : (v === 'missing' || v === 'invalid' ? 'warn' : 'neutral')}" style="height:20px">${label}: ${esc(v)}</span>` : '';
+    const loadB = site.load_bucket ? `<span class="np-badge ${site.load_bucket === 'fast' ? 'ok' : (site.load_bucket === 'slow' || site.load_bucket === 'very_slow' ? 'warn' : 'neutral')}" style="height:20px">${esc(site.load_bucket)}${site.load_ms ? ` · ${site.load_ms} ms` : ''}</span>` : '';
+    const auditBadges = [
+      site.has_email ? '<span class="np-badge ok" style="height:20px">tem email</span>' : '',
+      site.has_phone ? '<span class="np-badge ok" style="height:20px">tem telefone</span>' : '',
+      site.gmb ? `<span class="np-badge brand" style="height:20px">Google Business${site.gmb_signal ? ` (${esc(site.gmb_signal)})` : ''}</span>` : '',
+      site.is_cpanel ? `<span class="np-badge neutral" style="height:20px">cPanel${site.cpanel_signal ? ` (${esc(site.cpanel_signal)})` : ''}</span>` : '',
+      loadB, authBadge('SPF', site.spf_status), authBadge('DMARC', site.dmarc_status),
+      site.industry ? `<span class="np-badge info" style="height:20px">${esc(site.industry)}</span>` : '',
+      site.traffic_bucket && site.traffic_bucket !== 'unranked' ? `<span class="np-badge info" style="height:20px">Tráfego: ${esc(site.traffic_bucket)}</span>` : '',
+    ].filter(Boolean).join(' ') || '<span class="muted">Ainda sem sinais.</span>';
+    const scoreRows = [
+      site.seo_score != null ? `<div class="k">SEO</div><div class="v"><b>${site.seo_score}</b>/100</div>` : '',
+      site.mobile_score != null ? `<div class="k">Mobile</div><div class="v"><b>${site.mobile_score}</b>/100 ${site.mobile_friendly ? '<span class="np-badge ok" style="height:18px">friendly</span>' : '<span class="np-badge warn" style="height:18px">não</span>'}</div>` : '',
+      site.security_findings != null ? `<div class="k">Segurança</div><div class="v"><b>${site.security_findings}</b> findings ${site.security_severity ? `<span class="np-badge ${['high', 'critical'].includes(site.security_severity) ? 'warn' : 'neutral'}" style="height:18px">${esc(site.security_severity)}</span>` : ''}</div>` : '',
+      site.wp_vuln_count != null ? `<div class="k">WPScan</div><div class="v"><b>${site.wp_vuln_count}</b> vulns</div>` : '',
+      site.ssl_grade ? `<div class="k">SSL</div><div class="v"><span class="np-badge ${site.ssl_grade === 'A' || site.ssl_grade === 'B' ? 'ok' : (site.ssl_grade === 'F' ? 'warn' : 'neutral')}" style="height:18px">${esc(site.ssl_grade)}</span>${site.ssl_days_left != null ? ` · expira em <b>${site.ssl_days_left}</b>d` : ''}${site.ssl_issuer ? ` · ${esc(site.ssl_issuer)}` : ''}</div>` : '',
+      site.cms_version ? `<div class="k">CMS</div><div class="v"><b>${esc(site.cms_version)}</b> ${site.cms_outdated ? '<span class="np-badge warn" style="height:18px">desatualizado</span>' : '<span class="np-badge ok" style="height:18px">atual</span>'}</div>` : '',
+      (site.domain_expiry || site.domain_age_days != null) ? `<div class="k">Domínio</div><div class="v">${site.domain_age_days != null ? `<b>${site.domain_age_days}</b>d de idade` : ''}${site.domain_expiry ? ` · expira ${esc(String(site.domain_expiry).slice(0, 10))}` : ''} ${site.expiring_soon ? '<span class="np-badge warn" style="height:18px">a expirar</span>' : ''}${site.whois_registrar ? `<div class="muted" style="font-size:11px">${esc(site.whois_registrar)}</div>` : ''}</div>` : '',
+      site.dns_provider ? `<div class="k">DNS</div><div class="v">${esc(site.dns_provider)}</div>` : '',
+    ].filter(Boolean).join('');
+    const reportLinks = (reports || []).map((rp) => `<a class="np-chip" href="${esc((directusPublicUrl || '') + '/admin/content/site_reports/' + rp.id)}" target="_blank" rel="noopener">${esc(rp.kind)}${rp.score != null ? ` · ${rp.score}` : ''}</a>`).join(' ');
+    const isWp = (site.primary_platform?.slug || site.primary_platform?.name || '').toLowerCase().includes('wordpress');
+    const auditSection = `
+        <div class="np-sec-t" style="display:flex;justify-content:space-between;align-items:center;gap:6px">Auditoria &amp; prospeção
+          <span style="display:flex;gap:6px">${isWp ? `<button class="np-btn np-btn--sm" onclick="auditNow('${esc(site.domain)}','wpscan')" id="wpscanbtn" title="WPScan (on-demand, 25/dia)">${ic('shield', 13)} WPScan</button>` : ''}<button class="np-btn np-btn--sm" onclick="auditNow('${esc(site.domain)}')" id="auditbtn">${ic('shield', 13)} Auditar agora</button></span></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${auditBadges}</div>
+        ${socLinks ? `<div style="margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap">${socLinks}</div>` : ''}
+        ${(site.business_city || site.business_address) ? `<div class="np-kv"><div class="k">Cidade</div><div class="v">${esc(site.business_city || '—')}</div>${site.business_region ? `<div class="k">Região</div><div class="v">${esc(site.business_region)}</div>` : ''}${site.business_address ? `<div class="k">Morada</div><div class="v">${esc(site.business_address)}</div>` : ''}</div>` : ''}
+        ${scoreRows ? `<div class="np-kv" style="margin-top:6px">${scoreRows}</div>` : ''}
+        ${reportLinks ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${reportLinks}</div>` : ''}`;
+    const subs = (site.hostnames || []).slice(0, 40).map((h) => `<div class="np-mono" style="padding:3px 0;color:var(--np-text-2)">${esc(h)}</div>`).join('') || '<span class="muted">(não enumerado)</span>';
+    const people = contacts.map((c) => `<div class="np-contact"><span class="np-avatar" style="width:30px;height:30px;background:${CAT('info')}">${esc((c.name || '?').slice(0, 1))}</span><div style="flex:1"><div style="font-weight:700">${esc(c.name || '—')} ${c.role ? `<span class="np-badge ${DM.has(c.role) ? 'brand' : 'neutral'}" style="height:18px">${DM.has(c.role) ? ic('star', 11) : ''}${esc(c.role)}</span>` : ''}</div><div style="margin:3px 0">${verifBadge(c.email_status, c.email_verified)}</div><div class="muted" style="font-size:12px">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:var(--np-brand-ink)">${esc(c.email)}</a>` : ''} ${esc(c.phone || '')}</div></div></div>`).join('') || '<span class="muted">Sem contactos.</span>';
+    d.innerHTML = `
+      <div class="np-drawer-h"><div style="display:flex;justify-content:space-between;align-items:start">
+        <div><div style="font-size:18px;font-weight:800"><span class="np-dot" style="display:inline-block;background:${site.is_live ? 'var(--np-ok-mark)' : 'var(--np-neutral-mark)'}"></span> ${esc(site.domain)}</div><div class="muted" style="font-size:12.5px">${esc(site.company?.name || site.company?.org_domain || '')}</div></div>
+        <button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+        <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;align-items:center">${qualBadge(site.qualified)}${site.primary_platform ? `<span class="np-chip"><span class="np-dot" style="background:${CAT(site.primary_platform.slug || site.primary_platform.name)}"></span>${esc(site.primary_platform.name || '')}</span>` : ''}${site.language ? `<span class="np-chip">${esc(site.language)}</span>` : ''}${liveBadge(site.is_live)}${site.company?.id ? `<button class="np-btn np-btn--sm ${site.company.is_client ? '' : 'np-btn--primary'}" style="margin-left:auto" onclick="toggleClientDrawer(${site.company.id}, ${site.company.is_client ? 'false' : 'true'}, '${esc(site.domain)}')">${ic('briefcase', 13)} ${site.company.is_client ? 'Cliente ✓' : 'Marcar cliente'}</button>` : ''}</div></div>
+      <div style="padding:16px 18px">
+        <div class="np-sec-t" style="margin-top:0">Alojamento</div>
+        <div class="np-kv"><div class="k">IP</div><div class="v np-mono">${esc(site.hosting_ip || '—')}</div><div class="k">PTR</div><div class="v np-mono" style="word-break:break-all">${esc(site.ptr || '—')}</div><div class="k">ASN / ISP</div><div class="v">${esc(site.isp || '—')}</div><div class="k">Local</div><div class="v">${esc([site.ip_city, site.ip_country].filter(Boolean).join(', ') || '—')}</div><div class="k">CDN</div><div class="v">${esc(site.cdn || '—')}</div><div class="k">HTTP</div><div class="v">${esc(site.http_status || '—')}</div></div>
+        ${auditSection}
+        <div class="np-sec-t">Tech stack detetada</div><div>${tech}</div>
+        <div class="np-sec-t">Subdomínios (${(site.hostnames || []).length})</div>${subs}
+        <div id="np-timeline"></div>
+        <div class="np-sec-t">Contactos (${contacts.length})</div>${people}
+        ${site.company?.general_email || site.company?.general_phone ? `<div style="margin-top:8px;padding:8px 10px;background:var(--np-surface-2);border-radius:8px;font-size:12.5px"><b>Geral:</b> ${esc(site.company?.general_email || '')} ${esc(site.company?.general_phone || '')}</div>` : ''}
+        <div style="margin-top:16px;padding:10px 12px;background:var(--np-surface-2);border-radius:8px;color:var(--np-text-3);font-size:11.5px;display:flex;gap:8px;align-items:center">${ic('shield', 14)} Base legal RGPD: <b style="color:var(--np-text-2)">interesse legítimo B2B</b></div>
+      </div>`;
+    loadTimeline(site.domain); // preenche #np-timeline em async (não bloqueia o drawer)
+  } catch (e) { d.innerHTML = `<div class="np-empty">Erro: ${esc(e.message)} <br><button class="np-btn np-btn--sm" style="margin-top:12px" onclick="closeDrawer()">Fechar</button></div>`; }
+};
+window.closeDrawer = () => { $('#drawer').classList.remove('open'); $('#scrim').classList.remove('open'); };
+$('#scrim').onclick = closeDrawer;
+
+// Sparkline SVG minimal (série de {ts,v} numéricos, 0-100 típico) → linha inline.
+function sparkline(points, { w = 240, h = 34 } = {}) {
+  const pts = points.filter((p) => typeof p.v === 'number');
+  if (pts.length < 2) return '';
+  const xs = pts.map((p) => p.ts), ys = pts.map((p) => p.v);
+  const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+  const nx = (x) => x1 === x0 ? w : ((x - x0) / (x1 - x0)) * (w - 4) + 2;
+  const ny = (y) => y1 === y0 ? h / 2 : h - 3 - ((y - y0) / (y1 - y0)) * (h - 6);
+  const dpath = pts.map((p, i) => `${i ? 'L' : 'M'}${nx(p.ts).toFixed(1)},${ny(p.v).toFixed(1)}`).join(' ');
+  const last = pts[pts.length - 1];
+  return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" style="overflow:visible"><path d="${dpath}" fill="none" stroke="var(--np-brand)" stroke-width="2"/><circle cx="${nx(last.ts).toFixed(1)}" cy="${ny(last.v).toFixed(1)}" r="2.5" fill="var(--np-brand)"/></svg>`;
+}
+// Carrega timeline (histórico lead_score) + gatilhos do site → #np-timeline.
+async function loadTimeline(domain) {
+  const el = document.getElementById('np-timeline'); if (!el) return;
+  try {
+    const [tl, tg] = await Promise.all([
+      api('/api/timeline?domain=' + encodeURIComponent(domain)),
+      api('/api/triggers?domain=' + encodeURIComponent(domain) + '&limit=12&since=365'),
+    ]);
+    if (!tl.enabled) return; // analytics desligado → nada
+    const scoreSeries = (tl.series?.lead_score || []).map((o) => ({ ts: o.ts, v: typeof o.v === 'number' ? o.v : Number(o.v) }));
+    const triggers = tg.triggers || [];
+    const nPoints = scoreSeries.length;
+    if (!nPoints && !triggers.length) return; // sem histórico ainda
+    const spark = nPoints >= 2 ? `<div style="display:flex;align-items:center;gap:10px;margin:2px 0 6px"><span class="muted" style="font-size:12px">Lead score</span>${sparkline(scoreSeries)}<b class="tnum">${scoreSeries[scoreSeries.length - 1].v}</b></div>` : '';
+    const trg = triggers.map((t) => `<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12.5px"><span class="np-badge ${SEV_CLASS[t.severity] || 'neutral'}" style="height:18px">${esc(TRIGGER_LABEL[t.event] || t.event)}</span><span class="muted tnum">${esc(String(t.old_value))}→${esc(String(t.new_value))}</span><span class="muted" style="margin-left:auto">${timeAgo(Number(t.ts))}</span></div>`).join('');
+    el.innerHTML = `<div class="np-sec-t">Histórico & mudanças</div>${spark}${trg || (nPoints ? `<div class="muted" style="font-size:12px">${nPoints} observaç${nPoints === 1 ? 'ão' : 'ões'} · sem mudanças ainda.</div>` : '')}`;
+  } catch { /* silencioso */ }
+}
+// Auditoria pesada on-demand. `only` (ex.: 'wpscan') corre só esse passo.
+window.auditNow = async (domain, only) => {
+  const id = only === 'wpscan' ? 'wpscanbtn' : 'auditbtn';
+  const btn = $('#' + id); if (btn) { btn.disabled = true; btn.textContent = 'A enfileirar…'; }
+  try {
+    await api('/api/audit/' + encodeURIComponent(domain) + (only ? '?only=' + encodeURIComponent(only) : ''), { method: 'POST' });
+    if (btn) btn.textContent = 'Em fila ✓';
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = only === 'wpscan' ? 'WPScan' : 'Auditar agora'; }
+  }
+};
+
+// ========== CONTACTS ==========
+const ROLES = ['CEO', 'Founder', 'Owner', 'Partner', 'President', 'CTO', 'CFO', 'COO', 'CMO', 'DPO', 'VP', 'Head', 'Manager', 'Director', 'Lead', 'Sales', 'Marketing', 'HR', 'Support', 'Accountant', 'Legal', 'Consultant', 'Designer', 'Engineer'];
+const ROLECATS = [['decision_maker', 'Decisores'], ['manager', 'Gestão'], ['dpo', 'DPO'], ['staff', 'Staff'], ['unknown', 'Sem cargo']];
+const CState = { q: '', roles: '', rolecat: '', verif: '', dm: '', lead_min: '', has_email: '', has_phone: '', city: '', cpanel: '', fb: '', ig: '', li: '', tw: '', gmb: '', load: '', spf: '', dmarc: '', traffic: '', industry: '', page: 1, openFacet: null };
+async function viewContacts() {
+  const qp = parseHashQuery();
+  CState.q = qp.q || ''; CState.roles = qp.roles || ''; CState.rolecat = qp.rolecat || ''; CState.verif = qp.verif || ''; CState.page = +qp.page || 1;
+  auditParse(CState, qp);
+  if (!STATS) STATS = await api('/api/stats'); renderNav('contacts');
+  await paintContacts();
+}
+function conFilters() { const f = {}; for (const k of ['q', 'roles', 'rolecat', 'verif']) if (CState[k]) f[k] = CState[k]; for (const k of AUDIT_KEYS) if (CState[k]) f[k] = CState[k]; return f; }
+window.conExportCsv = () => { window.location = '/api/contacts.csv?' + new URLSearchParams(conFilters()); };
+async function paintContacts() {
+  const p = new URLSearchParams({ page: CState.page, limit: 25, ...conFilters() });
+  const chk = (on) => on ? ic('check', 14) : SP14;
+  const chips = auditChips(CState);
+  if (CState.roles) CState.roles.split(',').forEach((r) => chips.unshift(['roles:' + r, 'Cargo: ' + r]));
+  if (CState.rolecat) CState.rolecat.split(',').forEach((c) => chips.unshift(['rolecat:' + c, (ROLECATS.find((x) => x[0] === c)?.[1] || c)]));
+  $('#view').innerHTML = `
+    <div class="np-head"><div><div class="np-eyebrow">Decisores</div><h1 class="np-h1">Contactos</h1><div class="np-sub"><b>${fmt(STATS?.totals?.contacts)}</b> pessoas · <b style="color:var(--np-ok)">${fmt(STATS?.totals?.verifiedEmails)}</b> com e-mail verificado</div></div>
+      <button class="np-btn" onclick="conExportCsv()">${ic('download', 15)}Exportar CSV</button></div>
+    <section class="np-card" style="margin-bottom:14px"><div class="np-filterbar">
+      <input class="np-input" id="cq" style="min-width:220px" placeholder="Procurar nome, e-mail ou empresa…" value="${esc(CState.q)}"/>
+      <div class="np-facet ${CState.roles ? 'on' : ''}"><button onclick="conFacet('roles')">Cargo ${ic('chevD', 14)}</button>${CState.openFacet === 'roles' ? `<div class="np-facet-dd" style="max-height:340px;overflow:auto">${ROLES.map((r) => `<div class="np-opt" onclick="conTc('roles','${r}')">${chk((CState.roles || '').split(',').includes(r))} ${r}</div>`).join('')}</div>` : ''}</div>
+      <div class="np-facet ${CState.rolecat ? 'on' : ''}"><button onclick="conFacet('rolecat')">Categoria ${ic('chevD', 14)}</button>${CState.openFacet === 'rolecat' ? `<div class="np-facet-dd">${ROLECATS.map(([v, l]) => `<div class="np-opt" onclick="conTc('rolecat','${v}')">${chk((CState.rolecat || '').split(',').includes(v))} ${l}</div>`).join('')}</div>` : ''}</div>
+      <div class="np-facet ${CState.verif ? 'on' : ''}"><button onclick="conFacet('verif')">Verificação ${ic('chevD', 14)}</button>${CState.openFacet === 'verif' ? `<div class="np-facet-dd">${[['valid', 'Verificado'], ['catch_all', 'Catch-all'], ['role', 'Role-based'], ['unknown', 'Não verif.']].map(([v, l]) => `<div class="np-opt" onclick="conSet('verif','${CState.verif === v ? '' : v}')">${CState.verif === v ? ic('check', 14) : SP14} ${l}</div>`).join('')}</div>` : ''}</div>
+      ${auditFacetsHtml(CState, 'con')}
+      <input class="np-input" id="ccity" style="width:150px" placeholder="Cidade do negócio…" value="${esc(CState.city)}"/>
+    </div>
+    ${chips.length ? `<div class="np-chiprow"><span class="muted" style="font-size:12px">Filtros:</span>${chips.map(([k, l]) => `<span class="np-fchip">${esc(l)}<button onclick="conChipX('${k}')">${ic('x', 12)}</button></span>`).join('')}<button class="np-btn np-btn--sm" onclick="conClear()">Limpar tudo</button></div>` : ''}
+    </section>
+    <section class="np-card"><div class="np-tablewrap"><table class="np-table" style="min-width:1040px"><thead><tr>
+      <th>Nome</th><th>Cargo</th><th>E-mail</th><th>Telefone</th><th>Empresa</th><th>Fonte</th></tr></thead>
+      <tbody id="cbody"><tr><td colspan="6"><div class="np-empty">A carregar…</div></td></tr></tbody></table></div><div class="np-pager" id="cpager"></div></section>`;
+  const cq = $('#cq'); let ct; cq.oninput = () => { clearTimeout(ct); ct = setTimeout(() => { CState.q = cq.value.trim(); CState.page = 1; paintContacts(); }, 400); };
+  const ccity = $('#ccity'); let cct; if (ccity) ccity.oninput = () => { clearTimeout(cct); cct = setTimeout(() => { CState.city = ccity.value.trim(); CState.page = 1; paintContacts(); }, 450); };
+  const r = await api('/api/contacts?' + p);
+  $('#cbody').innerHTML = r.rows.map((c) => {
+    const psl = c.site?.primary_platform?.slug;
+    return `<tr onclick="${c.company?.org_domain ? `openSite('${esc(c.site?.domain || c.company.org_domain)}')` : ''}">
+      <td><span class="np-avatar" style="width:28px;height:28px;background:${CAT(psl || 'info')}">${esc((c.name || '?').slice(0, 1))}</span> <b style="margin-left:6px">${esc(c.name || '—')}</b></td>
+      <td>${c.role ? `<span class="np-badge ${c.role_category === 'decision_maker' ? 'brand' : c.role_category === 'manager' ? 'info' : 'neutral'}" style="height:20px">${c.role_category === 'decision_maker' ? ic('star', 11) : ''}${esc(c.role)}</span>` : `<span class="np-badge neutral" style="height:20px">${esc(c.role_category || 'sem cargo')}</span>`}</td>
+      <td>${c.email ? `<a href="mailto:${esc(c.email)}" style="color:var(--np-brand-ink)">${esc(c.email)}</a> ${verifBadge(c.email_status, c.email_verified)}` : '<span class="muted">—</span>'}</td>
+      <td class="muted">${esc(c.phone || '—')}${c.social_profiles?.linkedin ? ` <a href="${esc(c.social_profiles.linkedin)}" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="LinkedIn">in</a>` : ''}</td>
+      <td class="muted">${psl ? `<span class="np-dot" style="display:inline-block;background:${CAT(psl)}"></span> ` : ''}${esc(c.company?.name || c.company?.org_domain || '—')}</td>
+      <td class="muted">${esc(c.source || '—')}</td></tr>`;
+  }).join('') || `<tr><td colspan="6"><div class="np-empty">Sem contactos.</div></td></tr>`;
+  const pages = Math.max(1, Math.ceil(r.total / r.limit));
+  $('#cpager').innerHTML = `<span>A mostrar <b>${fmt((r.page - 1) * r.limit + 1)}–${fmt(Math.min(r.page * r.limit, r.total))}</b> de <b>${fmt(r.total)}</b></span><span style="flex:1"></span><button ${r.page <= 1 ? 'disabled' : ''} onclick="conPage(${r.page - 1})">‹</button><span class="tnum">Página ${r.page} / ${fmt(pages)}</span><button ${r.page >= pages ? 'disabled' : ''} onclick="conPage(${r.page + 1})">›</button>`;
+}
+window.conFacet = (k) => { CState.openFacet = CState.openFacet === k ? null : k; paintContacts(); };
+window.conSet = (k, v) => { CState[k] = v; CState.openFacet = null; CState.page = 1; paintContacts(); };
+window.conTv = (k, v) => { CState[k] = CState[k] === v ? '' : v; CState.page = 1; paintContacts(); };
+window.conTc = (k, v) => { const s = new Set((CState[k] || '').split(',').filter(Boolean)); s.has(v) ? s.delete(v) : s.add(v); CState[k] = [...s].join(','); CState.page = 1; paintContacts(); };
+window.conClear = () => { CState.q = ''; CState.roles = ''; CState.rolecat = ''; CState.verif = ''; for (const k of AUDIT_KEYS) CState[k] = ''; CState.page = 1; paintContacts(); };
+window.conPage = (n) => { CState.page = n; paintContacts(); };
+// Remove um chip: chaves compostas roles:X / rolecat:X removem só esse valor do csv.
+window.conChipX = (k) => {
+  if (k.startsWith('roles:') || k.startsWith('rolecat:')) { const [f, v] = k.split(/:(.+)/); CState[f] = (CState[f] || '').split(',').filter((x) => x && x !== v).join(','); }
+  else CState[k] = '';
+  CState.page = 1; paintContacts();
+};
+
+// ========== SEGMENTS / SETTINGS (lightweight) ==========
+function segFilterChips(f) {
+  f = f || {}; const c = [];
+  if (f.q) c.push('“' + f.q + '”');
+  if (f.qualified) c.push(f.qualified === 'true' ? 'Qualificado' : 'Não qualif.');
+  if (f.platform) c.push(f.platform); if (f.country) c.push('País: ' + f.country);
+  for (const [, l] of auditChips(f)) c.push(l);
+  return c.slice(0, 8).map((x) => `<span class="np-chip">${esc(x)}</span>`).join('') || '<span class="muted" style="font-size:12px">sem filtros</span>';
+}
+function segQuery(f) { const p = new URLSearchParams(); for (const [k, v] of Object.entries(f || {})) if (v) p.set(k, v); return p.toString(); }
+async function viewSegments() {
+  if (!STATS) STATS = await api('/api/stats'); renderNav('segments');
+  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  const { segments } = await api('/api/segments');
+  const card = (s) => `<section class="np-card" style="overflow:hidden"><div style="height:4px;background:${s.accent || 'var(--np-brand)'}"></div><div class="np-card-b">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="font-weight:800;font-size:15px">${esc(s.name)}</div>${s.shared ? '<span class="np-badge info" style="height:20px">Equipa</span>' : ''}</div>
+    <div class="muted" style="font-size:12.5px;margin:4px 0 10px">${esc(s.description || '')}</div>
+    <div class="tnum" style="font-size:24px;font-weight:800">${fmt(s.count)}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">${segFilterChips(s.filters)}</div>
+    <div style="display:flex;gap:8px;margin-top:6px"><a class="np-btn np-btn--sm np-btn--primary" href="#/directory?${segQuery(s.filters)}">Abrir no diretório →</a><button class="np-btn np-btn--sm" onclick="delSegment(${s.id})">Apagar</button></div>
+  </div></section>`;
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Vistas guardadas</div><h1 class="np-h1">Segmentos</h1><div class="np-sub">${segments.length} ${segments.length === 1 ? 'segmento guardado' : 'segmentos guardados'}</div></div><button class="np-btn np-btn--primary" onclick="newSegment()">${ic('plus', 15)}Novo segmento</button></div>
+    <div class="np-grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${segments.map(card).join('') || '<div class="np-empty">Sem segmentos. Cria um em Negócios (“Guardar segmento”) ou aqui em “Novo segmento”.</div>'}</div>`;
+}
+window.delSegment = async (id) => { if (!confirm('Apagar este segmento?')) return; await fetch('/api/segments/' + id, { method: 'DELETE' }); viewSegments(); };
+window.newSegment = async () => { const name = prompt('Nome do novo segmento (começa com “só qualificados”):'); if (!name) return; await fetch('/api/segments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, filters: { qualified: 'true' } }) }); viewSegments(); };
+window.saveSegment = async () => { const name = prompt('Guardar os filtros atuais como segmento — nome:'); if (!name) return; const filters = dirFilters(); const accent = DState.platform ? CAT(DState.platform) : 'var(--np-ok-mark)'; const r = await fetch('/api/segments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, filters, accent }) }); if (r.ok) alert('Segmento guardado (com todos os filtros). Vê em Segmentos.'); else alert('Erro ao guardar.'); };
+
+// ========== GATILHOS (Fase E — change events do ClickHouse) ==========
+const TRIGGER_LABEL = {
+  qualified: 'Qualificou', disqualified: 'Desqualificou', score_up: 'Lead score subiu', score_down: 'Lead score desceu',
+  spf_broke: 'SPF partiu', spf_fixed: 'SPF corrigido', dmarc_broke: 'DMARC partiu', cert_expiring: 'Certificado a expirar',
+  domain_expiring: 'Domínio a expirar', cms_went_stale: 'CMS desatualizou', platform_changed: 'Plataforma mudou',
+  security_worsened: 'Segurança piorou', seo_regressed: 'SEO regrediu',
+};
+const SEV_CLASS = { good: 'ok', warning: 'warn', critical: 'warn', info: 'info' };
+function timeAgo(sec) { const d = Math.max(0, Math.floor(Date.now() / 1000 - sec)); if (d < 60) return 'agora'; if (d < 3600) return `há ${Math.floor(d / 60)} min`; if (d < 86400) return `há ${Math.floor(d / 3600)} h`; return `há ${Math.floor(d / 86400)} d`; }
+const TState = { severity: '', since: '30' };
+async function viewTriggers() {
+  if (!STATS) STATS = await api('/api/stats'); renderNav('triggers');
+  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  const p = new URLSearchParams({ limit: '200', since: TState.since }); if (TState.severity) p.set('severity', TState.severity);
+  const r = await api('/api/triggers?' + p);
+  if (!r.enabled) {
+    $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Mudanças ao longo do tempo</div><h1 class="np-h1">Gatilhos</h1></div></div>
+      <div class="np-card"><div class="np-card-b"><b>Analytics desligado.</b><div class="muted" style="margin-top:6px">Liga o ClickHouse para registar observações e detetar mudanças (gatilhos de venda):<br>
+      <code>docker compose --profile analytics up -d clickhouse</code> · define <code>CLICKHOUSE_URL</code> no <code>.env</code> · <code>node bootstrap-clickhouse.js</code>.</div></div></div>`;
+    return;
+  }
+  const sevBtn = (v, l) => `<button class="np-btn np-btn--sm ${TState.severity === v ? 'np-btn--primary' : ''}" onclick="TState.severity='${v}';viewTriggers()">${l}</button>`;
+  const sinceBtn = (v, l) => `<button class="np-btn np-btn--sm ${TState.since === v ? 'np-btn--primary' : ''}" onclick="TState.since='${v}';viewTriggers()">${l}</button>`;
+  const row = (t) => `<tr onclick="openSite('${esc(t.domain)}')">
+    <td><span class="np-badge ${SEV_CLASS[t.severity] || 'neutral'}" style="height:20px">${esc(TRIGGER_LABEL[t.event] || t.event)}</span></td>
+    <td style="font-weight:600">${esc(t.domain)}</td>
+    <td class="muted tnum">${esc(String(t.old_value))} → <b style="color:var(--np-text)">${esc(String(t.new_value))}</b></td>
+    <td class="muted" style="text-align:right">${timeAgo(Number(t.ts))}</td></tr>`;
+  const list = (r.triggers || []);
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Mudanças ao longo do tempo</div><h1 class="np-h1">Gatilhos</h1><div class="np-sub">${list.length} evento(s) — cada mudança é um motivo de contacto</div></div></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+      <span class="muted" style="font-size:12px">Severidade:</span>${sevBtn('', 'Todas')}${sevBtn('critical', 'Crítica')}${sevBtn('warning', 'Aviso')}${sevBtn('good', 'Positiva')}
+      <span class="muted" style="font-size:12px;margin-left:10px">Período:</span>${sinceBtn('7', '7 d')}${sinceBtn('30', '30 d')}${sinceBtn('90', '90 d')}</div>
+    ${list.length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Evento</th><th>Domínio</th><th>Mudança</th><th style="text-align:right">Quando</th></tr></thead><tbody>${list.map(row).join('')}</tbody></table></div>`
+      : '<div class="np-empty">Sem gatilhos no período. Aparecem quando a re-análise deteta mudanças (score, SPF, certificado, plataforma…).</div>'}`;
+}
+
+// ========== CAMPANHAS (Fase F) ==========
+const ANGLE_LABEL = { general: 'Geral', speed: 'Velocidade', seo: 'SEO / visibilidade', security: 'Segurança', hosting: 'Alojamento', maintenance: 'Manutenção' };
+const CAMP_STATUS = { draft: ['Rascunho', 'neutral'], generating: ['A gerar…', 'info'], ready: ['Pronta', 'brand'], sending: ['A enviar…', 'info'], sent: ['Enviada', 'ok'], paused: ['Pausada', 'warn'] };
+const EMAIL_STATUS = { pending: ['pendente', 'neutral'], generating: ['a gerar', 'info'], ready: ['pronto', 'brand'], sending: ['a enviar', 'info'], sent: ['enviado', 'ok'], failed: ['falhou', 'warn'], opened: ['aberto', 'ok'], clicked: ['clicou', 'ok'], replied: ['respondeu', 'ok'], bounced: ['devolvido', 'warn'], unsubscribed: ['opt-out', 'warn'], skipped: ['ignorado', 'neutral'] };
+const campBadge = (st) => { const [l, c] = CAMP_STATUS[st] || [st, 'neutral']; return `<span class="np-badge ${c}" style="height:20px">${l}</span>`; };
+let CAMP_NEW = false;
+async function viewCampaigns() {
+  if (!STATS) STATS = await api('/api/stats'); renderNav('campaigns');
+  const qp = parseHashQuery();
+  if (qp.id) return viewCampaign(qp.id);
+  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  const [{ campaigns, mailer }, { segments }] = await Promise.all([api('/api/campaigns'), api('/api/segments')]);
+  const dryNote = mailer?.mode !== 'smtp' ? `<span class="np-badge warn" style="height:22px" title="Sem SMTP configurado: os envios ficam em modo de teste (dry-run)">${ic('mail', 12)} Modo de teste (dry-run)</span>` : `<span class="np-badge ok" style="height:22px">SMTP ativo</span>`;
+  const angleOpts = Object.entries(ANGLE_LABEL).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+  const segOpts = `<option value="">— escolher segmento —</option>` + (segments || []).map((s) => `<option value="${s.id}">${esc(s.name)} (${fmt(s.count || 0)})</option>`).join('');
+  const form = CAMP_NEW ? `<section class="np-card" style="margin-bottom:16px"><div class="np-card-b">
+    <div style="font-weight:800;margin-bottom:10px">Nova campanha</div>
+    <div class="np-grid" style="grid-template-columns:1fr 1fr;gap:10px">
+      <label class="np-fld"><span>Nome</span><input id="c_name" class="np-input" placeholder="Ex.: WooCommerce PT — velocidade"></label>
+      <label class="np-fld"><span>Ângulo</span><select id="c_angle" class="np-input">${angleOpts}</select></label>
+      <label class="np-fld"><span>Audiência (segmento)</span><select id="c_seg" class="np-input">${segOpts}</select></label>
+      <label class="np-fld"><span>Assunto (pista p/ IA, opcional)</span><input id="c_hint" class="np-input" placeholder="opcional"></label>
+      <label class="np-fld"><span>De (nome)</span><input id="c_fromname" class="np-input" placeholder="Gonçalo Pedro" value="Gonçalo Pedro"></label>
+      <label class="np-fld"><span>De (email)</span><input id="c_fromemail" class="np-input" placeholder="goncalo@netmaster.pt"></label>
+      <label class="np-fld"><span>Responder-para (opcional)</span><input id="c_replyto" class="np-input" placeholder="opcional"></label>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="np-btn np-btn--primary" onclick="createCampaign()">Criar campanha</button><button class="np-btn" onclick="CAMP_NEW=false;viewCampaigns()">Cancelar</button></div>
+  </div></section>` : '';
+  const card = (c) => { const k = c.counts || {}; return `<section class="np-card" style="overflow:hidden;cursor:pointer" onclick="location.hash='#/campaigns?id=${c.id}'"><div class="np-card-b">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="font-weight:800;font-size:15px">${esc(c.name)}</div>${campBadge(c.status)}</div>
+    <div class="muted" style="font-size:12.5px;margin:4px 0 10px">Ângulo: ${ANGLE_LABEL[c.angle] || c.angle}${c.from_email ? ` · de ${esc(c.from_email)}` : ''}</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      <div><div class="tnum" style="font-size:20px;font-weight:800">${fmt(k.total || 0)}</div><div class="muted" style="font-size:11px">destinatários</div></div>
+      <div><div class="tnum" style="font-size:20px;font-weight:800">${fmt((k.ready || 0) + (k.delivered || 0))}</div><div class="muted" style="font-size:11px">gerados</div></div>
+      <div><div class="tnum" style="font-size:20px;font-weight:800">${fmt(k.delivered || 0)}</div><div class="muted" style="font-size:11px">enviados</div></div>
+      <div><div class="tnum" style="font-size:20px;font-weight:800">${fmt((k.opened || 0) + (k.clicked || 0))}</div><div class="muted" style="font-size:11px">abertos</div></div>
+    </div></div></section>`; };
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Outreach</div><h1 class="np-h1">Campanhas</h1><div class="np-sub" style="display:flex;gap:8px;align-items:center">${(campaigns || []).length} campanha(s) ${dryNote}</div></div>
+    <button class="np-btn np-btn--primary" onclick="CAMP_NEW=true;viewCampaigns()">${ic('plus', 15)}Nova campanha</button></div>
+    ${form}
+    <div class="np-grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">${(campaigns || []).map(card).join('') || '<div class="np-empty">Sem campanhas. Cria uma contra um segmento — a IA (ou os modelos) gera um e-mail personalizado por contacto.</div>'}</div>`;
+}
+window.createCampaign = async () => {
+  const segId = $('#c_seg').value;
+  const segs = (await api('/api/segments')).segments || [];
+  const seg = segs.find((s) => String(s.id) === String(segId));
+  const body = { name: $('#c_name').value.trim(), angle: $('#c_angle').value, subject_hint: $('#c_hint').value.trim(),
+    from_name: $('#c_fromname').value.trim(), from_email: $('#c_fromemail').value.trim(), reply_to: $('#c_replyto').value.trim(),
+    segmentId: segId || null, filters: seg?.filters || {} };
+  if (!body.name) return alert('Dá um nome à campanha.');
+  if (!segId) return alert('Escolhe um segmento para a audiência.');
+  const r = await fetch('/api/campaigns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  if (!r.ok) return alert('Erro ao criar.');
+  const { campaign } = await r.json(); CAMP_NEW = false; location.hash = '#/campaigns?id=' + campaign.id;
+};
+async function viewCampaign(id) {
+  renderNav('campaigns');
+  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  const { campaign: c, emails, mailerMode } = await api('/api/campaigns/' + encodeURIComponent(id));
+  const k = c.counts || {};
+  const generated = (k.ready || 0) + (k.delivered || 0);
+  const stat = (v, l) => `<div><div class="tnum" style="font-size:22px;font-weight:800">${fmt(v)}</div><div class="muted" style="font-size:11px">${l}</div></div>`;
+  const row = (e) => { const [l, cl] = EMAIL_STATUS[e.status] || [e.status, 'neutral']; return `<tr onclick="previewEmail(${e.id})" style="cursor:pointer">
+    <td style="font-weight:600">${esc(e.to_email)}</td><td class="muted">${esc(e.site?.domain || '')}</td>
+    <td>${esc(e.subject || '—')}</td><td>${e.ai_generated ? '<span class="np-badge info" style="height:18px">IA</span>' : '<span class="np-badge neutral" style="height:18px">modelo</span>'}</td>
+    <td><span class="np-badge ${cl}" style="height:18px">${l}</span></td></tr>`; };
+  const dry = mailerMode !== 'smtp';
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow"><a href="#/campaigns" style="color:var(--np-brand-ink)">← Campanhas</a></div><h1 class="np-h1">${esc(c.name)}</h1>
+    <div class="np-sub" style="display:flex;gap:8px;align-items:center">${campBadge(c.status)} Ângulo: ${ANGLE_LABEL[c.angle] || c.angle}${dry ? ' · <span class="np-badge warn" style="height:20px">dry-run</span>' : ''}</div></div>
+    <div style="display:flex;gap:8px"><button class="np-btn np-btn--primary" onclick="campGenerate(${c.id})" id="genbtn">${ic('activity', 14)} Gerar e-mails</button>
+      <button class="np-btn" onclick="campSend(${c.id})" id="sendbtn" ${generated ? '' : 'disabled'}>${ic('send', 14)} Enviar${dry ? ' (teste)' : ''}</button>
+      <button class="np-btn" onclick="campDelete(${c.id})">Apagar</button></div></div>
+    <div style="display:flex;gap:20px;flex-wrap:wrap;padding:14px 16px;background:var(--np-surface-2);border-radius:10px;margin-bottom:14px">
+      ${stat(k.total || 0, 'destinatários')}${stat(generated, 'gerados')}${stat(k.delivered || 0, 'enviados')}${stat(k.opened || 0, 'abertos')}${stat(k.clicked || 0, 'cliques')}${stat(k.failed || 0, 'falhas')}</div>
+    ${emails.length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Para</th><th>Domínio</th><th>Assunto</th><th>Fonte</th><th>Estado</th></tr></thead><tbody>${emails.map(row).join('')}</tbody></table></div>`
+      : '<div class="np-empty">Ainda sem e-mails. Carrega em “Gerar e-mails” para construir a audiência e gerar a cópia personalizada.</div>'}`;
+}
+window.campGenerate = async (id) => { const b = $('#genbtn'); if (b) { b.disabled = true; b.textContent = 'A gerar…'; } const r = await api('/api/campaigns/' + id + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); alert(`${r.queued} e-mails em fila para geração. Atualiza daqui a uns segundos.`); viewCampaign(id); };
+window.campSend = async (id) => { if (!confirm('Enviar/enfileirar os e-mails prontos?')) return; const r = await api('/api/campaigns/' + id + '/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); alert(`${r.queued} e-mails em fila de envio.`); viewCampaign(id); };
+window.campDelete = async (id) => { if (!confirm('Apagar a campanha e todos os e-mails?')) return; await fetch('/api/campaigns/' + id, { method: 'DELETE' }); location.hash = '#/campaigns'; };
+window.previewEmail = async (emailId) => {
+  const { emails } = await api('/api/campaigns/' + (parseHashQuery().id) + '?_=' + emailId).catch(() => ({ emails: [] }));
+  const e = (emails || []).find((x) => x.id === emailId); if (!e) return;
+  const d = $('#drawer'); d.classList.add('open'); $('#scrim').classList.add('open');
+  d.innerHTML = `<div class="np-drawer-h"><div style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">Pré-visualização</div><div class="muted" style="font-size:12.5px">${esc(e.to_email)}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div></div>
+    <div style="padding:16px 18px"><div class="np-kv"><div class="k">Assunto</div><div class="v"><b>${esc(e.subject || '—')}</b></div></div>
+    <div class="np-sec-t">Corpo ${e.ai_generated ? '<span class="np-badge info" style="height:18px">IA</span>' : '<span class="np-badge neutral" style="height:18px">modelo</span>'}</div>
+    <div style="white-space:pre-wrap;background:var(--np-surface-2);border-radius:8px;padding:14px;font-size:13.5px;line-height:1.55">${esc(e.body || '(vazio)')}</div>
+    ${e.error ? `<div class="np-badge warn" style="height:auto;padding:6px 8px;margin-top:10px">${esc(e.error)}</div>` : ''}</div>`;
+};
+
+// Notificações — drawer da direita
+async function openNotifications() {
+  if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
+  const t = STATS?.totals || {};
+  const items = [
+    ['ok', 'check', 'Base sincronizada', `${fmt(t.sites)} sites · ${fmt(t.companies)} empresas`],
+    ['info', 'directory', 'Prospetos qualificados', `${fmt(t.qualified)} sites em WordPress/WooCommerce/PrestaShop/Wix`],
+    ['info', 'contacts', 'Contactos extraídos', `${fmt(t.contacts)} pessoas · ${fmt(t.verifiedEmails)} com e-mail verificado`],
+    (t.verifiedEmails === 0 ? ['warn', 'mail', 'Verificação de e-mails por correr', 'Corre verify-emails.js (chaves de API) para confirmar endereços'] : null),
+  ].filter(Boolean);
+  const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:16px;font-weight:800">Notificações</div><button class="np-iconbtn" style="border-color:var(--np-border);color:var(--np-text-2)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+    <div style="padding:6px 18px">${items.map(([tone, icon, title, desc]) => `<div style="display:flex;gap:12px;padding:14px 0;border-bottom:1px solid var(--np-divider)"><span class="np-kpi-ic" style="background:var(--np-${tone}-soft);color:var(--np-${tone})">${ic(icon, 15)}</span><div style="flex:1"><div style="font-weight:700">${esc(title)}</div><div class="muted" style="font-size:12.5px;margin-top:2px">${esc(desc)}</div></div></div>`).join('')}
+    <div class="muted" style="padding:16px 0;font-size:12px;text-align:center">Sem mais notificações.</div></div>`;
+}
+$('#bellbtn').onclick = openNotifications;
+async function viewSettings() {
+  renderNav('settings');
+  if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
+  const t = STATS?.totals || {};
+  const dark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const card = (title, body) => `<section class="np-card" style="max-width:720px;margin-bottom:16px"><div class="np-card-h"><h2>${title}</h2></div><div class="np-card-b">${body}</div></section>`;
+  const kv = (k, v) => `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--np-divider)"><span class="muted">${k}</span><b class="tnum">${fmt(v)}</b></div>`;
+  const toggle = (label, on) => `<label style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--np-divider);cursor:pointer"><span>${label}</span><input type="checkbox" ${on ? 'checked' : ''} style="width:18px;height:18px;accent-color:var(--np-brand-fill)"></label>`;
+  const themeCards = `<div style="display:flex;gap:12px">
+      <div onclick="setTheme('dark')" style="flex:1;cursor:pointer;border:2px solid ${dark ? 'var(--np-brand)' : 'var(--np-border)'};border-radius:10px;padding:12px;background:#0A0E16"><div style="height:10px;background:#0B111C;border-radius:4px;margin-bottom:6px"></div><div style="height:34px;background:#121A28;border-radius:6px"></div><div style="text-align:center;margin-top:8px;color:#EAF0F8;font-size:12px;font-weight:700">Escuro</div></div>
+      <div onclick="setTheme('light')" style="flex:1;cursor:pointer;border:2px solid ${!dark ? 'var(--np-brand)' : 'var(--np-border)'};border-radius:10px;padding:12px;background:#EEF1F6"><div style="height:10px;background:#121826;border-radius:4px;margin-bottom:6px"></div><div style="height:34px;background:#fff;border-radius:6px;border:1px solid #E2E8F0"></div><div style="text-align:center;margin-top:8px;color:#0F172A;font-size:12px;font-weight:700">Claro</div></div>
+    </div>`;
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Configuração</div><h1 class="np-h1">Definições</h1><div class="np-sub">Preferências, conta, fontes de dados e conformidade.</div></div></div>
+    ${card('Aparência', themeCards)}
+    ${card('Conta', `<div style="display:flex;align-items:center;gap:12px"><span class="np-avatar" style="width:48px;height:48px;font-size:16px">RA</span><div><div style="font-weight:700;font-size:15px">Rui Almeida</div><div class="muted" style="font-size:12.5px">sales@netmaster.pt · Sales · Admin</div></div></div>`)}
+    ${card('Dados & sincronização', kv('Sites na base', t.sites) + kv('Qualificados', t.qualified) + kv('Empresas', t.companies) + kv('Contactos', t.contacts) + kv('E-mails verificados', t.verifiedEmails) + `<div class="muted" style="font-size:12px;margin-top:8px">Fontes: Common Crawl (S3) + crt.sh + crawling próprio · armazenado no Directus interno.</div>`)}
+    ${card('Fontes de dados', toggle('Crawler HTTP (deteção de tecnologia)', true) + toggle('WHOIS / RDAP', false) + toggle('Enriquecimento de contactos (páginas equipa/contactos)', true) + toggle('Verificação de e-mails (SMTP + APIs)', false) + `<div class="muted" style="font-size:12px;margin-top:8px">Interruptores ilustrativos nesta fase.</div>`)}
+    ${card('RGPD & retenção', `<div style="display:flex;gap:10px;align-items:flex-start;padding:12px;background:var(--np-warn-soft);border:1px solid var(--np-warn-soft-bd);border-radius:8px;font-size:12.5px;color:var(--np-text-2)">${ic('shield', 16)}<div>Base legal: <b>interesse legítimo B2B</b>. Cada contacto guarda fonte e base legal (rastreabilidade). O primeiro contacto inclui sempre opção de opt-out; o direito ao apagamento é respeitado.</div></div>`)}`;
+}
+window.setTheme = (t) => { document.documentElement.setAttribute('data-theme', t); try { localStorage.setItem('np-theme', t); } catch (e) {} paintTheme(); viewSettings(); };
+
+// ========== WORKERS + FILAS (observabilidade) ==========
+const ROLE_LABEL = { base: 'Base — enrich/extract/score/domain-health', verify: 'Verificação de email (frota remota)', browser: 'Browser — Lighthouse/GMB', security: 'Segurança — Nuclei/WPScan', ai: 'IA — Ollama', all: 'Todos os roles', '?': 'Outro' };
+function fmtBytes(n) { if (!n) return '0 B'; const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; } return n.toFixed(i ? 1 : 0) + ' ' + u[i]; }
+const durMs = (ms) => (ms == null ? '—' : (ms < 1000 ? ms + 'ms' : (ms / 1000).toFixed(1) + 's'));
+
+// --- /workers: instâncias A CORRER (telemetria Redis), click → drawer c/ logs+métricas ---
+async function viewWorkers() {
+  if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
+  renderNav('workers');
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Workers</h1><div class="np-sub">Instâncias a correr (heartbeat &lt; 90 s) · telemetria via Redis · atualiza a cada 10 s</div></div></div>`;
+  let d; try { d = await api('/api/workers'); } catch (e) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
+  if (!d.telemetry) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Telemetria desligada.</b> <span class="muted">Os workers reportam via Redis — já configurado por omissão no compose; falta um rebuild dos workers (<code>docker compose up -d --build worker-base worker</code>) para começarem a reportar.</span></div></div>`; return; }
+  if (!d.workers.length) { $('#view').innerHTML = head + `<div class="np-empty">Nenhum worker a reportar. Arranca com <code>docker compose up -d worker-base</code> (ou a frota remota de verificação).</div>`; return; }
+  const ago = (ts) => (ts ? timeAgo(Math.floor(ts / 1000)) : '—');
+  const card = (w) => `<section class="np-card" style="cursor:pointer" onclick="openWorker('${esc(w.id)}')"><div class="np-card-b">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div><div style="font-weight:800;font-size:14px">${esc(w.host || w.id)}</div><div class="muted" style="font-size:11.5px">${esc(w.id)} · ${(w.consumers || []).length} capacidades</div></div>
+      <span class="np-badge ${w.role === 'verify' ? 'info' : 'ok'}" style="height:20px">${esc(w.role)}</span></div>
+    ${w.cur ? `<div style="margin-top:10px;font-size:12.5px"><span class="np-dot" style="background:var(--np-ok-mark);display:inline-block;margin-right:6px"></span><b>${esc(w.cur)}</b> <span class="muted">(${w.curStarted ? durMs(Date.now() - w.curStarted) : ''})</span></div>` : `<div class="muted" style="margin-top:10px;font-size:12.5px">idle</div>`}
+    <div style="display:flex;gap:16px;margin-top:12px;flex-wrap:wrap">
+      <div><div class="tnum" style="font-size:18px;font-weight:800">${fmt(w.done24h)}</div><div class="muted" style="font-size:10.5px">feitas 24h · ${fmt(w.done1h)}/h</div></div>
+      <div><div class="tnum" style="font-size:18px;font-weight:800;color:${w.fail24h ? 'var(--np-warn)' : 'var(--np-text)'}">${fmt(w.fail24h)}</div><div class="muted" style="font-size:10.5px">falhas 24h</div></div>
+      <div><div class="tnum" style="font-size:18px;font-weight:800">${durMs(w.avgMs)}</div><div class="muted" style="font-size:10.5px">duração média</div></div>
+    </div><div class="muted" style="font-size:11px;margin-top:8px">último sinal ${ago(w.beat)}</div></div></section>`;
+  $('#view').innerHTML = head + `<div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">${d.workers.map(card).join('')}</div>`;
+}
+window.openWorker = async (id) => {
+  let w; try { w = await api('/api/workers/' + encodeURIComponent(id)); } catch (e) { return; }
+  const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
+  const kv = (k, v) => `<div class="k">${k}</div><div class="v">${v}</div>`;
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(w.host || w.id)}</div><div class="muted" style="font-size:12px">${esc(w.role)} · ${esc(w.id)}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+    <div style="padding:16px 18px">
+      <div class="np-kv">${kv('Tarefa atual', w.cur ? esc(w.cur) + ' <span class="muted">(' + (w.curStarted ? durMs(Date.now() - w.curStarted) : '') + ')</span>' : '<span class="muted">idle</span>')}${kv('Feitas (esta hora)', fmt(w.done1h))}${kv('Feitas (24h)', fmt(w.done24h))}${kv('Falhas (esta hora)', fmt(w.fail1h))}${kv('Falhas (24h)', fmt(w.fail24h))}${kv('Duração média', durMs(w.avgMs))}${kv('Role', esc(w.role))}${kv('Capacidades', (w.consumers || []).map((c) => `<span class="np-chip" style="height:18px">${esc(c)}</span>`).join(' ') || '—')}</div>
+      <div class="np-sec-t">Logs recentes</div>
+      <div class="np-mono" style="background:var(--np-surface-2);border-radius:8px;padding:12px;font-size:11.5px;max-height:360px;overflow:auto;white-space:pre-wrap">${(w.logs || []).map(esc).join('\n') || '(sem logs recentes)'}</div>
+    </div>`;
+};
+
+// --- /queues: profundidade por consumer + click → gerir jobs da fila ---
+async function viewQueues() {
+  if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
+  renderNav('queues');
+  let d; try { d = await api('/api/queues'); } catch (e) { $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Filas</h1></div></div><div class="np-card"><div class="np-card-b"><b>NATS indisponível.</b> <span class="muted">${esc(e.message)}</span></div></div>`; return; }
+  const totPending = d.consumers.reduce((a, c) => a + c.pending, 0), totProc = d.consumers.reduce((a, c) => a + c.ackPending, 0), totRedeliv = d.consumers.reduce((a, c) => a + c.redelivered, 0);
+  const kpi = (icon, label, v, sub) => `<div class="np-kpi"><div class="np-kpi-l"><span class="np-kpi-ic">${ic(icon, 15)}</span>${label}</div><div class="np-kpi-v tnum">${fmt(v)}</div>${sub ? `<div class="muted" style="font-size:11px;margin-top:2px">${sub}</div>` : ''}</div>`;
+  const maxDepth = Math.max(1, ...d.consumers.map((c) => c.pending + c.ackPending));
+  const row = (c) => `<tr onclick="openQueue('${esc(c.name)}')" style="cursor:pointer" title="Ver / gerir jobs desta fila">
+    <td style="font-weight:600">${esc(c.name)}</td><td><span class="np-chip">${esc(c.role)}</span></td>
+    <td class="np-mono muted" style="font-size:11px">${esc(c.subject)}</td>
+    <td style="width:180px"><div class="np-bar-track" style="height:12px"><div class="np-bar-fill" style="width:${pct(c.pending + c.ackPending, maxDepth).toFixed(1)}%;background:${c.pending ? 'var(--np-warn)' : 'var(--np-ok-mark)'}"></div></div></td>
+    <td class="tnum" style="text-align:right;font-weight:700;${c.pending ? 'color:var(--np-warn)' : ''}">${fmt(c.pending)}</td>
+    <td class="tnum" style="text-align:right">${fmt(c.ackPending)}</td>
+    <td class="tnum" style="text-align:right;${c.redelivered ? 'color:var(--np-warn)' : 'color:var(--np-text-3)'}">${fmt(c.redelivered)}</td>
+    <td class="tnum" style="text-align:right;color:var(--np-text-3)">${fmt(c.waiting)}</td></tr>`;
+  const active = d.consumers.filter((c) => c.pending + c.ackPending > 0), idle = d.consumers.filter((c) => c.pending + c.ackPending === 0);
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Filas</h1><div class="np-sub">Fila NATS JetStream <b>NP_JOBS</b> · clica numa fila para ver/gerir os jobs · atualiza a cada 10 s</div></div></div>
+    <div class="np-kpis">
+      ${kpi('server', 'Mensagens na stream', d.stream.messages, fmtBytes(d.stream.bytes) + ' · ' + d.stream.consumerCount + ' consumers')}
+      ${kpi('activity', 'Em fila (por entregar)', totPending)}${kpi('power', 'A processar agora', totProc)}${kpi('clock', 'Re-tentativas (nak)', totRedeliv)}
+    </div>
+    <section class="np-card"><div class="np-card-h"><h2>Filas / consumers (${d.consumers.length})</h2><span class="muted" style="font-size:12px">${active.length} com trabalho · ${idle.length} vazias</span></div>
+      <div class="np-tablewrap"><table class="np-table"><thead><tr><th>Fila</th><th>Role</th><th>Subject</th><th>Profundidade</th><th style="text-align:right">Em fila</th><th style="text-align:right">A processar</th><th style="text-align:right">Retry</th><th style="text-align:right">Idle</th></tr></thead>
+      <tbody>${[...active, ...idle].map(row).join('')}</tbody></table></div></section>`;
+}
+window.openQueue = async (name) => {
+  const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
+  dw.innerHTML = `<div class="np-drawer-h"><div style="font-size:16px;font-weight:800">Fila: ${esc(name)}</div></div><div class="np-empty">A ler jobs…</div>`;
+  let d; try { d = await api('/api/queues/' + encodeURIComponent(name) + '/jobs'); } catch (e) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">${esc(e.message)}</div></div>`; return; }
+  window.QUEUE_CUR = name;
+  const rows = d.jobs.map((j) => `<tr><td style="width:34px"><input type="checkbox" class="qjob" value="${j.seq}"></td><td class="np-mono" style="font-size:11.5px">${esc(j.label)}</td><td class="muted" style="font-size:11px">seq ${j.seq}${j.time ? ' · ' + new Date(j.time).toLocaleTimeString('pt-PT') : ''}</td></tr>`).join('');
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">Fila: ${esc(name)}</div><div class="muted" style="font-size:12px">${esc(d.subject || '')} · ${d.jobs.length} job(s)${d.sampled ? ' (amostra dos mais recentes)' : ''}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+    <div style="padding:14px 18px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+        <button class="np-btn np-btn--sm" onclick="deleteQueueJobs()">${ic('trash', 13)} Apagar selecionados</button>
+        <button class="np-btn np-btn--sm" title="Priorizar não é suportado num workqueue FIFO — ver README (Follow-Ups)" disabled style="opacity:.5">Priorizar (indisponível)</button>
+        <button class="np-btn np-btn--sm" style="margin-left:auto;color:var(--np-warn)" onclick="purgeQueue('${esc(name)}')">${ic('trash', 13)} Purgar fila inteira</button>
+      </div>
+      ${d.jobs.length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th style="width:34px"><input type="checkbox" onchange="document.querySelectorAll('.qjob').forEach(x=>x.checked=this.checked)"></th><th>Job</th><th>Seq · hora</th></tr></thead><tbody>${rows}</tbody></table></div>` : '<div class="np-empty">Sem jobs pendentes nesta amostra.</div>'}
+      <div class="muted" style="font-size:11px;margin-top:8px">Amostra por peek (seqs mais recentes). Logs por-job não existem (os workers logam por instância — ver a página Workers).</div>
+    </div>`;
+};
+window.deleteQueueJobs = async () => {
+  const seqs = [...document.querySelectorAll('.qjob:checked')].map((x) => +x.value); if (!seqs.length) return alert('Seleciona jobs primeiro.');
+  if (!confirm(`Apagar ${seqs.length} job(s) da fila?`)) return;
+  const r = await (await fetch('/api/queues/jobs/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seqs }) })).json();
+  alert(`${r.deleted} job(s) apagados.`); openQueue(window.QUEUE_CUR);
+};
+window.purgeQueue = async (name) => {
+  if (!confirm(`Purgar TODOS os jobs pendentes da fila "${name}"? Não se desfaz.`)) return;
+  const r = await (await fetch('/api/queues/' + encodeURIComponent(name) + '/purge', { method: 'POST' })).json();
+  alert(`${r.purged} job(s) purgados.`); closeDrawer(); viewQueues();
+};
+
+// ========== ISPs / ALOJAMENTO (B3) ==========
+async function viewIsps() {
+  if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
+  renderNav('isps');
+  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  const page = +parseHashQuery().page || 1;
+  const d = await api('/api/isps?page=' + page + '&limit=30');
+  const max = Math.max(1, ...d.rows.map((r) => r.sites));
+  const totalPages = Math.max(1, Math.ceil(d.total / d.limit));
+  const row = (r) => `<tr onclick="location.hash='#/directory?isp=${encodeURIComponent(r.isp)}&qualified=true'" title="Ver sites qualificados neste ISP">
+    <td style="font-weight:600">${esc(r.isp)}</td>
+    <td style="width:220px"><div class="np-bar-track" style="height:12px"><div class="np-bar-fill" style="width:${pct(r.sites, max).toFixed(1)}%;background:${r.sites >= 10000 ? 'var(--np-brand)' : 'var(--cat-wordpress)'}"></div></div></td>
+    <td class="tnum" style="text-align:right;font-weight:700">${fmt(r.sites)}</td>
+    <td class="tnum" style="text-align:right">${fmt(r.qualified)}</td>
+    <td style="text-align:right"><span class="np-badge ${r.qualified / r.sites >= 0.4 ? 'ok' : 'neutral'}" style="height:20px">${pct(r.qualified, r.sites).toFixed(0)}%</span></td></tr>`;
+  const pBtn = (p, l, dis) => `<button ${dis ? 'disabled' : ''} onclick="location.hash='#/isps?page=${p}'">${l}</button>`;
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Onde os prospetos estão alojados</div><h1 class="np-h1">ISPs / Alojamento</h1><div class="np-sub"><b>${fmt(d.total)}</b> ISPs · ${fmt(d.totalSites)} sites — clica num ISP para ver os seus sites qualificados</div></div></div>
+    <section class="np-card"><div class="np-tablewrap"><table class="np-table"><thead><tr><th>ISP / alojamento</th><th>Distribuição</th><th style="text-align:right">Sites</th><th style="text-align:right">Qualif.</th><th style="text-align:right">%</th></tr></thead><tbody>${d.rows.map(row).join('')}</tbody></table></div>
+    <div class="np-pager">${pBtn(1, '«', page <= 1)}${pBtn(page - 1, '‹', page <= 1)}<span>Página ${page} de ${fmt(totalPages)}</span>${pBtn(page + 1, '›', page >= totalPages)}${pBtn(totalPages, '»', page >= totalPages)}</div></section>`;
+}
+
+// ========== CLIENTES (B3) ==========
+async function viewClients() {
+  if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
+  renderNav('clients');
+  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  const { clients, totalMrr } = await api('/api/clients');
+  const kpi = (icon, label, v) => `<div class="np-kpi"><div class="np-kpi-l"><span class="np-kpi-ic">${ic(icon, 15)}</span>${label}</div><div class="np-kpi-v tnum">${v}</div></div>`;
+  const row = (c) => `<tr>
+    <td style="font-weight:600">${esc(c.name || c.org_domain)}<div class="muted" style="font-size:11.5px">${esc(c.org_domain)}</div></td>
+    <td class="muted">${c.client_since ? new Date(c.client_since).toLocaleDateString('pt-PT') : '—'}</td>
+    <td style="text-align:right"><input class="np-input" style="width:92px;height:30px;text-align:right" value="${c.client_mrr ?? ''}" placeholder="€/mês" onchange="setClientField(${c.id},'client_mrr',this.value)"></td>
+    <td class="tnum" style="text-align:right">${fmt(c.sites_count)}</td>
+    <td class="tnum" style="text-align:right">${fmt(c.contacts_count)}</td>
+    <td><input class="np-input" style="width:100%;height:30px" value="${esc(c.client_notes || '')}" placeholder="notas…" onchange="setClientField(${c.id},'client_notes',this.value)"></td>
+    <td><button class="np-btn np-btn--sm" onclick="unmarkClient(${c.id})" title="Desmarcar cliente">${ic('x', 13)}</button></td></tr>`;
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Carteira</div><h1 class="np-h1">Clientes</h1><div class="np-sub">Empresas convertidas de prospeto → cliente</div></div></div>
+    <div class="np-kpis">${kpi('briefcase', 'Clientes', fmt(clients.length))}${kpi('star', 'MRR total', '€' + fmt(totalMrr))}${kpi('activity', 'MRR médio', '€' + fmt(clients.length ? totalMrr / clients.length : 0))}</div>
+    <section class="np-card" style="margin-bottom:16px"><div class="np-card-b">
+      <label class="np-fld"><span>Marcar empresa como cliente (procura por nome, domínio ou nome de contacto)</span>
+        <input id="cl_q" class="np-input" style="width:400px;max-width:100%" placeholder="ex.: Padaria Central · cliente.pt · João Silva" oninput="clientSearch(this.value)" autocomplete="off"></label>
+      <div id="cl_results" style="margin-top:8px"></div></div></section>
+    ${clients.length ? `<section class="np-card"><div class="np-tablewrap"><table class="np-table"><thead><tr><th>Empresa</th><th>Cliente desde</th><th style="text-align:right">MRR</th><th style="text-align:right">Sites</th><th style="text-align:right">Contactos</th><th>Notas</th><th></th></tr></thead><tbody>${clients.map(row).join('')}</tbody></table></div></section>`
+      : '<div class="np-empty">Ainda sem clientes. Procura uma empresa acima para a marcar.</div>'}`;
+}
+let CL_T = null;
+window.clientSearch = (q) => {
+  clearTimeout(CL_T);
+  CL_T = setTimeout(async () => {
+    q = (q || '').trim(); const box = $('#cl_results'); if (!box) return;
+    if (q.length < 2) { box.innerHTML = ''; return; }
+    let r; try { r = await api('/api/companies/search?q=' + encodeURIComponent(q)); } catch { return; }
+    box.innerHTML = r.results.length ? `<div class="np-facet-dd" style="position:static;max-height:none">${r.results.map((c) => `<div class="np-opt" style="justify-content:space-between"><span>${esc(c.name || c.org_domain)} <span class="muted">${esc(c.org_domain || '')}</span>${c.via ? ` <span class="muted">· via ${esc(c.via)}</span>` : ''}</span>${c.is_client ? '<span class="np-badge ok" style="height:18px">já cliente</span>' : `<button class="np-btn np-btn--sm np-btn--primary" onclick="markClient(${c.id})">Marcar</button>`}</div>`).join('')}</div>` : '<div class="muted" style="padding:6px 8px;font-size:12px">Sem resultados.</div>';
+  }, 250);
+};
+window.markClient = async (id) => { await fetch('/api/clients/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_client: true }) }); STATS = null; viewClients(); };
+// Marcar/desmarcar cliente a partir do drawer do site (diretório + contactos) → reabre o drawer.
+window.toggleClientDrawer = async (companyId, makeClient, domain) => { await fetch('/api/clients/' + companyId, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_client: makeClient === true || makeClient === 'true' }) }); STATS = null; openSite(domain); };
+window.setClientField = async (id, field, v) => { await fetch('/api/clients/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [field]: v }) }); };
+window.unmarkClient = async (id) => { if (!confirm('Desmarcar como cliente?')) return; await fetch('/api/clients/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ is_client: false }) }); viewClients(); };
+
+// ========== IMPORTAR CSV (B3) ==========
+let IMPORT_FILE = null;
+const IMPORT_LABELS = { name: 'Nome', email: 'Email', phone: 'Telefone', role: 'Cargo', company_name: 'Empresa', domain: 'Website / Domínio', website: 'Website', general_email: 'Email geral', general_phone: 'Telefone geral', country: 'País', client_mrr: 'MRR (€/mês)', client_notes: 'Notas', angle: 'Ângulo', from_name: 'De (nome)', from_email: 'De (email)', subject_hint: 'Pista de assunto', description: 'Descrição' };
+const IMPORT_TARGETS = { contacts: ['name', 'email', 'phone', 'role', 'company_name', 'domain'], companies: ['name', 'domain', 'website', 'general_email', 'general_phone', 'country'], clients: ['name', 'domain', 'client_mrr', 'client_notes', 'general_email', 'general_phone'], sites: ['domain', 'company_name'], campaigns: ['name', 'angle', 'from_name', 'from_email', 'subject_hint'], segments: ['name', 'description'] };
+const IMPORT_TARGET_LABELS = { contacts: 'Contactos', companies: 'Empresas', clients: 'Clientes', sites: 'Sites', campaigns: 'Campanhas', segments: 'Segmentos' };
+let IMPORT_TARGET = 'contacts';
+async function viewImport() {
+  if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
+  renderNav('import'); IMPORT_FILE = null;
+  const topts = Object.entries(IMPORT_TARGET_LABELS).map(([v, l]) => `<option value="${v}" ${v === IMPORT_TARGET ? 'selected' : ''}>${l}</option>`).join('');
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Dados</div><h1 class="np-h1">Importar CSV</h1><div class="np-sub">Escolhe o tipo → carrega o CSV → mapeia as colunas → dedup + upsert (source: <code>csv_import</code>)</div></div></div>
+    <section class="np-card" style="max-width:880px"><div class="np-card-b">
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:end">
+        <label class="np-fld"><span>Tipo de dados</span><select id="imp_target" class="np-input" style="width:190px" onchange="IMPORT_TARGET=this.value;IMPORT_FILE=null;document.getElementById('imp_map').innerHTML='';document.getElementById('imp_file').value=''">${topts}</select></label>
+        <label class="np-fld" style="flex:1;min-width:260px"><span>Ficheiro CSV (até 25 MB)</span><input type="file" accept=".csv,text/csv" id="imp_file" class="np-input" style="height:auto;padding:8px" onchange="importPreview()"></label>
+      </div><div id="imp_map"></div></div></section>`;
+}
+window.importPreview = async () => {
+  const f = $('#imp_file').files[0]; if (!f) return; IMPORT_FILE = f;
+  const fd = new FormData(); fd.append('file', f);
+  let r; try { r = await (await fetch('/api/import/preview', { method: 'POST', body: fd })).json(); } catch (e) { r = { error: e.message }; }
+  if (r.error) { $('#imp_map').innerHTML = `<div class="np-badge warn" style="height:auto;padding:8px;margin-top:12px">${esc(r.error)}</div>`; return; }
+  const guess = (field) => { const rx = { email: /mail/i, name: /nome|name|empresa|company|t[íi]tulo|title/i, phone: /tel|phone|contacto/i, role: /cargo|role|fun/i, company_name: /empresa|company/i, domain: /site|web|url|domain|dominio/i, website: /site|web|url/i, general_email: /mail/i, general_phone: /tel|phone/i, country: /pa[ií]s|country/i, client_mrr: /mrr|mensal|valor/i, angle: /[âa]ngulo|angle/i, from_name: /^de$|from|remetente/i, from_email: /mail/i, description: /descri|notas?/i }[field]; return rx ? (r.headers.find((h) => rx.test(h)) || '') : ''; };
+  const opts = (sel) => `<option value="">— ignorar —</option>` + r.headers.map((h) => `<option value="${esc(h)}" ${h === sel ? 'selected' : ''}>${esc(h)}</option>`).join('');
+  const fields = IMPORT_TARGETS[IMPORT_TARGET] || IMPORT_TARGETS.contacts;
+  const mapRow = (fld) => `<label class="np-fld"><span>${IMPORT_LABELS[fld] || fld}</span><select class="np-input" data-mapf="${fld}">${opts(guess(fld))}</select></label>`;
+  $('#imp_map').innerHTML = `<div class="np-sec-t">${fmt(r.rowCount)} linha(s) · mapeia as colunas para <b>${IMPORT_TARGET_LABELS[IMPORT_TARGET]}</b></div>
+    <div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px">${fields.map(mapRow).join('')}</div>
+    <div class="np-sec-t">Amostra</div><div class="np-tablewrap"><table class="np-table"><thead><tr>${r.headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${r.sample.map((rw) => `<tr>${r.headers.map((h) => `<td class="muted">${esc(rw[h] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
+    <div style="display:flex;gap:8px;margin-top:14px"><button class="np-btn" onclick="runImport(true)">${ic('activity', 14)} Testar (dry-run)</button><button class="np-btn np-btn--primary" onclick="runImport(false)">${ic('upload', 15)} Importar ${IMPORT_TARGET_LABELS[IMPORT_TARGET]}</button></div>
+    <div id="imp_result"></div>`;
+};
+function importMapping() { const m = {}; document.querySelectorAll('[data-mapf]').forEach((s) => { if (s.value) m[s.dataset.mapf] = s.value; }); return m; }
+window.runImport = async (dry) => {
+  if (!IMPORT_FILE) return; const m = importMapping();
+  const need = { contacts: ['email|name', 'domain|company_name'], companies: ['domain|name'], clients: ['domain|name'], sites: ['domain'], campaigns: ['name'], segments: ['name'] }[IMPORT_TARGET] || [];
+  for (const grp of need) { if (!grp.split('|').some((k) => m[k])) return alert('Mapeia pelo menos: ' + grp.split('|').map((k) => IMPORT_LABELS[k] || k).join(' ou ')); }
+  const resB = $('#imp_result'); resB.innerHTML = `<div class="np-sub" style="margin-top:12px">A processar…</div>`;
+  const fd = new FormData(); fd.append('file', IMPORT_FILE); fd.append('mapping', JSON.stringify(m)); fd.append('dryRun', dry ? 'true' : 'false'); fd.append('target', IMPORT_TARGET);
+  let r; try { r = await (await fetch('/api/import', { method: 'POST', body: fd })).json(); } catch (e) { r = { error: e.message }; }
+  if (r.error) { resB.innerHTML = `<div class="np-badge warn" style="height:auto;padding:8px;margin-top:12px">${esc(r.error)}</div>`; return; }
+  const box = (v, l, col) => `<div><div class="tnum" style="font-size:20px;font-weight:800${col ? ';color:' + col : ''}">${fmt(v)}</div><div class="muted" style="font-size:11px">${l}</div></div>`;
+  resB.innerHTML = `<div style="margin-top:14px;padding:14px;background:var(--np-surface-2);border-radius:10px">
+    <div style="font-weight:800;margin-bottom:8px">${dry ? 'Simulação (dry-run) — nada gravado' : 'Importação concluída'} ${r.capped ? '<span class="np-badge warn" style="height:18px">limitado a 20 000 linhas</span>' : ''}</div>
+    <div style="display:flex;gap:18px;flex-wrap:wrap">${box(r.total, 'linhas')}${box(r.created, 'novos', 'var(--np-ok)')}${box(r.updated, 'atualizados')}${r.companies_created ? box(r.companies_created, 'empresas novas') : ''}${box(r.skipped, 'ignoradas', 'var(--np-text-3)')}${r.errors ? box(r.errors, 'erros', 'var(--np-warn)') : ''}</div>
+    ${dry ? '<div class="muted" style="margin-top:10px;font-size:12px">Confere os números e carrega em <b>Importar</b> para gravar.</div>' : '<div class="muted" style="margin-top:10px;font-size:12px">Feito. Os KPIs atualizam ao navegar.</div>'}</div>`;
+  if (!dry) STATS = null;
+};
+
+// ========== AGENTES IA (B4) ==========
+let AGENT_RESULT = null;
+async function viewAgents() {
+  if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
+  renderNav('agents');
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Assistente</div><h1 class="np-h1">Agentes IA</h1><div class="np-sub">On-prem (Ollama/Gemma). Fala com o Orquestrador (encaminha para os sub-agentes) ou usa-os diretamente.</div></div></div>
+    <section class="np-card" style="margin-bottom:16px"><div class="np-card-h"><h2>${ic('sparkles', 16)} Orquestrador</h2><span class="muted" style="font-size:12px">chat · encaminha para o Audience Creator / Planner</span></div><div class="np-card-b">
+      <div id="ag_chat" style="max-height:360px;overflow:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
+      <form id="ag_chatform" style="display:flex;gap:8px" onsubmit="return chatSend(event)"><input id="ag_chatin" class="np-input" style="flex:1" placeholder="Ex.: “cria um público de lojas WooCommerce lentas” · ou “que campanhas devia fazer?”" autocomplete="off"><button class="np-btn np-btn--primary" type="submit">${ic('send', 15)}</button></form>
+    </div></section>
+    <div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(420px,1fr))">
+      <section class="np-card"><div class="np-card-h"><h2>${ic('segments', 16)} Audience Creator</h2></div><div class="np-card-b">
+        <div class="np-sub" style="margin-bottom:8px">Ex.: “lojas WooCommerce em Portugal, lentas e sem Google Business”</div>
+        <textarea id="ag_aud" class="np-input" style="width:100%;height:72px;padding:10px" placeholder="Descreve o público-alvo…"></textarea>
+        <button class="np-btn np-btn--primary" style="margin-top:10px" onclick="runAudience()">${ic('sparkles', 15)} Gerar público</button>
+        <div id="ag_aud_out"></div></div></section>
+      <section class="np-card"><div class="np-card-h"><h2>${ic('activity', 16)} Planner</h2></div><div class="np-card-b">
+        <div class="np-sub" style="margin-bottom:8px">Sugere campanhas a partir dos números da base. Foco (opcional):</div>
+        <input id="ag_plan" class="np-input" style="width:100%" placeholder="opcional: ex. ‘foca-te em .pt’ ou ‘segurança’">
+        <button class="np-btn np-btn--primary" style="margin-top:10px" onclick="runPlanner()">${ic('sparkles', 15)} Sugerir campanhas</button>
+        <div id="ag_plan_out"></div></div></section>
+    </div>`;
+}
+function chatAppend(who, html) { const box = $('#ag_chat'); if (!box) return; const align = who === 'user' ? 'flex-end' : 'flex-start'; const bg = who === 'user' ? 'var(--np-brand-soft)' : 'var(--np-surface-2)'; box.insertAdjacentHTML('beforeend', `<div style="align-self:${align};max-width:88%;background:${bg};border-radius:12px;padding:10px 12px;font-size:13px">${html}</div>`); box.scrollTop = box.scrollHeight; }
+window.chatSend = async (ev) => {
+  ev.preventDefault(); const inp = $('#ag_chatin'); const msg = (inp.value || '').trim(); if (!msg) return false; inp.value = '';
+  chatAppend('user', esc(msg)); chatAppend('bot', '<span class="muted">a pensar… (Ollama on-prem)</span>');
+  let r; try { r = await api('/api/agents/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) }); }
+  catch (e) { const box = $('#ag_chat'); if (box?.lastChild) box.lastChild.innerHTML = `<span class="np-badge warn" style="height:auto;padding:6px">${esc(e.message)}</span>`; return false; }
+  const box = $('#ag_chat'); if (box?.lastChild) box.removeChild(box.lastChild);
+  if (r.kind === 'audience') {
+    AGENT_RESULT = r;
+    const chips = Object.entries(r.filters || {}).map(([k, v]) => `<span class="np-chip">${esc(k)}: ${esc(v)}</span>`).join(' ') || 'sem filtros';
+    chatAppend('bot', `<b>${esc(r.name)}</b> — <b>${fmt(r.count)}</b> sites<div class="muted" style="font-size:12px;margin:4px 0">${esc(r.explanation || '')}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${chips}</div><button class="np-btn np-btn--sm np-btn--primary" onclick="saveAudience()">Guardar segmento</button> <button class="np-btn np-btn--sm" onclick="location.hash='#/directory?'+new URLSearchParams(AGENT_RESULT.filters).toString()">Ver no diretório</button>`);
+  } else if (r.kind === 'plan') {
+    chatAppend('bot', (r.ideas || []).map((i) => `<div style="margin-bottom:8px"><b>${esc(i.title)}</b><div style="font-size:12px"><b>Público:</b> ${esc(i.audience)} · <b>Ângulo:</b> ${esc(i.angle)}</div>${i.why ? `<div class="muted" style="font-size:11.5px">${esc(i.why)}</div>` : ''}</div>`).join('') || 'Sem sugestões.');
+  } else { chatAppend('bot', esc(r.reply || '(sem resposta)')); }
+  return false;
+};
+window.runAudience = async () => {
+  const q = ($('#ag_aud').value || '').trim(); if (!q) return;
+  const out = $('#ag_aud_out'); out.innerHTML = `<div class="np-sub" style="margin-top:12px">A pensar… (Ollama on-prem)</div>`;
+  let r; try { r = await api('/api/agents/audience', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: q }) }); }
+  catch (e) { out.innerHTML = `<div class="np-badge warn" style="height:auto;padding:8px;margin-top:12px">${esc(e.message)}</div>`; return; }
+  AGENT_RESULT = r;
+  const chips = Object.entries(r.filters || {}).map(([k, v]) => `<span class="np-chip">${esc(k)}: ${esc(v)}</span>`).join(' ') || '<span class="muted">sem filtros</span>';
+  out.innerHTML = `<div style="margin-top:14px;padding:14px;background:var(--np-surface-2);border-radius:10px">
+    <div style="font-weight:800">${esc(r.name)}</div><div class="muted" style="font-size:12.5px;margin:4px 0 10px">${esc(r.explanation || '')}</div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px">${chips}</div>
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><div><span class="tnum" style="font-size:22px;font-weight:800">${fmt(r.count)}</span> <span class="muted">sites correspondem</span></div>
+    <button class="np-btn np-btn--primary np-btn--sm" onclick="saveAudience()">${ic('plus', 14)} Guardar como segmento</button>
+    <button class="np-btn np-btn--sm" onclick="location.hash='#/directory?'+new URLSearchParams(AGENT_RESULT.filters).toString()">Ver no diretório</button></div></div>`;
+};
+window.saveAudience = async () => {
+  if (!AGENT_RESULT) return;
+  await fetch('/api/segments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: AGENT_RESULT.name, description: AGENT_RESULT.explanation, filters: AGENT_RESULT.filters }) });
+  location.hash = '#/segments';
+};
+window.runPlanner = async () => {
+  const out = $('#ag_plan_out'); out.innerHTML = `<div class="np-sub" style="margin-top:12px">A analisar a base…</div>`;
+  let r; try { r = await api('/api/agents/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: ($('#ag_plan').value || '').trim() }) }); }
+  catch (e) { out.innerHTML = `<div class="np-badge warn" style="height:auto;padding:8px;margin-top:12px">${esc(e.message)}</div>`; return; }
+  const card = (i) => `<div style="padding:12px;background:var(--np-surface-2);border-radius:10px;margin-top:10px">
+    <div style="font-weight:800">${esc(i.title)}</div>
+    <div style="font-size:12.5px;margin-top:4px"><b>Público:</b> ${esc(i.audience)}</div>
+    <div style="font-size:12.5px"><b>Ângulo:</b> ${esc(i.angle)}</div>
+    ${i.why ? `<div class="muted" style="font-size:12px;margin-top:4px">${esc(i.why)}</div>` : ''}</div>`;
+  out.innerHTML = (r.ideas || []).length ? r.ideas.map(card).join('') : '<div class="muted" style="margin-top:12px">Sem sugestões (ou Ollama em baixo).</div>';
+};
+
+// ========== CONFIGURAÇÃO / SISTEMA (B5) ==========
+async function viewConfig() {
+  if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
+  renderNav('config');
+  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  let c; try { c = await api('/api/config'); } catch (e) { $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Configuração</h1></div></div><div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
+  const st = c.status, cfg = c.config;
+  const svc = (name, ok, detail) => `<div class="np-kpi"><div class="np-kpi-l"><span class="np-dot" style="background:${ok ? 'var(--np-ok-mark)' : 'var(--np-neutral-mark)'}"></span>${name}</div><div style="font-size:14px;font-weight:800;margin-top:6px;color:${ok ? 'var(--np-ok)' : 'var(--np-text-3)'}">${ok ? 'ligado' : 'desligado'}</div><div class="muted" style="font-size:11px;margin-top:2px;word-break:break-all">${detail || ''}</div></div>`;
+  const provRow = (p) => `<tr><td style="font-weight:600">${esc(p.provider)}</td><td class="tnum" style="text-align:right">${p.keys}</td><td class="tnum" style="text-align:right">${p.dailyLimit ? fmt(p.dailyLimit) + '/dia' : '—'}</td></tr>`;
+  const sendRow = (s) => `<tr><td style="font-weight:600">${esc(s.label || s.from_email || '—')}</td><td class="muted">${esc(s.from_email || '')}</td><td>${esc(String(s.warmup_stage ?? '—'))}</td><td class="tnum" style="text-align:right">${fmt(s.sent_today || 0)}/${fmt(s.daily_cap || 0)}</td><td>${s.active ? '<span class="np-badge ok" style="height:18px">ativa</span>' : '<span class="np-badge neutral" style="height:18px">inativa</span>'}</td></tr>`;
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Configuração</h1><div class="np-sub">Estado dos serviços + resumo da configuração — os segredos são lidos no servidor mas <b>nunca</b> mostrados.</div></div></div>
+    <div class="np-kpis">
+      ${svc('Directus', st.directus.up, esc(st.directus.url))}
+      ${svc('NATS (fila)', st.nats.up, st.nats.up ? fmt(st.nats.messages) + ' msgs · ' + st.nats.consumers + ' consumers' : esc(st.nats.error || ''))}
+      ${svc('Redis (cache)', st.redis.up, esc(st.redis.url))}
+      ${svc('ClickHouse', st.clickhouse.up, st.clickhouse.enabled ? 'analytics ligado' : 'perfil analytics desligado')}
+      ${svc('Ollama (IA)', st.ollama.enabled, esc(st.ollama.url))}
+    </div>
+    <div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr))">
+      <section class="np-card"><div class="np-card-h"><h2>Verificação de email</h2><span class="np-chip">${cfg.mailer === 'smtp' ? 'SMTP' : 'dry-run'}</span></div><div class="np-card-b">
+        ${cfg.providers.length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Provider</th><th style="text-align:right">Chaves</th><th style="text-align:right">Limite</th></tr></thead><tbody>${cfg.providers.map(provRow).join('')}</tbody></table></div>` : `<div class="muted">${cfg.providerFileExists ? 'Sem providers configurados.' : 'config/verify-providers.json ausente (copia o .example).'}</div>`}
+        <div class="muted" style="font-size:12px;margin-top:8px">Proxies de verificação: <b>${cfg.proxyCount}</b>${cfg.proxyFileExists ? '' : ' (ficheiro ausente)'}</div></div></section>
+      <section class="np-card"><div class="np-card-h"><h2>Contas de envio (outreach)</h2></div><div class="np-card-b">
+        ${(cfg.sending || []).length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Conta</th><th>De</th><th>Warm-up</th><th style="text-align:right">Hoje</th><th></th></tr></thead><tbody>${cfg.sending.map(sendRow).join('')}</tbody></table></div>` : '<div class="muted">Sem contas de envio (outreach pausado — aguarda as VMs de IP limpo).</div>'}</div></section>
+    </div>
+    <section class="np-card" style="margin-top:16px"><div class="np-card-h"><h2>Ângulos de campanha</h2>${cfg.sender_org ? `<span class="muted" style="font-size:12px">${esc(cfg.sender_org)}</span>` : ''}</div><div class="np-card-b">
+      ${cfg.angles.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${cfg.angles.map((a) => `<span class="np-chip">${esc(a)}</span>`).join('')}</div>` : '<div class="muted">config/campaign-angles.json ausente.</div>'}
+      <div class="muted" style="font-size:12px;margin-top:10px">Editar chaves/proxies/contas faz-se nos ficheiros gitignored do servidor (nunca pelo browser) — ver <code>docs/</code>. Páginas públicas + dashboards de outreach chegam com a retoma do outreach.</div>
+    </div></section>`;
+}
+
+// ---------- router ----------
+async function route() {
+  closeDrawer();
+  const h = (location.hash || '#/overview').slice(2).split('?')[0] || 'overview';
+  try {
+    if (h === 'directory') await viewDirectory();
+    else if (h === 'contacts') await viewContacts();
+    else if (h === 'triggers') await viewTriggers();
+    else if (h === 'segments') await viewSegments();
+    else if (h === 'campaigns') await viewCampaigns();
+    else if (h === 'agents') await viewAgents();
+    else if (h === 'clients') await viewClients();
+    else if (h === 'isps') await viewIsps();
+    else if (h === 'import') await viewImport();
+    else if (h === 'workers') await viewWorkers();
+    else if (h === 'queues') await viewQueues();
+    else if (h === 'config') await viewConfig();
+    else if (h === 'settings') await viewSettings();
+    else await viewOverview();
+  } catch (e) { $('#view').innerHTML = `<div class="np-empty">Erro a carregar: ${esc(e.message)}</div>`; }
+  if (parseHashQuery().notif) openNotifications(); // deep-link p/ notificações
+}
+// Auto-refresh global (10s) das páginas de dados. NÃO refresca ferramentas (import/agents/
+// settings), nem enquanto se edita um campo, nem com um drawer aberto; preserva o scroll.
+const NO_AUTOREFRESH = new Set(['import', 'agents', 'settings']);
+window.addEventListener('hashchange', route);
+route();
+setInterval(() => {
+  const h = (location.hash || '#/overview').slice(2).split('?')[0] || 'overview';
+  if (NO_AUTOREFRESH.has(h)) return;
+  const ae = document.activeElement;
+  if (ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName)) return;
+  if ($('#drawer').classList.contains('open')) return;
+  const y = window.scrollY; Promise.resolve(route()).then(() => window.scrollTo(0, y));
+}, 10000);
+</script>
+</body>
+</html>

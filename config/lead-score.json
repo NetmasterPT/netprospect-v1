@@ -1,0 +1,22 @@
+{
+  "_comment": "Lead score 0-100 (lib/lead-score.js). Pesos somam ~100; score = min(100, soma dos pesos dos sinais presentes). Editável sem redeploy. Sinais de Fase D (ssl/whois/cms) a 0 até serem recolhidos.",
+  "max_score": 100,
+  "weights": {
+    "target_platform": 18,
+    "cpanel": 8,
+    "has_decision_maker": 16,
+    "has_email": 8,
+    "has_phone": 4,
+    "spf_problem": 6,
+    "dmarc_problem": 6,
+    "security_high": 10,
+    "security_any": 5,
+    "no_gmb": 4,
+    "weak_seo": 7,
+    "slow_site": 6,
+    "traffic_ranked": 8,
+    "ssl_expiring": 6,
+    "whois_expiring": 5,
+    "cms_outdated": 9
+  }
+}

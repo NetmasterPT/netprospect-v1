@@ -1,0 +1,13 @@
+[
+  {
+    "_comment": "Copiar p/ config/verify-providers.json (GITIGNORED — chave REAL só lá; em cada VM, as chaves DESSE IP). Adapters: quickemailverification, myemailverifier, verifalia, reoon, mailboxvalidator, zerobounce, abstractapi, mailboxlayer, hunter, emailable, clearout, disify(keyless). RECORRENTES=melhor: QEV 100/dia · MyEmailVerifier 100/dia · Verifalia 25/dia · Reoon 600/mês · MailboxValidator 300/mês · ZeroBounce/AbstractAPI 100/mês. Para tiers MENSAIS, pôr dailyLimit=mês/30 (throttle diário, não gastar o mês num dia). apiKeys:[...] = multi-key. disify é keyless (1000/dia por IP, só pré-filtro, nunca 'valid'). EVA foi descontinuado. Rotear por proxy: config/verify-proxies.json (campo http) → 1 quota free por IP. Ver README § frota + docs/distributed-fleet.md.",
+    "provider": "quickemailverification",
+    "apiKeys": ["CHAVE_QEV_1", "CHAVE_QEV_2", "CHAVE_QEV_3"],
+    "dailyLimit": 100
+  },
+  { "provider": "myemailverifier", "apiKey": "CHAVE", "dailyLimit": 100 },
+  { "provider": "reoon", "apiKey": "CHAVE", "dailyLimit": 20 },
+  { "provider": "mailboxvalidator", "apiKey": "CHAVE", "dailyLimit": 10 },
+  { "provider": "zerobounce", "apiKeys": ["CHAVE_1", "CHAVE_2"], "dailyLimit": 3 },
+  { "provider": "disify" }
+]

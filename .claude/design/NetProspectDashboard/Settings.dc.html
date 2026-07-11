@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap">
+<link rel="stylesheet" href="tokens/netprospect.css">
+<script src="_ds/netmaster-design-system-afcc6f5c-433f-4078-8dbe-f97343007c6b/_ds_bundle.js"></script>
+</helmet>
+<dc-import name="Shell" active="settings" hint-size="100%,100%">
+<div style="padding:18px 26px 34px; max-width:1080px;">
+  <div style="margin-bottom:18px;">
+    <div style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--np-brand-ink);">Administração</div>
+    <h1 style="margin:3px 0 2px; font-size:22px; font-weight:800; letter-spacing:-0.01em; color:var(--np-text);">Definições</h1>
+    <div style="font-size:13px; color:var(--np-text-3);">Esboço · configuração da conta, fontes de dados e conformidade</div>
+  </div>
+
+  <div style="display:grid; grid-template-columns:220px 1fr; gap:20px; align-items:start;">
+    <!-- sub nav -->
+    <nav style="display:flex; flex-direction:column; gap:2px; position:sticky; top:0;">
+      <sc-for list="{{ sections }}" as="s" hint-placeholder-count="6">
+        <button onClick="{{ s.onClick }}" style="{{ s.style }}" style-hover="{{ s.hover }}"><span style="display:inline-flex; width:18px; color:{{ s.iconColor }};">{{ s.icon }}</span>{{ s.label }}</button>
+      </sc-for>
+    </nav>
+
+    <!-- panel -->
+    <div style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); padding:22px 24px; min-height:380px;">
+
+      <!-- Perfil -->
+      <sc-if value="{{ isProfile }}" hint-placeholder-val="{{ true }}">
+        <div>
+          <h2 style="margin:0 0 4px; font-size:17px; font-weight:800; color:var(--np-text);">Perfil</h2>
+          <p style="margin:0 0 20px; font-size:13px; color:var(--np-text-3);">Como apareces para a tua equipa.</p>
+          <div style="display:flex; align-items:center; gap:16px; margin-bottom:22px;">
+            <span style="width:56px; height:56px; border-radius:999px; background:linear-gradient(135deg,#EA0B2A,#F2B234); display:inline-flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:18px;">RA</span>
+            <button style="height:34px; padding:0 14px; border:1px solid var(--np-border); background:var(--np-surface-2); color:var(--np-text-2); border-radius:var(--np-radius-sm); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer;">Alterar foto</button>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; max-width:560px;">
+            <label style="display:block;"><span style="{{ labelStyle }}">Nome</span><input value="Rui Almeida" style="{{ inputStyle }}" /></label>
+            <label style="display:block;"><span style="{{ labelStyle }}">Função</span><input value="Sales · Admin" style="{{ inputStyle }}" /></label>
+            <label style="display:block; grid-column:1 / -1;"><span style="{{ labelStyle }}">E-mail</span><input value="rui@netmaster.pt" style="{{ inputStyle }}" /></label>
+          </div>
+          <div style="margin-top:24px; padding-top:18px; border-top:1px solid var(--np-divider); display:flex; gap:10px;">
+            <button style="{{ primaryBtn }}">Guardar alterações</button>
+            <button style="{{ secondaryBtn }}">Cancelar</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- Equipa -->
+      <sc-if value="{{ isTeam }}" hint-placeholder-val="">
+        <div>
+          <h2 style="margin:0 0 4px; font-size:17px; font-weight:800; color:var(--np-text);">Equipa</h2>
+          <p style="margin:0 0 18px; font-size:13px; color:var(--np-text-3);">3 de 5 lugares utilizados.</p>
+          <div style="border:1px solid var(--np-border); border-radius:var(--np-radius); overflow:hidden;">
+            <sc-for list="{{ members }}" as="m" hint-placeholder-count="3">
+              <div style="display:flex; align-items:center; gap:12px; padding:12px 14px; border-bottom:1px solid var(--np-divider);">
+                <span style="width:34px; height:34px; border-radius:999px; background:{{ m.color }}; color:#fff; font-weight:800; font-size:12px; display:inline-flex; align-items:center; justify-content:center;">{{ m.initials }}</span>
+                <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:700; color:var(--np-text);">{{ m.name }}</div><div style="font-size:11px; color:var(--np-text-faint);">{{ m.email }}</div></div>
+                <span style="{{ m.roleStyle }}">{{ m.role }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <button style="{{ primaryBtn }}; margin-top:16px;">{{ plusIcon }} Convidar membro</button>
+        </div>
+      </sc-if>
+
+      <!-- Fontes -->
+      <sc-if value="{{ isSources }}" hint-placeholder-val="">
+        <div>
+          <h2 style="margin:0 0 4px; font-size:17px; font-weight:800; color:var(--np-text);">Fontes de dados & enriquecimento</h2>
+          <p style="margin:0 0 18px; font-size:13px; color:var(--np-text-3);">Controla como os dados são recolhidos e enriquecidos.</p>
+          <div style="display:flex; flex-direction:column; gap:10px; max-width:620px;">
+            <sc-for list="{{ sources }}" as="src" hint-placeholder-count="4">
+              <div style="display:flex; align-items:center; gap:14px; padding:14px 16px; border:1px solid var(--np-border); border-radius:var(--np-radius); background:var(--np-surface);">
+                <div style="flex:1; min-width:0;"><div style="font-size:13px; font-weight:700; color:var(--np-text);">{{ src.name }}</div><div style="font-size:12px; color:var(--np-text-3); margin-top:2px;">{{ src.desc }}</div></div>
+                <button onClick="{{ src.onToggle }}" aria-label="Alternar" style="width:44px; height:24px; border-radius:999px; border:none; background:{{ src.trackBg }}; position:relative; cursor:pointer; flex:0 0 auto; transition:background var(--np-dur);"><span style="position:absolute; top:3px; left:{{ src.knobX }}; width:18px; height:18px; border-radius:999px; background:#fff; transition:left var(--np-dur); box-shadow:0 1px 2px rgba(0,0,0,0.3);"></span></button>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- Exportação -->
+      <sc-if value="{{ isExport }}" hint-placeholder-val="">
+        <div>
+          <h2 style="margin:0 0 4px; font-size:17px; font-weight:800; color:var(--np-text);">Exportação</h2>
+          <p style="margin:0 0 18px; font-size:13px; color:var(--np-text-3);">Formato e campos por defeito nas exportações CSV.</p>
+          <div style="max-width:520px; display:flex; flex-direction:column; gap:16px;">
+            <label style="display:block;"><span style="{{ labelStyle }}">Formato</span>
+              <select style="{{ inputStyle }}"><option>CSV (UTF-8, vírgula)</option><option>CSV (ponto e vírgula)</option><option>XLSX</option></select></label>
+            <div>
+              <span style="{{ labelStyle }}">Campos incluídos</span>
+              <div style="display:flex; flex-wrap:wrap; gap:6px; margin-top:6px;">
+                <sc-for list="{{ exportFields }}" as="ef" hint-placeholder-count="6"><span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--np-brand-ink); background:var(--np-brand-soft); border:1px solid var(--np-brand-soft-bd); padding:5px 10px; border-radius:999px;">{{ ef }}</span></sc-for>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- RGPD -->
+      <sc-if value="{{ isGdpr }}" hint-placeholder-val="">
+        <div>
+          <h2 style="margin:0 0 4px; font-size:17px; font-weight:800; color:var(--np-text);">RGPD & conformidade</h2>
+          <p style="margin:0 0 18px; font-size:13px; color:var(--np-text-3);">Base legal e retenção de dados pessoais.</p>
+          <div style="max-width:560px; display:flex; flex-direction:column; gap:16px;">
+            <label style="display:block;"><span style="{{ labelStyle }}">Base legal por defeito</span><select style="{{ inputStyle }}"><option>Interesse legítimo (B2B)</option><option>Consentimento</option></select></label>
+            <label style="display:block;"><span style="{{ labelStyle }}">Retenção de contactos sem interação</span><select style="{{ inputStyle }}"><option>12 meses</option><option>24 meses</option><option>Sem limite</option></select></label>
+            <div style="display:flex; align-items:flex-start; gap:10px; padding:14px 16px; background:var(--np-warn-soft); border:1px solid var(--np-warn-soft-bd); border-radius:var(--np-radius);">
+              <span style="color:var(--np-warn); flex:0 0 auto;">{{ shieldIcon }}</span>
+              <div style="font-size:12px; color:var(--np-text-2); line-height:1.5;">Pedidos de apagamento são processados em 30 dias. Registo de auditoria mantido durante 6 anos.</div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- Aparência -->
+      <sc-if value="{{ isAppearance }}" hint-placeholder-val="">
+        <div>
+          <h2 style="margin:0 0 4px; font-size:17px; font-weight:800; color:var(--np-text);">Aparência</h2>
+          <p style="margin:0 0 18px; font-size:13px; color:var(--np-text-3);">Tema da aplicação. Também disponível na barra de topo.</p>
+          <div style="display:flex; gap:12px; flex-wrap:wrap;">
+            <sc-for list="{{ themeOptions }}" as="th" hint-placeholder-count="3">
+              <button onClick="{{ th.onClick }}" style="{{ th.style }}">
+                <div style="height:56px; border-radius:var(--np-radius-sm); background:{{ th.preview }}; border:1px solid var(--np-border); margin-bottom:10px; display:flex; overflow:hidden;"><span style="width:34%; background:{{ th.previewNav }};"></span><span style="flex:1; display:flex; align-items:center; padding:8px;"><span style="width:60%; height:8px; border-radius:4px; background:{{ th.previewBar }};"></span></span></div>
+                <span style="display:flex; align-items:center; gap:7px; font-size:13px; font-weight:700; color:var(--np-text);"><span style="{{ th.dotStyle }}">{{ th.check }}</span>{{ th.label }}</span>
+              </button>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+</div>
+</dc-import>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:940}}">
+class Component extends DCLogic {
+  state = { active: 'profile', theme: 'dark', sources: { crawl: true, whois: true, enrich: true, social: false } };
+
+  componentDidMount() { try { this.setState({ theme: localStorage.getItem('np-theme') || 'dark' }); } catch (e) {} }
+
+  ic(name, size = 16) {
+    const P = {
+      user: ['M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2', 'M12 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0'],
+      users: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0', 'M22 21v-2a4 4 0 0 0-3-3.87'],
+      db: ['M12 2c5 0 9 1.3 9 3s-4 3-9 3-9-1.3-9-3 4-3 9-3Z', 'M3 5v14c0 1.7 4 3 9 3s9-1.3 9-3V5', 'M3 12c0 1.7 4 3 9 3s9-1.3 9-3'],
+      down: ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'], shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z'],
+      palette: ['M12 2a10 10 0 1 0 0 20 2 2 0 0 0 2-2c0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2a2 2 0 0 1 2-2h2.3a4 4 0 0 0 4-4A9 9 0 0 0 12 2Z', 'M7.5 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z', 'M12 8a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z', 'M16.5 11a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z'],
+      plus: ['M12 5v14', 'M5 12h14'], check: ['M20 6 9 17l-5-5'],
+    };
+    const paths = (P[name] || []).map((d, i) => React.createElement('path', { key: i, d }));
+    return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block' } }, paths);
+  }
+  applyTheme(t) { try { document.documentElement.setAttribute('data-theme', t); localStorage.setItem('np-theme', t); } catch (e) {} this.setState({ theme: t }); }
+
+  renderVals() {
+    const A = this.state.active;
+    const labelStyle = { display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--np-text-2)', marginBottom: '6px' };
+    const inputStyle = { width: '100%', height: '38px', padding: '0 12px', border: '1px solid var(--np-border)', borderRadius: 'var(--np-radius-sm)', background: 'var(--np-surface-2)', color: 'var(--np-text)', fontFamily: 'inherit', fontSize: '13px', outline: 'none' };
+    const primaryBtn = { display: 'inline-flex', alignItems: 'center', gap: '7px', height: '38px', padding: '0 16px', border: 'none', borderRadius: 'var(--np-radius)', background: 'var(--np-brand-fill)', color: '#fff', fontFamily: 'inherit', fontSize: '13px', fontWeight: 700, cursor: 'pointer', boxShadow: 'var(--np-shadow-brand)' };
+    const secondaryBtn = { height: '38px', padding: '0 16px', border: '1px solid var(--np-border)', borderRadius: 'var(--np-radius)', background: 'var(--np-surface-2)', color: 'var(--np-text-2)', fontFamily: 'inherit', fontSize: '13px', fontWeight: 700, cursor: 'pointer' };
+
+    const secs = [['profile', 'Perfil', 'user'], ['team', 'Equipa', 'users'], ['sources', 'Fontes de dados', 'db'], ['export', 'Exportação', 'down'], ['gdpr', 'RGPD', 'shield'], ['appearance', 'Aparência', 'palette']];
+    const sections = secs.map(([key, label, icon]) => {
+      const on = A === key;
+      return { label, icon: this.ic(icon, 17), iconColor: on ? 'var(--np-brand)' : 'inherit', onClick: () => this.setState({ active: key }),
+        style: { display: 'flex', alignItems: 'center', gap: '10px', height: '38px', padding: '0 12px', border: 'none', borderRadius: 'var(--np-radius)', background: on ? 'var(--np-brand-soft)' : 'transparent', color: on ? 'var(--np-brand-ink)' : 'var(--np-text-2)', fontFamily: 'inherit', fontSize: '13px', fontWeight: on ? 700 : 600, cursor: 'pointer', textAlign: 'left', width: '100%' },
+        hover: on ? '' : 'background:var(--np-surface-3)' };
+    });
+
+    const members = [
+      { name: 'Rui Almeida', email: 'rui@netmaster.pt', role: 'Admin', color: 'var(--np-brand)' },
+      { name: 'Marta Reis', email: 'marta@netmaster.pt', role: 'Editor', color: 'var(--cat-prestashop)' },
+      { name: 'João Pinto', email: 'joao@netmaster.pt', role: 'Viewer', color: 'var(--cat-wordpress)' },
+    ].map(m => ({ ...m, initials: m.name.split(' ').map(w => w[0]).join(''), roleStyle: { fontSize: '11px', fontWeight: 700, color: 'var(--np-text-3)', background: 'var(--np-surface-2)', border: '1px solid var(--np-border)', padding: '3px 10px', borderRadius: '999px' } }));
+
+    const srcDefs = [['crawl', 'Crawler HTTP', 'Deteta plataforma, tech stack e estado dos sites.'], ['whois', 'WHOIS / RDAP', 'Titular do domínio e datas de registo.'], ['enrich', 'Enriquecimento de contactos', 'Encontra e verifica e-mails de decisores.'], ['social', 'Perfis sociais', 'Associa LinkedIn e redes sociais (beta).']];
+    const sources = srcDefs.map(([key, name, desc]) => { const on = this.state.sources[key]; return { name, desc, onToggle: () => this.setState({ sources: { ...this.state.sources, [key]: !on } }), trackBg: on ? 'var(--np-brand-fill)' : 'var(--np-border-2)', knobX: on ? '23px' : '3px' }; });
+
+    const themeOptions = [['dark', 'Escuro', '#0A0E16', '#0B111C', '#3a4860'], ['light', 'Claro', '#EEF1F6', '#121826', '#cbd5e1']].map(([k, label, bg, nav, bar]) => {
+      const on = this.state.theme === k;
+      return { label, preview: bg, previewNav: nav, previewBar: bar, onClick: () => this.applyTheme(k),
+        style: { width: '150px', padding: '10px', border: `2px solid ${on ? 'var(--np-brand)' : 'var(--np-border)'}`, borderRadius: 'var(--np-radius)', background: 'var(--np-surface-2)', cursor: 'pointer', textAlign: 'left' },
+        dotStyle: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '16px', height: '16px', borderRadius: '999px', border: `1.5px solid ${on ? 'var(--np-brand)' : 'var(--np-border-2)'}`, background: on ? 'var(--np-brand-fill)' : 'transparent', color: '#fff' },
+        check: on ? this.ic('check', 11) : '' };
+    });
+
+    return {
+      sections, labelStyle, inputStyle, primaryBtn, secondaryBtn,
+      isProfile: A === 'profile', isTeam: A === 'team', isSources: A === 'sources', isExport: A === 'export', isGdpr: A === 'gdpr', isAppearance: A === 'appearance',
+      members, sources, themeOptions, plusIcon: this.ic('plus', 15), shieldIcon: this.ic('shield', 16),
+      exportFields: ['Domínio', 'Empresa', 'Plataforma', 'Host/ISP', 'País', 'E-mail decisor', 'Estado verif.', 'Qualificado'],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+<?xml version="1.0"?>
+<!-- Este host tem IPv6 desativado; o default do ClickHouse (<listen_host>::</listen_host>)
+     falha com "Address family not supported". Forçar IPv4. -->
+<clickhouse>
+    <listen_host>0.0.0.0</listen_host>
+</clickhouse>

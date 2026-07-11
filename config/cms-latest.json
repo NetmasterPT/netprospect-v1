@@ -1,0 +1,8 @@
+{
+  "_comment": "Versões major.minor mais recentes conhecidas (para cms_outdated). Atualizar periodicamente.",
+  "wordpress": "6.8",
+  "woocommerce": "9.6",
+  "prestashop": "8.2",
+  "joomla": "5.2",
+  "drupal": "11.1"
+}

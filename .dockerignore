@@ -1,0 +1,15 @@
+# Contexto de build do worker (context = raiz do repo). Exclui o que não vai p/ a
+# imagem: node_modules é reconstruído via npm ci; out/ e data/ vêm por bind-mount.
+node_modules
+out
+data
+.git
+dashboard/node_modules
+**/*.log
+config/verify-providers.json
+config/proxies.json
+config/verify-proxies.json
+config/sending-accounts.json
+.claude
+docker/.env
+docker/.env.worker

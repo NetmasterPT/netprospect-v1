@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap">
+<link rel="stylesheet" href="tokens/netprospect.css">
+<script src="_ds/netmaster-design-system-afcc6f5c-433f-4078-8dbe-f97343007c6b/_ds_bundle.js"></script>
+</helmet>
+<dc-import name="Shell" active="segments" hint-size="100%,100%">
+<div style="padding:18px 26px 34px; max-width:1240px;">
+
+  <div style="display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:18px;">
+    <div>
+      <div style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--np-brand-ink);">Vistas guardadas</div>
+      <h1 style="margin:3px 0 2px; font-size:22px; font-weight:800; letter-spacing:-0.01em; color:var(--np-text);">Segmentos</h1>
+      <div style="font-size:13px; color:var(--np-text-3);">Filtros guardados e partilhados pela equipa · atualizados automaticamente</div>
+    </div>
+    <button style="display:inline-flex; align-items:center; gap:7px; height:38px; padding:0 16px; border-radius:var(--np-radius); border:none; background:var(--np-brand-fill); color:#fff; font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; box-shadow:var(--np-shadow-brand);" style-hover="background:var(--np-brand-hover)">{{ plusIcon }} Novo segmento</button>
+  </div>
+
+  <div style="font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--np-text-faint); margin-bottom:12px;">Os meus segmentos</div>
+  <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:16px; margin-bottom:26px;">
+    <sc-for list="{{ mine }}" as="s" hint-placeholder-count="4">
+      <div style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); overflow:hidden; transition:border-color var(--np-dur), transform var(--np-dur);" style-hover="border-color:var(--np-brand-soft-bd); transform:translateY(-2px)">
+        <div style="height:4px; background:{{ s.accent }};"></div>
+        <div style="padding:16px 18px;">
+          <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+            <div style="min-width:0;">
+              <a href="Directory.dc.html" style="font-size:15px; font-weight:800; color:var(--np-text); text-decoration:none;" style-hover="color:var(--np-brand-ink)">{{ s.name }}</a>
+              <div style="margin-top:3px; font-size:12px; color:var(--np-text-3); line-height:1.45;">{{ s.desc }}</div>
+            </div>
+            <sc-if value="{{ s.shared }}" hint-placeholder-val=""><span style="display:inline-flex; align-items:center; gap:4px; font-size:10px; font-weight:700; color:var(--np-info); background:var(--np-info-soft); border:1px solid var(--np-info-soft-bd); padding:2px 7px; border-radius:999px; flex:0 0 auto;">{{ s.shareIcon }}Equipa</span></sc-if>
+          </div>
+          <div style="margin-top:13px; display:flex; align-items:flex-end; justify-content:space-between; gap:10px;">
+            <div>
+              <div style="font-size:26px; font-weight:800; color:var(--np-text); font-variant-numeric:tabular-nums; line-height:1;">{{ s.count }}</div>
+              <div style="font-size:11px; color:var(--np-text-faint); margin-top:3px;">sites · <span style="color:{{ s.deltaColor }}; font-weight:700;">{{ s.delta }}</span> esta semana</div>
+            </div>
+            <div>{{ s.spark }}</div>
+          </div>
+          <div style="margin-top:13px; display:flex; flex-wrap:wrap; gap:5px;">
+            <sc-for list="{{ s.filters }}" as="fl" hint-placeholder-count="3"><span style="font-size:10px; font-weight:600; color:var(--np-text-3); background:var(--np-surface-2); border:1px solid var(--np-border); padding:3px 8px; border-radius:999px;">{{ fl }}</span></sc-for>
+          </div>
+          <div style="margin-top:14px; padding-top:12px; border-top:1px solid var(--np-divider); display:flex; align-items:center; justify-content:space-between;">
+            <span style="font-size:11px; color:var(--np-text-faint);">{{ s.updated }}</span>
+            <div style="display:flex; align-items:center; gap:4px;">
+              <button aria-label="Duplicar" style="{{ iconBtn }}" style-hover="border-color:var(--np-border-2); color:var(--np-text)">{{ s.copyIcon }}</button>
+              <button aria-label="Editar" style="{{ iconBtn }}" style-hover="border-color:var(--np-border-2); color:var(--np-text)">{{ s.editIcon }}</button>
+              <a href="Directory.dc.html" style="display:inline-flex; align-items:center; gap:5px; height:30px; padding:0 12px; border-radius:var(--np-radius-sm); background:var(--np-surface-2); border:1px solid var(--np-border); color:var(--np-text-2); text-decoration:none; font-size:12px; font-weight:700;" style-hover="border-color:var(--np-border-2); color:var(--np-text)">Abrir {{ s.arrowIcon }}</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--np-text-faint); margin-bottom:12px;">Partilhados com a equipa</div>
+  <div style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); overflow:hidden;">
+    <table style="width:100%; border-collapse:separate; border-spacing:0;">
+      <thead><tr>
+        <th style="text-align:left; padding:11px 16px; font-size:11px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--np-text-3); background:var(--np-surface-2); border-bottom:1px solid var(--np-border);">Segmento</th>
+        <th style="text-align:left; padding:11px 16px; font-size:11px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--np-text-3); background:var(--np-surface-2); border-bottom:1px solid var(--np-border);">Dono</th>
+        <th style="text-align:right; padding:11px 16px; font-size:11px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--np-text-3); background:var(--np-surface-2); border-bottom:1px solid var(--np-border);">Sites</th>
+        <th style="text-align:right; padding:11px 16px; font-size:11px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--np-text-3); background:var(--np-surface-2); border-bottom:1px solid var(--np-border);">Atualizado</th>
+        <th style="background:var(--np-surface-2); border-bottom:1px solid var(--np-border); width:40px;"></th>
+      </tr></thead>
+      <tbody>
+        <sc-for list="{{ team }}" as="t" hint-placeholder-count="4">
+          <tr style="cursor:pointer;" style-hover="background:var(--np-surface-3)">
+            <td style="padding:11px 16px; border-bottom:1px solid var(--np-divider);"><div style="display:flex; align-items:center; gap:9px;"><span style="width:8px; height:8px; border-radius:3px; background:{{ t.accent }};"></span><a href="Directory.dc.html" style="font-size:13px; font-weight:700; color:var(--np-text); text-decoration:none;">{{ t.name }}</a></div></td>
+            <td style="padding:11px 16px; border-bottom:1px solid var(--np-divider); font-size:12px; color:var(--np-text-2);">{{ t.owner }}</td>
+            <td style="padding:11px 16px; border-bottom:1px solid var(--np-divider); text-align:right; font-size:13px; font-weight:700; color:var(--np-text); font-variant-numeric:tabular-nums;">{{ t.count }}</td>
+            <td style="padding:11px 16px; border-bottom:1px solid var(--np-divider); text-align:right; font-size:12px; color:var(--np-text-faint);">{{ t.updated }}</td>
+            <td style="padding:11px 10px; border-bottom:1px solid var(--np-divider); text-align:right;"><span style="display:inline-flex; color:var(--np-text-faint);">{{ chevRightIcon }}</span></td>
+          </tr>
+        </sc-for>
+      </tbody>
+    </table>
+  </div>
+</div>
+</dc-import>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:940}}">
+class Component extends DCLogic {
+  ic(name, size = 14) {
+    const P = {
+      plus: ['M12 5v14', 'M5 12h14'], arrow: ['M5 12h14', 'm12 5 7 7-7 7'], chevR: ['m9 18 6-6-6-6'],
+      copy: ['M9 9h11a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2Z', 'M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1'],
+      edit: ['M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7', 'M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5Z'],
+      share: ['M18 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M6 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'M18 22a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z', 'm8.6 13.5 6.8 4', 'm15.4 6.5-6.8 4'],
+    };
+    const paths = (P[name] || []).map((d, i) => React.createElement('path', { key: i, d }));
+    return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block', flex: '0 0 auto' } }, paths);
+  }
+  spark(points, color) {
+    const w = 74, h = 30, max = Math.max(...points), min = Math.min(...points), rng = (max - min) || 1;
+    const line = points.map((v, i) => `${((i / (points.length - 1)) * w).toFixed(1)},${(h - 3 - ((v - min) / rng) * (h - 6)).toFixed(1)}`).join(' ');
+    return React.createElement('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { display: 'block' } }, [
+      React.createElement('polygon', { key: 'a', points: `0,${h} ${line} ${w},${h}`, fill: color, opacity: 0.14 }),
+      React.createElement('polyline', { key: 'l', points: line, fill: 'none', stroke: color, strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }),
+    ]);
+  }
+  fmt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+
+  renderVals() {
+    const iconBtn = { width: '30px', height: '30px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--np-border)', background: 'var(--np-surface-2)', color: 'var(--np-text-3)', borderRadius: 'var(--np-radius-sm)', cursor: 'pointer' };
+    const seg = (name, desc, accent, count, delta, deltaUp, filters, updated, shared, spark) => ({
+      name, desc, accent, count: this.fmt(count), delta, deltaColor: deltaUp ? 'var(--np-ok)' : 'var(--np-danger)', filters, updated, shared,
+      spark: this.spark(spark, deltaUp ? 'var(--np-ok-mark)' : 'var(--np-danger-mark)'),
+      copyIcon: this.ic('copy', 14), editIcon: this.ic('edit', 14), arrowIcon: this.ic('arrow', 13), shareIcon: this.ic('share', 10),
+    });
+    const mine = [
+      seg('WooCommerce sem contacto', 'Lojas ativas sem decisor identificado.', 'var(--cat-woocommerce)', 4118, '+142', true, ['WooCommerce', 'Sem contactos', 'Live'], 'Atualizado há 12 min', false, [30, 33, 35, 38, 40, 41]),
+      seg('WordPress @ OVH', 'Grande bolsa alojada num único host.', 'var(--cat-wordpress)', 9442, '+318', true, ['WordPress', 'Host: OVHcloud'], 'Atualizado há 1 h', true, [70, 74, 78, 85, 90, 94]),
+      seg('Qualificados · e-mail verif.', 'Prontos para outreach imediato.', 'var(--np-ok-mark)', 2706, '+61', true, ['Qualificado', 'E-mail verificado'], 'Atualizado há 3 h', true, [22, 23, 24, 25, 26, 27]),
+      seg('PrestaShop desatualizado', 'PrestaShop < 1.7 — risco de segurança.', 'var(--cat-prestashop)', 1284, '-8', false, ['PrestaShop', 'Versão < 1.7'], 'Atualizado ontem', false, [15, 14, 14, 13, 13, 12]),
+    ];
+    const team = [
+      { name: 'Novos .nl esta semana', owner: 'Rui Almeida', accent: 'var(--cat-wix)', count: this.fmt(312), updated: 'há 20 min' },
+      { name: 'CMO/CEO com telefone', owner: 'Marta Reis', accent: 'var(--np-brand)', count: this.fmt(1876), updated: 'há 2 h' },
+      { name: 'Shopify nórdico', owner: 'João Pinto', accent: 'var(--cat-shopify)', count: this.fmt(2440), updated: 'ontem' },
+      { name: 'Offline > 30 dias', owner: 'Rui Almeida', accent: 'var(--np-neutral-mark)', count: this.fmt(890), updated: 'há 3 dias' },
+    ].map(t => ({ ...t }));
+
+    return { plusIcon: this.ic('plus', 15), iconBtn, mine, team, chevRightIcon: this.ic('chevR', 15) };
+  }
+}
+</script>
+</body>
+</html>

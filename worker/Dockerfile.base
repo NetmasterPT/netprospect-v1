@@ -1,0 +1,25 @@
+# Worker BASE (Fase B) — imagem LEVE p/ os jobs sem ferramentas pesadas:
+# fetch/dns/geoip/fingerprint/contacts/social/locality/emailauth/traffic/score/
+# ssl/whois/dnsprovider/subdomains/discover + o coarse enrich/contacts.
+# (browser=Chromium e security=Nuclei/WPScan usam worker/Dockerfile — imagem pesada.)
+# Contexto de build = raiz do repo (docker-compose: context ..).
+FROM node:22-bookworm-slim
+
+WORKDIR /app
+
+# Só o essencial (sem Chromium/Ruby/Nuclei). curl/ca-certs p/ rede.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl procps \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+COPY lib ./lib
+COPY worker ./worker
+COPY enrich-sites.js extract-contacts.js update-geoip.js ./
+COPY config ./config
+
+ENV NODE_ENV=production \
+    WORKER_ROLES=base
+# GeoIP/Tranco por bind-mount (ro) em /app/data/{geoip,tranco}.
+CMD ["node", "worker/worker.mjs"]

@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap">
+<link rel="stylesheet" href="tokens/netprospect.css">
+<script src="_ds/netmaster-design-system-afcc6f5c-433f-4078-8dbe-f97343007c6b/_ds_bundle.js"></script>
+</helmet>
+<dc-import name="Shell" active="directory" hint-size="100%,100%">
+<div style="display:flex; flex-direction:column; height:calc(100vh - var(--np-topbar-h)); overflow:hidden;">
+
+  <!-- ===== header ===== -->
+  <div style="flex:0 0 auto; padding:18px 24px 14px; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+    <div>
+      <div style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--np-brand-ink);">Prospeção</div>
+      <h1 style="margin:3px 0 2px; font-size:22px; font-weight:800; letter-spacing:-0.01em; color:var(--np-text);">Diretório de negócios</h1>
+      <div style="font-size:13px; color:var(--np-text-3);"><strong style="color:var(--np-text-2);">{{ resultCount }}</strong> sites correspondem aos filtros · de 78 240</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <button onClick="{{ openColsMenu }}" style="display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 12px; border-radius:var(--np-radius); border:1px solid var(--np-border); background:var(--np-surface); color:var(--np-text-2); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer; position:relative;" style-hover="border-color:var(--np-border-2); color:var(--np-text)">
+        {{ colsIcon }} Colunas
+      </button>
+      <button style="display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 12px; border-radius:var(--np-radius); border:1px solid var(--np-border); background:var(--np-surface); color:var(--np-text-2); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;" style-hover="border-color:var(--np-border-2); color:var(--np-text)">
+        {{ saveIcon }} Guardar segmento
+      </button>
+      <button style="display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 16px; border-radius:var(--np-radius); border:none; background:var(--np-brand-fill); color:var(--np-on-brand); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer; box-shadow:var(--np-shadow-brand);" style-hover="background:var(--np-brand-hover)">
+        {{ downloadIcon }} Exportar CSV
+      </button>
+    </div>
+  </div>
+
+  <!-- ===== filter bar ===== -->
+  <div style="flex:0 0 auto; padding:0 24px; position:relative; z-index:var(--np-z-dropdown);">
+    <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap; padding:12px 14px; background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card);">
+      <!-- search -->
+      <div style="flex:1 1 240px; min-width:200px; display:flex; align-items:center; gap:8px; height:36px; padding:0 12px; background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:var(--np-radius); color:var(--np-text-3);">
+        <span style="display:inline-flex;">{{ searchIcon }}</span>
+        <input value="{{ searchValue }}" onInput="{{ onSearch }}" placeholder="Procurar domínio ou empresa…" style="flex:1; border:none; background:transparent; outline:none; font-family:inherit; font-size:13px; color:var(--np-text);" />
+        <sc-if value="{{ searching }}" hint-placeholder-val=""><span style="width:13px; height:13px; border:2px solid var(--np-border-2); border-top-color:var(--np-brand); border-radius:999px; animation:npspin 0.7s linear infinite;"></span></sc-if>
+      </div>
+      <!-- facet buttons -->
+      <sc-for list="{{ facets }}" as="f" hint-placeholder-count="7">
+        <div style="position:relative;">
+          <button onClick="{{ f.onClick }}" style="{{ f.btnStyle }}" style-hover="border-color:var(--np-border-2)">
+            <span>{{ f.label }}</span>
+            <sc-if value="{{ f.badge }}" hint-placeholder-val=""><span style="min-width:16px; height:16px; padding:0 4px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; border-radius:999px; background:var(--np-brand-fill); color:#fff;">{{ f.badge }}</span></sc-if>
+            <span style="display:inline-flex; opacity:0.6;">{{ chevIcon }}</span>
+          </button>
+          <sc-if value="{{ f.open }}" hint-placeholder-val="">
+            <div style="position:absolute; top:42px; left:0; min-width:230px; background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-md); box-shadow:var(--np-shadow-pop); padding:6px; z-index:var(--np-z-dropdown);">
+              <sc-for list="{{ f.options }}" as="o" hint-placeholder-count="4">
+                <button onClick="{{ o.onClick }}" style="width:100%; display:flex; align-items:center; gap:9px; padding:7px 9px; border:none; background:transparent; border-radius:var(--np-radius-sm); font-family:inherit; font-size:13px; color:var(--np-text-2); cursor:pointer; text-align:left;" style-hover="background:var(--np-surface-3)">
+                  <span style="width:16px; height:16px; border-radius:4px; border:1.5px solid {{ o.boxBorder }}; background:{{ o.boxBg }}; display:inline-flex; align-items:center; justify-content:center; color:#fff; flex:0 0 auto;">{{ o.check }}</span>
+                  <sc-if value="{{ o.dot }}" hint-placeholder-val=""><span style="width:9px; height:9px; border-radius:3px; background:{{ o.dot }}; flex:0 0 auto;"></span></sc-if>
+                  <span style="flex:1;">{{ o.label }}</span>
+                  <span style="font-size:11px; color:var(--np-text-faint); font-variant-numeric:tabular-nums;">{{ o.count }}</span>
+                </button>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- column config dropdown -->
+    <sc-if value="{{ colsOpen }}" hint-placeholder-val="">
+      <div style="position:absolute; top:8px; right:24px; min-width:210px; background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-md); box-shadow:var(--np-shadow-pop); padding:8px; z-index:var(--np-z-dropdown);">
+        <div style="padding:4px 8px 8px; font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--np-text-faint);">Colunas visíveis</div>
+        <sc-for list="{{ colToggles }}" as="c" hint-placeholder-count="3">
+          <button onClick="{{ c.onClick }}" style="width:100%; display:flex; align-items:center; gap:9px; padding:7px 9px; border:none; background:transparent; border-radius:var(--np-radius-sm); font-family:inherit; font-size:13px; color:var(--np-text-2); cursor:pointer; text-align:left;" style-hover="background:var(--np-surface-3)">
+            <span style="width:34px; height:18px; border-radius:999px; background:{{ c.trackBg }}; position:relative; flex:0 0 auto; transition:background var(--np-dur);"><span style="position:absolute; top:2px; left:{{ c.knobX }}; width:14px; height:14px; border-radius:999px; background:#fff; transition:left var(--np-dur);"></span></span>
+            {{ c.label }}
+          </button>
+        </sc-for>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- ===== active filter chips ===== -->
+  <sc-if value="{{ hasChips }}" hint-placeholder-val="">
+    <div style="flex:0 0 auto; padding:12px 24px 4px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+      <span style="font-size:12px; font-weight:600; color:var(--np-text-faint);">Filtros:</span>
+      <sc-for list="{{ chips }}" as="ch" hint-placeholder-count="3">
+        <span style="display:inline-flex; align-items:center; gap:7px; height:28px; padding:0 6px 0 11px; background:var(--np-brand-soft); border:1px solid var(--np-brand-soft-bd); border-radius:999px; font-size:12px; font-weight:600; color:var(--np-brand-ink);">
+          <span style="opacity:0.7; font-weight:700;">{{ ch.facet }}</span>{{ ch.value }}
+          <button onClick="{{ ch.onRemove }}" aria-label="Remover filtro" style="width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; border:none; background:rgba(0,0,0,0.06); border-radius:999px; color:inherit; cursor:pointer; font-size:12px; line-height:1;">×</button>
+        </span>
+      </sc-for>
+      <button onClick="{{ clearAll }}" style="height:28px; padding:0 10px; border:none; background:transparent; color:var(--np-text-3); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; text-decoration:underline;">Limpar tudo</button>
+    </div>
+  </sc-if>
+
+  <!-- ===== bulk action bar ===== -->
+  <sc-if value="{{ hasSelection }}" hint-placeholder-val="">
+    <div style="flex:0 0 auto; margin:12px 24px 0; padding:10px 14px; display:flex; align-items:center; gap:14px; background:var(--np-text); color:var(--np-text-inverse); border-radius:var(--np-radius-md); box-shadow:var(--np-shadow-raise);">
+      <span style="font-size:13px; font-weight:700;">{{ selCount }} selecionados</span>
+      <span style="width:1px; height:18px; background:rgba(150,150,150,0.4);"></span>
+      <button style="display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 12px; border:none; background:rgba(255,255,255,0.14); color:inherit; border-radius:var(--np-radius-sm); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer;" style-hover="background:rgba(255,255,255,0.24)">{{ downloadIcon2 }} Exportar CSV</button>
+      <button style="display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 12px; border:none; background:rgba(255,255,255,0.14); color:inherit; border-radius:var(--np-radius-sm); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer;" style-hover="background:rgba(255,255,255,0.24)">{{ plusIcon }} Adicionar a segmento</button>
+      <div style="flex:1;"></div>
+      <button onClick="{{ clearSel }}" style="height:32px; padding:0 12px; border:none; background:transparent; color:rgba(255,255,255,0.75); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer;" style-hover="color:#fff">Limpar seleção</button>
+    </div>
+  </sc-if>
+
+  <!-- ===== table ===== -->
+  <div style="flex:1 1 auto; margin:12px 24px 0; min-height:0; background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg) var(--np-radius-lg) 0 0; box-shadow:var(--np-shadow-card); overflow:auto;">
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="">
+      <div style="padding:70px 20px; text-align:center;">
+        <div style="width:56px; height:56px; margin:0 auto 16px; border-radius:16px; background:var(--np-surface-3); display:flex; align-items:center; justify-content:center; color:var(--np-text-faint);">{{ emptyIcon }}</div>
+        <div style="font-size:16px; font-weight:800; color:var(--np-text);">Sem resultados</div>
+        <div style="margin:6px 0 16px; font-size:13px; color:var(--np-text-3);">Nenhum site corresponde a estes filtros. Experimente alargar os critérios.</div>
+        <button onClick="{{ clearAll }}" style="height:36px; padding:0 16px; border:1px solid var(--np-border); background:var(--np-surface); color:var(--np-text); border-radius:var(--np-radius); font-family:inherit; font-size:13px; font-weight:700; cursor:pointer;">Limpar filtros</button>
+      </div>
+    </sc-if>
+    <sc-if value="{{ notEmpty }}" hint-placeholder-val="{{ true }}">
+    <table style="width:100%; border-collapse:separate; border-spacing:0; min-width:1180px;">
+      <thead>
+        <tr>
+          <th style="position:sticky; top:0; z-index:2; background:var(--np-surface-2); padding:0 8px 0 14px; height:42px; border-bottom:1px solid var(--np-border); text-align:left; width:44px;">
+            <span onClick="{{ toggleAll }}" role="checkbox" aria-checked="{{ allChecked }}" style="{{ headCbStyle }}">{{ headCbMark }}</span>
+          </th>
+          <sc-for list="{{ columns }}" as="col" hint-placeholder-count="8">
+            <th onClick="{{ col.onSort }}" style="{{ col.thStyle }}">
+              <span style="display:inline-flex; align-items:center; gap:5px;">{{ col.label }}<span style="display:inline-flex; color:{{ col.sortColor }};">{{ col.sortIcon }}</span></span>
+            </th>
+          </sc-for>
+          <th style="position:sticky; top:0; z-index:2; background:var(--np-surface-2); border-bottom:1px solid var(--np-border); width:48px;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        <sc-for list="{{ rows }}" as="r" hint-placeholder-count="12">
+          <tr tabindex="0" onClick="{{ r.onOpen }}" onKeyDown="{{ r.onKey }}" style="{{ r.rowStyle }}" style-hover="background:var(--np-surface-3)" style-focus="outline:2px solid var(--np-brand); outline-offset:-2px">
+            <td onClick="{{ r.onToggleStop }}" style="padding:0 8px 0 14px; border-bottom:1px solid var(--np-divider);">
+              <span style="{{ r.cbStyle }}">{{ r.cbMark }}</span>
+            </td>
+            <!-- domain -->
+            <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider);">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span title="{{ r.live.label }}" style="display:inline-flex; align-items:center; justify-content:center; width:8px; height:8px; border-radius:999px; background:{{ r.live.dot }}; flex:0 0 auto;"></span>
+                <div style="min-width:0;">
+                  <div style="font-size:13px; font-weight:700; color:var(--np-text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ r.domain }}</div>
+                  <div style="display:flex; align-items:center; gap:6px; font-size:11px; color:var(--np-text-faint);">
+                    <span style="display:inline-flex; align-items:center; gap:3px; color:{{ r.live.color }};">{{ r.live.icon }}{{ r.live.label }}</span>
+                    <sc-if value="{{ r.cdn }}" hint-placeholder-val=""><span style="color:var(--np-text-faint);">· CDN</span></sc-if>
+                  </div>
+                </div>
+              </div>
+            </td>
+            <!-- company -->
+            <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider); font-size:13px; color:var(--np-text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:180px;">{{ r.company }}</td>
+            <!-- platform -->
+            <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider);">
+              <span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--np-text-2); white-space:nowrap;"><span style="width:9px; height:9px; border-radius:3px; background:{{ r.platform.color }};"></span>{{ r.platform.label }}</span>
+            </td>
+            <!-- host -->
+            <sc-if value="{{ showHost }}" hint-placeholder-val="{{ true }}">
+              <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider); font-size:12px; color:var(--np-text-2); white-space:nowrap;">
+                <span style="display:inline-flex; align-items:center; gap:6px;">{{ r.host }}<sc-if value="{{ r.hostFlag }}" hint-placeholder-val=""><span style="font-size:9px; font-weight:800; color:var(--np-brand); background:var(--np-brand-soft); padding:0 4px; border-radius:999px;">PT</span></sc-if></span>
+              </td>
+            </sc-if>
+            <!-- country -->
+            <sc-if value="{{ showCountry }}" hint-placeholder-val="{{ true }}">
+              <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider); font-size:12px; color:var(--np-text-2); white-space:nowrap;">{{ r.geo }}</td>
+            </sc-if>
+            <!-- contacts -->
+            <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider);">
+              <span style="display:inline-flex; align-items:center; gap:6px; font-size:12px; color:var(--np-text-2);">
+                <span style="font-weight:700; font-variant-numeric:tabular-nums; color:var(--np-text);">{{ r.contactsCount }}</span>
+                <sc-if value="{{ r.hasVerified }}" hint-placeholder-val=""><span title="Tem e-mail verificado" style="display:inline-flex; align-items:center; gap:2px; color:var(--np-ok); font-size:11px; font-weight:700;">{{ verifyMini }}verif.</span></sc-if>
+                <sc-if value="{{ r.noContacts }}" hint-placeholder-val=""><span style="color:var(--np-text-faint);">sem</span></sc-if>
+              </span>
+            </td>
+            <!-- qualified -->
+            <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider);">
+              <span style="{{ r.qual.style }}">{{ r.qual.icon }}{{ r.qual.label }}</span>
+            </td>
+            <!-- outreach -->
+            <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider);">
+              <span style="{{ r.out.style }}">{{ r.out.icon }}{{ r.out.label }}</span>
+            </td>
+            <!-- tech (optional) -->
+            <sc-if value="{{ showTech }}" hint-placeholder-val="">
+              <td style="padding:8px 14px; border-bottom:1px solid var(--np-divider); white-space:nowrap;">
+                <sc-for list="{{ r.techMini }}" as="t" hint-placeholder-count="2"><span style="display:inline-block; font-size:10px; font-weight:600; color:var(--np-text-3); background:var(--np-surface-2); border:1px solid var(--np-border); padding:2px 6px; border-radius:999px; margin-right:4px;">{{ t }}</span></sc-for>
+              </td>
+            </sc-if>
+            <td style="padding:8px 10px; border-bottom:1px solid var(--np-divider); text-align:right;">
+              <span style="display:inline-flex; color:var(--np-text-faint);">{{ chevRightIcon }}</span>
+            </td>
+          </tr>
+        </sc-for>
+      </tbody>
+    </table>
+    </sc-if>
+  </div>
+
+  <!-- ===== pagination ===== -->
+  <div style="flex:0 0 auto; margin:0 24px 0; padding:11px 16px; background:var(--np-surface-2); border:1px solid var(--np-border); border-top:none; border-radius:0 0 var(--np-radius-lg) var(--np-radius-lg); display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <div style="font-size:12px; color:var(--np-text-3);">A mostrar <strong style="color:var(--np-text-2);">{{ pageFrom }}–{{ pageTo }}</strong> de <strong style="color:var(--np-text-2);">{{ resultCount }}</strong></div>
+    <div style="display:flex; align-items:center; gap:14px;">
+      <div style="display:flex; align-items:center; gap:6px; font-size:12px; color:var(--np-text-3);">
+        Linhas
+        <select style="height:30px; border:1px solid var(--np-border); background:var(--np-surface); color:var(--np-text-2); border-radius:var(--np-radius-sm); font-family:inherit; font-size:12px; padding:0 6px;"><option>25</option><option>50</option><option>100</option></select>
+      </div>
+      <div style="display:flex; align-items:center; gap:4px;">
+        <button onClick="{{ prevPage }}" style="{{ prevStyle }}">‹</button>
+        <sc-for list="{{ pages }}" as="pg" hint-placeholder-count="5">
+          <button onClick="{{ pg.onClick }}" style="{{ pg.style }}">{{ pg.label }}</button>
+        </sc-for>
+        <button onClick="{{ nextPage }}" style="{{ nextStyle }}">›</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DETAIL DRAWER ============ -->
+<sc-if value="{{ drawerOpen }}" hint-placeholder-val="">
+  <div onClick="{{ closeDrawer }}" style="position:fixed; inset:var(--np-topbar-h) 0 0 0; background:var(--np-overlay); z-index:var(--np-z-drawer-scrim); animation:npfade var(--np-dur) var(--np-ease);"></div>
+  <aside style="position:fixed; top:var(--np-topbar-h); right:0; width:var(--np-drawer-w); max-width:92vw; height:calc(100vh - var(--np-topbar-h)); background:var(--np-surface); border-left:1px solid var(--np-border); box-shadow:var(--np-shadow-drawer); z-index:var(--np-z-drawer); display:flex; flex-direction:column; animation:npslide var(--np-dur-slow) var(--np-ease);">
+    <!-- drawer header -->
+    <div style="flex:0 0 auto; padding:18px 20px 16px; border-bottom:1px solid var(--np-border); background:var(--np-surface-2);">
+      <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:10px;">
+        <div style="min-width:0;">
+          <div style="display:flex; align-items:center; gap:9px;">
+            <span style="width:9px; height:9px; border-radius:999px; background:{{ d.live.dot }};"></span>
+            <span style="font-size:18px; font-weight:800; color:var(--np-text); letter-spacing:-0.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ d.domain }}</span>
+          </div>
+          <div style="margin-top:3px; font-size:13px; color:var(--np-text-3);">{{ d.company }}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px; flex:0 0 auto;">
+          <a href="CompanyDetail.dc.html" title="Abrir página completa" style="width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--np-border); border-radius:var(--np-radius-sm); color:var(--np-text-2); text-decoration:none;" style-hover="border-color:var(--np-border-2); color:var(--np-text)">{{ expandIcon }}</a>
+          <button onClick="{{ closeDrawer }}" aria-label="Fechar" style="width:32px; height:32px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--np-border); border-radius:var(--np-radius-sm); background:transparent; color:var(--np-text-2); cursor:pointer;" style-hover="border-color:var(--np-border-2); color:var(--np-text)">{{ closeIcon }}</button>
+        </div>
+      </div>
+      <div style="margin-top:13px; display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="{{ d.qual.style }}">{{ d.qual.icon }}{{ d.qual.label }}</span>
+        <span style="display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; font-size:12px; font-weight:600; color:var(--np-text-2); background:var(--np-surface); border:1px solid var(--np-border); border-radius:999px;"><span style="width:8px; height:8px; border-radius:3px; background:{{ d.platform.color }};"></span>{{ d.platform.label }}</span>
+        <span style="display:inline-flex; align-items:center; gap:5px; height:24px; padding:0 10px; font-size:12px; font-weight:600; color:var(--np-text-2); background:var(--np-surface); border:1px solid var(--np-border); border-radius:999px;">{{ globeIcon }}{{ d.lang }}</span>
+      </div>
+    </div>
+
+    <!-- drawer body (scroll) -->
+    <div style="flex:1 1 auto; overflow-y:auto; padding:18px 20px 24px;">
+      <!-- hosting -->
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--np-text-faint); margin-bottom:10px;">Alojamento</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1px; background:var(--np-border); border:1px solid var(--np-border); border-radius:var(--np-radius); overflow:hidden;">
+          <sc-for list="{{ d.hosting }}" as="hp" hint-placeholder-count="6">
+            <div style="background:var(--np-surface); padding:9px 12px;">
+              <div style="font-size:10px; color:var(--np-text-faint); text-transform:uppercase; letter-spacing:0.06em;">{{ hp.k }}</div>
+              <div style="margin-top:2px; font-size:12px; font-weight:600; color:var(--np-text); word-break:break-all;">{{ hp.v }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <!-- tech stack -->
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--np-text-faint); margin-bottom:10px;">Tech stack detetada</div>
+        <div style="display:flex; flex-wrap:wrap; gap:6px;">
+          <sc-for list="{{ d.tech }}" as="t" hint-placeholder-count="5"><span style="font-size:12px; font-weight:600; color:var(--np-text-2); background:var(--np-surface-2); border:1px solid var(--np-border); padding:4px 10px; border-radius:999px;">{{ t }}</span></sc-for>
+        </div>
+      </div>
+
+      <!-- subdomains -->
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--np-text-faint); margin-bottom:10px;">Subdomínios ({{ d.subCount }})</div>
+        <div style="display:flex; flex-direction:column; gap:1px; background:var(--np-border); border:1px solid var(--np-border); border-radius:var(--np-radius); overflow:hidden;">
+          <sc-for list="{{ d.subdomains }}" as="s" hint-placeholder-count="3"><div style="background:var(--np-surface); padding:8px 12px; font-size:12px; font-family:ui-monospace,monospace; color:var(--np-text-2);">{{ s }}</div></sc-for>
+        </div>
+      </div>
+
+      <!-- contacts -->
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--np-text-faint); margin-bottom:10px;">Contactos ({{ d.contactCount }})</div>
+        <div style="display:flex; flex-direction:column; gap:8px;">
+          <sc-for list="{{ d.contacts }}" as="c" hint-placeholder-count="3">
+            <div style="border:1px solid var(--np-border); border-radius:var(--np-radius); padding:11px 12px; background:var(--np-surface);">
+              <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                <div style="display:flex; align-items:center; gap:9px; min-width:0;">
+                  <span style="width:30px; height:30px; border-radius:999px; background:var(--np-surface-3); color:var(--np-text-2); font-size:11px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;">{{ c.initials }}</span>
+                  <div style="min-width:0;">
+                    <div style="font-size:13px; font-weight:700; color:var(--np-text);">{{ c.name }}</div>
+                    <span style="{{ c.roleStyle }}">{{ c.role }}</span>
+                  </div>
+                </div>
+                <span style="{{ c.verif.style }}">{{ c.verif.icon }}{{ c.verif.label }}</span>
+              </div>
+              <div style="margin-top:9px; display:flex; flex-direction:column; gap:5px;">
+                <a href="{{ c.mailto }}" style="display:flex; align-items:center; gap:7px; font-size:12px; color:var(--np-text-2); text-decoration:none;" style-hover="color:var(--np-brand-ink)">{{ mailIcon }}<span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">{{ c.email }}</span></a>
+                <sc-if value="{{ c.phone }}" hint-placeholder-val=""><a href="{{ c.tel }}" style="display:flex; align-items:center; gap:7px; font-size:12px; color:var(--np-text-2); text-decoration:none;" style-hover="color:var(--np-brand-ink)">{{ phoneIcon }}{{ c.phone }}</a></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:10px; padding:10px 12px; background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:var(--np-radius); font-size:12px; color:var(--np-text-3);">
+          <span style="font-weight:700; color:var(--np-text-2);">Geral:</span> {{ d.generalEmail }} · {{ d.generalPhone }}
+        </div>
+      </div>
+
+      <!-- outreach mini workflow -->
+      <div style="margin-bottom:16px;">
+        <div style="font-size:11px; font-weight:700; letter-spacing:0.1em; text-transform:uppercase; color:var(--np-text-faint); margin-bottom:10px;">Outreach</div>
+        <div style="display:flex; gap:6px; margin-bottom:10px;">
+          <sc-for list="{{ outreachSteps }}" as="st" hint-placeholder-count="4">
+            <button onClick="{{ st.onClick }}" style="{{ st.style }}">{{ st.icon }}{{ st.label }}</button>
+          </sc-for>
+        </div>
+        <textarea placeholder="Adicionar nota interna sobre este prospeto…" style="width:100%; min-height:70px; resize:vertical; padding:10px 12px; border:1px solid var(--np-border); border-radius:var(--np-radius); background:var(--np-surface-2); color:var(--np-text); font-family:inherit; font-size:13px; outline:none;">{{ d.note }}</textarea>
+      </div>
+    </div>
+
+    <!-- drawer footer / GDPR -->
+    <div style="flex:0 0 auto; padding:11px 20px; border-top:1px solid var(--np-border); background:var(--np-surface-2); display:flex; align-items:center; gap:8px;">
+      <span style="display:inline-flex; color:var(--np-text-faint);">{{ shieldIcon }}</span>
+      <span style="font-size:11px; color:var(--np-text-3); line-height:1.4;">Base legal RGPD: <strong style="color:var(--np-text-2);">interesse legítimo B2B</strong> · fonte {{ d.source }} · recolhido {{ d.collected }}</span>
+    </div>
+  </aside>
+</sc-if>
+
+<style>
+@keyframes npspin { to { transform:rotate(360deg); } }
+@keyframes npfade { from { opacity:0; } to { opacity:1; } }
+@keyframes npslide { from { transform:translateX(28px); opacity:0.4; } to { transform:translateX(0); opacity:1; } }
+</style>
+</dc-import>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:940}}">
+class Component extends DCLogic {
+  state = {
+    q: '', searching: false, sort: { key: 'domain', dir: 'asc' },
+    filters: { qualified: [], platform: [], host: [], country: [], contacts: [], verified: [] },
+    openFacet: null, colsOpen: false,
+    cols: { host: true, country: true, tech: false },
+    selected: {}, openRowId: null, page: 1, outreach: 'contacted',
+  };
+
+  componentDidMount() {
+    // reflect filters from URL on load
+    try {
+      const p = new URLSearchParams(location.search);
+      const f = { ...this.state.filters };
+      ['qualified', 'platform', 'host', 'country', 'contacts', 'verified'].forEach(k => {
+        const v = p.get(k); if (v) f[k] = v.split(',');
+      });
+      const q = p.get('q') || '';
+      this.setState({ filters: f, q });
+    } catch (e) {}
+  }
+
+  syncUrl() {
+    try {
+      const p = new URLSearchParams();
+      if (this.state.q) p.set('q', this.state.q);
+      Object.entries(this.state.filters).forEach(([k, v]) => { if (v.length) p.set(k, v.join(',')); });
+      const qs = p.toString();
+      history.replaceState(null, '', qs ? '?' + qs : location.pathname);
+    } catch (e) {}
+  }
+
+  ic(name, size = 14) {
+    const P = {
+      search: ['M11 11m-8 0a8 8 0 1 0 16 0a8 8 0 1 0-16 0', 'm21 21-4.3-4.3'],
+      chev: ['m6 9 6 6 6-6'], chevR: ['m9 18 6-6-6-6'], check: ['M20 6 9 17l-5-5'],
+      download: ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'], plus: ['M12 5v14', 'M5 12h14'],
+      cols: ['M3 3h18v18H3z', 'M9 3v18', 'M15 3v18'], save: ['M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2Z', 'M17 21v-8H7v8', 'M7 3v5h8'],
+      expand: ['M15 3h6v6', 'M9 21H3v-6', 'M21 3l-7 7', 'M3 21l7-7'], close: ['M18 6 6 18', 'M6 6l12 12'],
+      mail: ['M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z', 'm22 7-10 6L2 7'],
+      phone: ['M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.6A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z'],
+      globe: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z', 'M2 12h20', 'M12 2a15 15 0 0 1 0 20', 'M12 2a15 15 0 0 0 0 20'],
+      shield: ['M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z'],
+      globe2: ['M2 12h20', 'M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z'],
+      power: ['M12 2v10', 'M6.3 6.3a8 8 0 1 0 11.4 0'], x: ['M18 6 6 18', 'M6 6l12 12'],
+      dash: ['M5 12h14'], mailq: ['M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z', 'm22 7-10 6L2 7'],
+      alert: ['M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z', 'M12 9v4', 'M12 17h.01'],
+      folder: ['M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z'],
+      send: ['M22 2 11 13', 'M22 2 15 22l-4-9-9-4 20-7Z'], reply: ['M9 17 4 12l5-5', 'M20 18v-2a4 4 0 0 0-4-4H4'],
+      clock: ['M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0', 'M12 7v5l3 2'],
+    };
+    const paths = (P[name] || []).map((d, i) => React.createElement('path', { key: i, d }));
+    return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block', flex: '0 0 auto' } }, paths);
+  }
+
+  badge(color, soft, bd, icon, label, size) {
+    return {
+      style: { display: 'inline-flex', alignItems: 'center', gap: '5px', height: (size || 22) + 'px', padding: '0 9px', fontSize: '11px', fontWeight: 700, color: `var(${color})`, background: `var(${soft})`, border: `1px solid var(${bd})`, borderRadius: '999px', whiteSpace: 'nowrap' },
+      icon: this.ic(icon, 12), label,
+    };
+  }
+
+  platformMap() {
+    return {
+      WordPress: 'var(--cat-wordpress)', WooCommerce: 'var(--cat-woocommerce)', PrestaShop: 'var(--cat-prestashop)',
+      Wix: 'var(--cat-wix)', Joomla: 'var(--cat-joomla)', Drupal: 'var(--cat-drupal)', Shopify: 'var(--cat-shopify)',
+      Squarespace: 'var(--cat-squarespace)', Custom: 'var(--cat-custom)',
+    };
+  }
+
+  data() {
+    const P = this.platformMap();
+    const mk = (o) => o;
+    return [
+      mk({ id: 1, domain: 'padariacentral.pt', live: true, cdn: true, company: 'Padaria Central Lda', platform: 'WooCommerce', host: 'OVHcloud', hostFlag: false, ip: '51.83.42.19', ptr: 'vps-1a2b.ovh.net', asn: 'AS16276 OVH', country: 'PT', city: 'Lisboa', http: '200', lang: 'PT', qualified: true, out: 'contacted', contacts: 3, verified: true, general: ['geral@padariacentral.pt', '+351 21 314 55 20'], tech: ['WooCommerce 8.2', 'PHP 8.1', 'WP 6.4', 'MB WAY', 'Cloudflare'], subs: ['loja.padariacentral.pt', 'blog.padariacentral.pt'], people: [['Ana Ferreira', 'CEO', 'ana.ferreira@padariacentral.pt', 'verified', '+351 91 222 33 44'], ['Tiago Sousa', 'Manager', 'tiago@padariacentral.pt', 'role', ''], ['Info', 'DPO', 'dpo@padariacentral.pt', 'catchall', '']], source: 'crawl+WHOIS', collected: '2026-05-14' }),
+      mk({ id: 2, domain: 'bloomdesign.nl', live: true, cdn: false, company: 'Bloom Design B.V.', platform: 'WordPress', host: 'Hetzner', hostFlag: false, ip: '116.203.9.44', ptr: 'static.44.hetzner.com', asn: 'AS24940 Hetzner', country: 'NL', city: 'Amesterdão', http: '200', lang: 'NL', qualified: true, out: 'new', contacts: 2, verified: true, general: ['hello@bloomdesign.nl', '+31 20 715 88 00'], tech: ['WP 5.9', 'PHP 7.4', 'Elementor', 'jQuery'], subs: ['staging.bloomdesign.nl'], people: [['Sanne de Vries', 'Founder', 's.devries@bloomdesign.nl', 'verified', '+31 6 1122 3344'], ['Mark Jansen', 'CTO', 'mark@bloomdesign.nl', 'unverified', '']], source: 'crawl', collected: '2026-06-02' }),
+      mk({ id: 3, domain: 'kaffesthlm.se', live: true, cdn: true, company: 'Kaffe Sthlm AB', platform: 'Shopify', host: 'Cloudflare', hostFlag: false, ip: '104.21.6.12', ptr: '—', asn: 'AS13335 Cloudflare', country: 'SE', city: 'Estocolmo', http: '200', lang: 'SV', qualified: false, out: 'new', contacts: 1, verified: false, general: ['info@kaffesthlm.se', '+46 8 559 22 10'], tech: ['Shopify', 'Liquid', 'Klaviyo'], subs: [], people: [['Erik Lund', 'CEO', 'erik@kaffesthlm.se', 'catchall', '']], source: 'crawl', collected: '2026-06-11' }),
+      mk({ id: 4, domain: 'clinicaviseu.pt', live: false, cdn: false, company: 'Clínica Viseu', platform: 'Joomla', host: 'Amen (PTISP)', hostFlag: true, ip: '188.93.95.7', ptr: 'srv7.amen.pt', asn: 'AS29222 Amen', country: 'PT', city: 'Viseu', http: '503', lang: 'PT', qualified: false, out: 'new', contacts: 0, verified: false, general: ['—', '+351 232 410 900'], tech: ['Joomla 3.9', 'PHP 7.2'], subs: [], people: [], source: 'WHOIS', collected: '2026-04-28' }),
+      mk({ id: 5, domain: 'nordiskmobler.no', live: true, cdn: false, company: 'Nordisk Møbler AS', platform: 'PrestaShop', host: 'Leaseweb', hostFlag: false, ip: '95.211.3.88', ptr: 'lw-88.leaseweb.net', asn: 'AS60781 Leaseweb', country: 'NO', city: 'Oslo', http: '200', lang: 'NO', qualified: true, out: 'replied', contacts: 4, verified: true, general: ['post@nordiskmobler.no', '+47 22 44 55 66'], tech: ['PrestaShop 1.7', 'PHP 8.0', 'Stripe'], subs: ['b2b.nordiskmobler.no', 'no.nordiskmobler.no'], people: [['Ingrid Hansen', 'CMO', 'ingrid@nordiskmobler.no', 'verified', '+47 900 11 223'], ['Lars Berg', 'CEO', 'lars.berg@nordiskmobler.no', 'verified', ''], ['Sales', 'Manager', 'sales@nordiskmobler.no', 'role', '']], source: 'crawl+enrich', collected: '2026-05-30' }),
+      mk({ id: 6, domain: 'helsinkitech.fi', live: true, cdn: true, company: 'Helsinki Tech Oy', platform: 'Custom', host: 'Amazon AWS', hostFlag: false, ip: '13.48.22.9', ptr: 'ec2-13-48.compute.aws', asn: 'AS16509 Amazon', country: 'FI', city: 'Helsínquia', http: '200', lang: 'FI', qualified: false, out: 'new', contacts: 2, verified: false, general: ['info@helsinkitech.fi', '+358 9 425 110'], tech: ['Next.js', 'Node', 'Vercel Edge'], subs: ['app.helsinkitech.fi', 'docs.helsinkitech.fi'], people: [['Aino Virtanen', 'CTO', 'aino@helsinkitech.fi', 'unverified', ''], ['Juho Mäki', 'CFO', 'j.maki@helsinkitech.fi', 'catchall', '']], source: 'crawl', collected: '2026-06-08' }),
+      mk({ id: 7, domain: 'lojaverde.pt', live: true, cdn: false, company: 'Loja Verde Unipessoal', platform: 'WooCommerce', host: 'Dominios.pt', hostFlag: true, ip: '193.126.9.30', ptr: 'web30.dominios.pt', asn: 'AS8426 Claranet', country: 'PT', city: 'Porto', http: '200', lang: 'PT', qualified: true, out: 'to-contact', contacts: 2, verified: true, general: ['loja@lojaverde.pt', '+351 22 019 44 12'], tech: ['WooCommerce 7.8', 'WP 6.1', 'PHP 8.0', 'Ifthenpay'], subs: ['loja.lojaverde.pt'], people: [['Rita Nunes', 'CEO', 'rita@lojaverde.pt', 'verified', '+351 96 555 12 12'], ['Suporte', 'Manager', 'apoio@lojaverde.pt', 'role', '']], source: 'crawl+WHOIS', collected: '2026-06-01' }),
+      mk({ id: 8, domain: 'studioamsterdam.nl', live: true, cdn: true, company: 'Studio Amsterdam', platform: 'Squarespace', host: 'Google Cloud', hostFlag: false, ip: '35.190.4.7', ptr: '7.4.190.35.bc.googleusercontent.com', asn: 'AS15169 Google', country: 'NL', city: 'Amesterdão', http: '200', lang: 'NL', qualified: false, out: 'new', contacts: 1, verified: false, general: ['studio@studioamsterdam.nl', ''], tech: ['Squarespace', 'YUI'], subs: [], people: [['Noa Bakker', 'Founder', 'noa@studioamsterdam.nl', 'catchall', '']], source: 'crawl', collected: '2026-06-09' }),
+      mk({ id: 9, domain: 'malmostore.se', live: true, cdn: false, company: 'Malmö Store AB', platform: 'WordPress', host: 'OVHcloud', hostFlag: false, ip: '51.83.9.201', ptr: 'vps-9c.ovh.net', asn: 'AS16276 OVH', country: 'SE', city: 'Malmö', http: '200', lang: 'SV', qualified: true, out: 'contacted', contacts: 3, verified: true, general: ['kontakt@malmostore.se', '+46 40 12 34 56'], tech: ['WP 5.4', 'PHP 7.3', 'WPBakery'], subs: ['shop.malmostore.se', 'blogg.malmostore.se'], people: [['Sofia Nilsson', 'CEO', 'sofia@malmostore.se', 'verified', '+46 70 111 22 33'], ['Anders Ek', 'COO', 'anders@malmostore.se', 'verified', ''], ['Info', 'DPO', 'gdpr@malmostore.se', 'role', '']], source: 'crawl+enrich', collected: '2026-05-25' }),
+      mk({ id: 10, domain: 'fjordtravel.no', live: false, cdn: false, company: 'Fjord Travel AS', platform: 'Drupal', host: '1&1 IONOS', hostFlag: false, ip: '217.160.0.99', ptr: 'ionos-99.1and1.com', asn: 'AS8560 IONOS', country: 'NO', city: 'Bergen', http: '404', lang: 'NO', qualified: false, out: 'new', contacts: 0, verified: false, general: ['—', ''], tech: ['Drupal 7', 'PHP 5.6'], subs: [], people: [], source: 'WHOIS', collected: '2026-03-19' }),
+      mk({ id: 11, domain: 'bragadigital.pt', live: true, cdn: true, company: 'Braga Digital', platform: 'WordPress', host: 'OVHcloud', hostFlag: false, ip: '51.83.11.7', ptr: 'vps-11.ovh.net', asn: 'AS16276 OVH', country: 'PT', city: 'Braga', http: '200', lang: 'PT', qualified: true, out: 'to-contact', contacts: 2, verified: false, general: ['info@bragadigital.pt', '+351 253 200 100'], tech: ['WP 6.3', 'PHP 8.1', 'Elementor', 'Cloudflare'], subs: ['portal.bragadigital.pt'], people: [['Pedro Costa', 'CEO', 'pedro@bragadigital.pt', 'unverified', ''], ['Marketing', 'CMO', 'marketing@bragadigital.pt', 'role', '']], source: 'crawl', collected: '2026-06-05' }),
+      mk({ id: 12, domain: 'tamperefood.fi', live: true, cdn: false, company: 'Tampere Food Oy', platform: 'WooCommerce', host: 'Hetzner', hostFlag: false, ip: '116.203.44.2', ptr: 'static.2.hetzner.com', asn: 'AS24940 Hetzner', country: 'FI', city: 'Tampere', http: '200', lang: 'FI', qualified: true, out: 'contacted', contacts: 3, verified: true, general: ['info@tamperefood.fi', '+358 3 244 100'], tech: ['WooCommerce 8.0', 'WP 6.2', 'PHP 8.0', 'Klarna'], subs: ['kauppa.tamperefood.fi'], people: [['Mika Laine', 'CEO', 'mika@tamperefood.fi', 'verified', '+358 40 111 222'], ['Sanna Koski', 'CFO', 'sanna@tamperefood.fi', 'verified', ''], ['Tuki', 'Manager', 'tuki@tamperefood.fi', 'role', '']], source: 'crawl+enrich', collected: '2026-06-07' }),
+    ];
+  }
+
+  verifBadge(v) {
+    if (v === 'verified') return this.badge('--np-ok', '--np-ok-soft', '--np-ok-soft-bd', 'check', 'Verificado', 22);
+    if (v === 'catchall') return this.badge('--np-warn', '--np-warn-soft', '--np-warn-soft-bd', 'alert', 'Catch-all', 22);
+    if (v === 'role') return this.badge('--np-info', '--np-info-soft', '--np-info-soft-bd', 'globe2', 'Role-based', 22);
+    return this.badge('--np-neutral', '--np-neutral-soft', '--np-neutral-soft-bd', 'dash', 'Não verif.', 22);
+  }
+  outBadge(o) {
+    if (o === 'to-contact') return this.badge('--np-info', '--np-info-soft', '--np-info-soft-bd', 'clock', 'A contactar', 22);
+    if (o === 'contacted') return this.badge('--np-warn', '--np-warn-soft', '--np-warn-soft-bd', 'send', 'Contactado', 22);
+    if (o === 'replied') return this.badge('--np-ok', '--np-ok-soft', '--np-ok-soft-bd', 'reply', 'Respondeu', 22);
+    return this.badge('--np-neutral', '--np-neutral-soft', '--np-neutral-soft-bd', 'plus', 'Novo', 22);
+  }
+  qualBadge(q) {
+    return q ? this.badge('--np-ok', '--np-ok-soft', '--np-ok-soft-bd', 'check', 'Qualificado', 24)
+             : { style: { display: 'inline-flex', alignItems: 'center', gap: '5px', height: '24px', padding: '0 9px', fontSize: '11px', fontWeight: 700, color: 'var(--np-text-faint)', background: 'transparent', border: '1px solid var(--np-border)', borderRadius: '999px', whiteSpace: 'nowrap' }, icon: this.ic('dash', 12), label: 'Não' };
+  }
+
+  // ------- filtering + sorting -------
+  filtered() {
+    const f = this.state.filters, q = this.state.q.trim().toLowerCase();
+    let rows = this.data().filter(r => {
+      if (q && !(r.domain.toLowerCase().includes(q) || r.company.toLowerCase().includes(q))) return false;
+      if (f.qualified.length && !f.qualified.includes(r.qualified ? 'Sim' : 'Não')) return false;
+      if (f.platform.length && !f.platform.includes(r.platform)) return false;
+      if (f.host.length && !f.host.includes(r.host)) return false;
+      if (f.country.length && !f.country.includes(r.country)) return false;
+      if (f.contacts.includes('Com contactos') && r.contacts === 0) return false;
+      if (f.verified.includes('E-mail verificado') && !r.verified) return false;
+      return true;
+    });
+    const { key, dir } = this.state.sort, s = dir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => {
+      let va = a[key], vb = b[key];
+      if (key === 'contacts') { va = a.contacts; vb = b.contacts; }
+      if (typeof va === 'string') return va.localeCompare(vb) * s;
+      return (va > vb ? 1 : va < vb ? -1 : 0) * s;
+    });
+    return rows;
+  }
+
+  onSearch = (e) => {
+    const v = e.target.value;
+    this.setState({ q: v, searching: true });
+    clearTimeout(this._t);
+    this._t = setTimeout(() => { this.setState({ searching: false }); this.syncUrl(); }, 450);
+  };
+  toggleFilter(facet, val) {
+    const arr = this.state.filters[facet];
+    const next = arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val];
+    this.setState({ filters: { ...this.state.filters, [facet]: next } }, () => this.syncUrl());
+  }
+  removeChip(facet, val) { this.toggleFilter(facet, val); }
+  clearAll = () => this.setState({ filters: { qualified: [], platform: [], host: [], country: [], contacts: [], verified: [] }, q: '' }, () => this.syncUrl());
+  sortBy(key) {
+    const cur = this.state.sort;
+    this.setState({ sort: { key, dir: cur.key === key && cur.dir === 'asc' ? 'desc' : 'asc' } });
+  }
+  toggleRow(id) { const s = { ...this.state.selected }; if (s[id]) delete s[id]; else s[id] = true; this.setState({ selected: s }); }
+  toggleAllRows(rows) {
+    const all = rows.every(r => this.state.selected[r.id]);
+    const s = {}; if (!all) rows.forEach(r => s[r.id] = true); this.setState({ selected: s });
+  }
+
+  renderVals() {
+    const rowsData = this.filtered();
+    const P = this.platformMap();
+    const selected = this.state.selected;
+    const selCount = Object.keys(selected).length;
+
+    // ---- facets ----
+    const facetDefs = [
+      { key: 'qualified', label: 'Qualificado', opts: [['Sim', 12], ['Não', 6]] },
+      { key: 'platform', label: 'Plataforma', opts: [['WordPress', 4], ['WooCommerce', 3], ['PrestaShop', 1], ['Shopify', 1], ['Joomla', 1], ['Drupal', 1], ['Squarespace', 1], ['Custom', 1]], dots: P },
+      { key: 'host', label: 'Host / ISP', opts: [['OVHcloud', 3], ['Hetzner', 2], ['Cloudflare', 1], ['Amazon AWS', 1], ['Amen (PTISP)', 1], ['Dominios.pt', 1]] },
+      { key: 'country', label: 'País', opts: [['PT', 4], ['NL', 2], ['SE', 2], ['FI', 2], ['NO', 2]] },
+      { key: 'contacts', label: 'Contactos', opts: [['Com contactos', 10]] },
+      { key: 'verified', label: 'E-mail verif.', opts: [['E-mail verificado', 7]] },
+    ];
+    const chev = this.ic('chev', 14);
+    const facets = facetDefs.map(fd => {
+      const active = this.state.filters[fd.key];
+      const open = this.state.openFacet === fd.key;
+      return {
+        label: fd.label, badge: active.length ? String(active.length) : '', open,
+        onClick: () => this.setState({ openFacet: open ? null : fd.key, colsOpen: false }),
+        btnStyle: { display: 'inline-flex', alignItems: 'center', gap: '7px', height: '36px', padding: '0 11px', borderRadius: 'var(--np-radius)', border: `1px solid ${active.length ? 'var(--np-brand-soft-bd)' : 'var(--np-border)'}`, background: active.length ? 'var(--np-brand-soft)' : 'var(--np-surface-2)', color: active.length ? 'var(--np-brand-ink)' : 'var(--np-text-2)', fontFamily: 'inherit', fontSize: '13px', fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' },
+        options: fd.opts.map(([label, count]) => {
+          const on = active.includes(label);
+          return {
+            label, count, dot: fd.dots ? fd.dots[label] : '',
+            onClick: () => this.toggleFilter(fd.key, label),
+            check: on ? this.ic('check', 11) : '',
+            boxBg: on ? 'var(--np-brand-fill)' : 'transparent',
+            boxBorder: on ? 'var(--np-brand-fill)' : 'var(--np-border-2)',
+          };
+        }),
+      };
+    });
+
+    // ---- chips ----
+    const facetLabels = { qualified: 'Qualif:', platform: 'Plataforma:', host: 'Host:', country: 'País:', contacts: '', verified: '' };
+    const chips = [];
+    Object.entries(this.state.filters).forEach(([facet, vals]) => vals.forEach(v => chips.push({ facet: facetLabels[facet] ? facetLabels[facet] + ' ' : '', value: v, onRemove: (e) => { e.stopPropagation(); this.removeChip(facet, v); } })));
+
+    // ---- columns ----
+    const colDefs = [
+      { key: 'domain', label: 'Domínio' }, { key: 'company', label: 'Empresa' }, { key: 'platform', label: 'Plataforma' },
+    ];
+    if (this.state.cols.host) colDefs.push({ key: 'host', label: 'Host / ISP' });
+    if (this.state.cols.country) colDefs.push({ key: 'country', label: 'País' });
+    colDefs.push({ key: 'contacts', label: 'Contactos' }, { key: 'qualified', label: 'Qualif.' }, { key: 'out', label: 'Outreach' });
+    if (this.state.cols.tech) colDefs.push({ key: 'tech', label: 'Tech' });
+    const sortState = this.state.sort;
+    const columns = colDefs.map(c => {
+      const isSorted = sortState.key === c.key;
+      return {
+        label: c.label,
+        onSort: () => this.sortBy(c.key),
+        sortIcon: isSorted ? (sortState.dir === 'asc' ? '▲' : '▼') : '↕',
+        sortColor: isSorted ? 'var(--np-brand)' : 'var(--np-text-faint)',
+        thStyle: { position: 'sticky', top: 0, zIndex: 2, background: 'var(--np-surface-2)', padding: '0 14px', height: '42px', borderBottom: '1px solid var(--np-border)', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--np-text-3)', cursor: 'pointer', whiteSpace: 'nowrap', userSelect: 'none' },
+      };
+    });
+
+    // ---- rows ----
+    const rows = rowsData.map(r => {
+      const on = !!selected[r.id];
+      return {
+        domain: r.domain, company: r.company, cdn: r.cdn, geo: r.city + ' · ' + r.country,
+        host: r.host, hostFlag: r.hostFlag, contactsCount: r.contacts, hasVerified: r.verified, noContacts: r.contacts === 0,
+        platform: { label: r.platform, color: P[r.platform] },
+        live: r.live ? { dot: 'var(--np-ok-mark)', color: 'var(--np-ok)', label: 'Live', icon: this.ic('power', 11) } : { dot: 'var(--np-neutral-mark)', color: 'var(--np-text-faint)', label: 'Offline', icon: this.ic('x', 11) },
+        qual: this.qualBadge(r.qualified), out: this.outBadge(r.out),
+        techMini: r.tech.slice(0, 2),
+        rowStyle: { cursor: 'pointer', background: on ? 'var(--np-surface-sel)' : 'transparent', transition: 'background var(--np-dur-fast)' },
+        cbStyle: this.cb(on), cbMark: on ? this.ic('check', 12) : '',
+        onOpen: () => this.setState({ openRowId: r.id }),
+        onToggleStop: (e) => { e.stopPropagation(); this.toggleRow(r.id); },
+        onKey: (e) => { if (e.key === 'Enter') { this.setState({ openRowId: r.id }); } else if (e.key === 'ArrowDown') { e.preventDefault(); if (e.currentTarget.nextElementSibling) e.currentTarget.nextElementSibling.focus(); } else if (e.key === 'ArrowUp') { e.preventDefault(); if (e.currentTarget.previousElementSibling) e.currentTarget.previousElementSibling.focus(); } },
+      };
+    });
+    const allChecked = rowsData.length > 0 && rowsData.every(r => selected[r.id]);
+
+    // ---- drawer ----
+    const openRow = this.data().find(r => r.id === this.state.openRowId);
+    let d = null;
+    if (openRow) {
+      d = {
+        domain: openRow.domain, company: openRow.company, lang: openRow.lang,
+        live: openRow.live ? { dot: 'var(--np-ok-mark)' } : { dot: 'var(--np-neutral-mark)' },
+        qual: this.qualBadge(openRow.qualified), platform: { label: openRow.platform, color: P[openRow.platform] },
+        hosting: [
+          { k: 'IP', v: openRow.ip }, { k: 'PTR', v: openRow.ptr }, { k: 'ASN / ISP', v: openRow.asn },
+          { k: 'Host', v: openRow.host }, { k: 'Local', v: openRow.city + ', ' + openRow.country }, { k: 'CDN', v: openRow.cdn ? 'Sim (Cloudflare)' : 'Não' },
+        ],
+        tech: openRow.tech, subCount: openRow.subs.length, subdomains: openRow.subs.length ? openRow.subs : ['— sem subdomínios detetados'],
+        contactCount: openRow.people.length,
+        contacts: openRow.people.map(([name, role, email, verif, phone]) => ({
+          name, role, email, phone, initials: name.split(' ').map(w => w[0]).slice(0, 2).join(''),
+          mailto: 'mailto:' + email, tel: phone ? 'tel:' + phone.replace(/\s/g, '') : '',
+          verif: this.verifBadge(verif),
+          roleStyle: { display: 'inline-block', marginTop: '2px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.04em', color: 'var(--np-text-3)', background: 'var(--np-surface-2)', border: '1px solid var(--np-border)', padding: '1px 7px', borderRadius: '999px' },
+        })),
+        generalEmail: openRow.general[0], generalPhone: openRow.general[1] || '—',
+        source: openRow.source, collected: openRow.collected, note: '',
+      };
+    }
+    const outreachSteps = ['new', 'to-contact', 'contacted', 'replied'].map((k, i) => {
+      const labels = { new: 'Novo', 'to-contact': 'A contactar', contacted: 'Contactado', replied: 'Respondeu' };
+      const icons = { new: 'plus', 'to-contact': 'clock', contacted: 'send', replied: 'reply' };
+      const active = (openRow && openRow.out === k) || (!openRow && this.state.outreach === k);
+      return {
+        label: labels[k], icon: this.ic(icons[k], 12),
+        onClick: () => this.setState({ outreach: k }),
+        style: { display: 'inline-flex', alignItems: 'center', gap: '5px', flex: 1, justifyContent: 'center', height: '34px', padding: '0 4px', borderRadius: 'var(--np-radius-sm)', border: `1px solid ${active ? 'var(--np-brand-soft-bd)' : 'var(--np-border)'}`, background: active ? 'var(--np-brand-soft)' : 'var(--np-surface-2)', color: active ? 'var(--np-brand-ink)' : 'var(--np-text-3)', fontFamily: 'inherit', fontSize: '11px', fontWeight: 700, cursor: 'pointer' },
+      };
+    });
+
+    // ---- pagination ----
+    const total = 78240, perPage = 25, pageCount = Math.ceil(total / perPage), cur = this.state.page;
+    const pageNums = [1, 2, 3, '…', pageCount].filter((v, i, a) => a.indexOf(v) === i);
+    const pages = pageNums.map(n => ({
+      label: n, onClick: () => typeof n === 'number' && this.setState({ page: n }),
+      style: { minWidth: '32px', height: '32px', padding: '0 8px', border: `1px solid ${n === cur ? 'var(--np-brand-fill)' : 'var(--np-border)'}`, background: n === cur ? 'var(--np-brand-fill)' : 'var(--np-surface)', color: n === cur ? '#fff' : (n === '…' ? 'var(--np-text-faint)' : 'var(--np-text-2)'), borderRadius: 'var(--np-radius-sm)', fontFamily: 'inherit', fontSize: '12px', fontWeight: 700, cursor: n === '…' ? 'default' : 'pointer' },
+    }));
+
+    const colToggles = [['host', 'Host / ISP'], ['country', 'País'], ['tech', 'Tech stack']].map(([k, label]) => {
+      const on = this.state.cols[k];
+      return { label, onClick: () => this.setState({ cols: { ...this.state.cols, [k]: !on } }), trackBg: on ? 'var(--np-brand-fill)' : 'var(--np-border-2)', knobX: on ? '18px' : '2px' };
+    });
+
+    return {
+      resultCount: this.fmt(rowsData.length === this.data().length ? 78240 : rowsData.length),
+      searchValue: this.state.q, searching: this.state.searching, onSearch: this.onSearch,
+      searchIcon: this.ic('search', 16), chevIcon: chev, colsIcon: this.ic('cols', 15), saveIcon: this.ic('save', 15),
+      downloadIcon: this.ic('download', 15), downloadIcon2: this.ic('download', 13), plusIcon: this.ic('plus', 13),
+      facets, chips, hasChips: chips.length > 0, clearAll: this.clearAll,
+      colsOpen: this.state.colsOpen, openColsMenu: () => this.setState({ colsOpen: !this.state.colsOpen, openFacet: null }), colToggles,
+      hasSelection: selCount > 0, selCount, clearSel: () => this.setState({ selected: {} }),
+      columns, rows, showHost: this.state.cols.host, showCountry: this.state.cols.country, showTech: this.state.cols.tech,
+      isEmpty: rowsData.length === 0, notEmpty: rowsData.length > 0,
+      emptyIcon: this.ic('search', 26), verifyMini: this.ic('check', 11), chevRightIcon: this.ic('chevR', 16),
+      toggleAll: () => this.toggleAllRows(rowsData), allChecked, headCbStyle: this.cb(allChecked), headCbMark: allChecked ? this.ic('check', 12) : '',
+      pageFrom: this.fmt((cur - 1) * perPage + 1), pageTo: this.fmt(cur * perPage), pages,
+      prevPage: () => this.setState({ page: Math.max(1, cur - 1) }), nextPage: () => this.setState({ page: cur + 1 }),
+      prevStyle: this.pageArrow(), nextStyle: this.pageArrow(),
+      drawerOpen: !!openRow, closeDrawer: () => this.setState({ openRowId: null }), d,
+      expandIcon: this.ic('expand', 15), closeIcon: this.ic('close', 16), mailIcon: this.ic('mail', 13), phoneIcon: this.ic('phone', 13),
+      globeIcon: this.ic('globe', 12), shieldIcon: this.ic('shield', 14), outreachSteps,
+    };
+  }
+
+  fmt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+  cb(on) { return { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '17px', height: '17px', borderRadius: '5px', border: `1.5px solid ${on ? 'var(--np-brand-fill)' : 'var(--np-border-2)'}`, background: on ? 'var(--np-brand-fill)' : 'transparent', color: '#fff', cursor: 'pointer', flex: '0 0 auto' }; }
+  pageArrow() { return { width: '32px', height: '32px', border: '1px solid var(--np-border)', background: 'var(--np-surface)', color: 'var(--np-text-2)', borderRadius: 'var(--np-radius-sm)', fontSize: '16px', cursor: 'pointer', lineHeight: 1 }; }
+}
+</script>
+</body>
+</html>

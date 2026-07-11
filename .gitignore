@@ -1,0 +1,16 @@
+node_modules/
+docker/.env
+docker/.env.worker
+docker/.data/
+data/geoip/*.mmdb
+data/proxies.json
+config/verify-providers.json
+config/verify-proxies.json
+config/sending-accounts.json
+out/*.txt
+out/*.log
+out/*.raw
+out/*.progress.json
+package-lock.json
+data/
+out/

@@ -1,0 +1,12 @@
+{
+  "_comment": "Qualificação v2 (lib/qualify.js). qualified = require_email AND (≥1 de signals_any). Editável sem redeploy.",
+  "require_email": true,
+  "signals_any": [
+    "target_platform",
+    "cpanel",
+    "shopify",
+    "spf_problem",
+    "dmarc_problem",
+    "security_findings"
+  ]
+}

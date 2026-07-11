@@ -1,0 +1,21 @@
+[
+  {
+    "_comment": "Fase 1 — proxies SOCKS5 LIMPOS para o Reacher fazer os handshakes SMTP. Copiar para config/verify-proxies.json (gitignored). Cada proxy = 1 VM datacenter com porta 25 aberta + PTR. 'helo' TEM de ser igual ao PTR/rDNS do IP (ver docs/outreach-ops/01-validation-fleet.md).",
+    "id": "val1",
+    "host": "p1.disposable-domain.tld",
+    "port": 1080,
+    "user": "proxyuser",
+    "pass": "CHANGE_ME",
+    "ip": "203.0.113.10",
+    "helo": "p1.disposable-domain.tld"
+  },
+  {
+    "id": "val2",
+    "host": "p2.disposable-domain.tld",
+    "port": 1080,
+    "user": "proxyuser",
+    "pass": "CHANGE_ME",
+    "ip": "203.0.113.11",
+    "helo": "p2.disposable-domain.tld"
+  }
+]

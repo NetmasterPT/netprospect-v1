@@ -1,0 +1,229 @@
+/* ==========================================================================
+   NetProspect — Design Tokens
+   Semantic layer for the internal analytics + business-directory dashboard.
+   Built on the NetMaster brand (signature red over a cool slate ramp,
+   Montserrat) and extended for a data-dense product with LIGHT + DARK themes.
+
+   HOW TO USE
+   ----------
+   • Drop this file into your app and reference tokens as var(--np-*).
+   • Theme is driven by a [data-theme] attribute on a wrapping element
+     (default the app mounts data-theme="dark").
+   • Color carries IDENTITY only — on marks, dots and badge accents.
+     Text always stays in the ink ramp (--np-text*). Status is NEVER
+     color-alone: every status token is paired with an icon + text label
+     in the UI.
+   • Categorical (platform) colors use an Okabe–Ito colorblind-safe ramp.
+   ========================================================================== */
+
+/* ------------------------------------------------------------------ *
+ *  LIGHT  (:root default + explicit [data-theme="light"])
+ * ------------------------------------------------------------------ */
+:root,
+[data-theme="light"] {
+  color-scheme: light;
+
+  /* — Surfaces / background — */
+  --np-bg:            #EEF1F6;   /* app canvas                        */
+  --np-bg-2:          #E6EAF1;   /* rail / recessed canvas            */
+  --np-surface:       #FFFFFF;   /* cards, table body, panels         */
+  --np-surface-2:     #F7F9FC;   /* table header, sunken subpanels    */
+  --np-surface-3:     #EEF2F7;   /* row hover, track fills            */
+  --np-surface-sel:   #FDECEE;   /* selected row (brand tint)         */
+  --np-overlay:       rgba(15,23,42,0.42); /* scrim behind drawer     */
+
+  /* — Chrome (top bar + left nav) — */
+  --np-chrome:        #121826;   /* near-black brand chrome           */
+  --np-chrome-2:      #1B2332;   /* chrome hover / active nav row     */
+  --np-chrome-border: rgba(255,255,255,0.10);
+  --np-chrome-text:   #E7ECF3;
+  --np-chrome-text-2: #93A0B4;
+
+  /* — Borders / dividers — */
+  --np-border:        #E2E8F0;   /* hairline                          */
+  --np-border-2:      #CBD5E1;   /* strong / focused control          */
+  --np-divider:       #EDF1F6;   /* faint interior rule               */
+
+  /* — Text / ink — */
+  --np-text:          #0F172A;   /* strong / headings / data          */
+  --np-text-2:        #47536A;   /* body, secondary                   */
+  --np-text-3:        #64748B;   /* muted, captions, meta             */
+  --np-text-faint:    #94A3B8;   /* placeholders, disabled            */
+  --np-text-inverse:  #FFFFFF;
+
+  /* — Brand (signature red) — */
+  --np-brand:         #EA0B2A;   /* marks, active accent              */
+  --np-brand-ink:     #C20E26;   /* brand as small text (AA on white) */
+  --np-brand-hover:   #E41937;
+  --np-brand-fill:    #EA0B2A;   /* solid button bg                   */
+  --np-on-brand:      #FFFFFF;
+  --np-brand-soft:    #FDE2E4;   /* tinted fill / icon tile           */
+  --np-brand-soft-bd: #FBC5CB;
+
+  /* — Status (always used WITH an icon + label) — */
+  --np-ok:            #15803D;  --np-ok-mark:  #16A34A;  --np-ok-soft:   #DCFCE7;  --np-ok-soft-bd:   #A7E9BE;
+  --np-warn:          #A15C07;  --np-warn-mark:#E59711;  --np-warn-soft: #FEF1D6;  --np-warn-soft-bd: #F6D488;
+  --np-info:          #1D4ED8;  --np-info-mark:#2563EB;  --np-info-soft: #DBEAFE;  --np-info-soft-bd: #A9C7FB;
+  --np-danger:        #B91C1C;  --np-danger-mark:#DC2626;--np-danger-soft:#FEE2E2; --np-danger-soft-bd:#F6B0B0;
+  --np-neutral:       #475569;  --np-neutral-mark:#94A3B8;--np-neutral-soft:#F1F5F9;--np-neutral-soft-bd:#E2E8F0;
+
+  /* — Chart scaffolding (recessive) — */
+  --np-axis:          #CBD5E1;
+  --np-grid:          #EDF1F6;
+  --np-track:         #EEF2F7;   /* empty portion of bars / funnel    */
+  --np-tooltip-bg:    #0F172A;
+  --np-tooltip-text:  #F8FAFC;
+
+  /* — Categorical: platforms (Okabe–Ito, colorblind-safe) — */
+  --cat-wordpress:    #0072B2;   /* blue           */
+  --cat-woocommerce:  #CC79A7;   /* reddish purple */
+  --cat-prestashop:   #009E73;   /* bluish green   */
+  --cat-wix:          #E69F00;   /* orange         */
+  --cat-joomla:       #56B4E9;   /* sky blue       */
+  --cat-drupal:       #D55E00;   /* vermillion     */
+  --cat-shopify:      #C9A400;   /* dark yellow    */
+  --cat-squarespace:  #4D4D4D;   /* dark grey      */
+  --cat-custom:       #8C8C8C;   /* grey           */
+
+  /* — Shadows — */
+  --np-shadow-card:   0 1px 2px rgba(15,23,42,0.06);
+  --np-shadow-raise:  0 1px 3px rgba(15,23,42,0.08), 0 4px 12px rgba(15,23,42,0.06);
+  --np-shadow-pop:    0 8px 28px rgba(15,23,42,0.16);
+  --np-shadow-drawer: -18px 0 48px rgba(15,23,42,0.18);
+  --np-shadow-brand:  0 6px 16px rgba(234,11,42,0.22);
+  --np-focus:         rgba(234,11,42,0.38);
+}
+
+/* ------------------------------------------------------------------ *
+ *  DARK  (default mount)
+ * ------------------------------------------------------------------ */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --np-bg:            #0A0E16;
+  --np-bg-2:          #070A11;
+  --np-surface:       #121A28;
+  --np-surface-2:     #172131;
+  --np-surface-3:     #1E2A3D;
+  --np-surface-sel:   #26161C;
+  --np-overlay:       rgba(2,4,8,0.62);
+
+  --np-chrome:        #0B111C;
+  --np-chrome-2:      #17202F;
+  --np-chrome-border: rgba(255,255,255,0.08);
+  --np-chrome-text:   #E7ECF3;
+  --np-chrome-text-2: #8595AB;
+
+  --np-border:        #253143;
+  --np-border-2:      #37475F;
+  --np-divider:       #1B2636;
+
+  --np-text:          #EAF0F8;
+  --np-text-2:        #AFBDCF;
+  --np-text-3:        #8595AB;
+  --np-text-faint:    #5C6B81;
+  --np-text-inverse:  #0F172A;
+
+  --np-brand:         #FF5A6E;
+  --np-brand-ink:     #FF7C8C;
+  --np-brand-hover:   #F4546B;
+  --np-brand-fill:    #EA0B2A;
+  --np-on-brand:      #FFFFFF;
+  --np-brand-soft:    rgba(234,11,42,0.16);
+  --np-brand-soft-bd: rgba(244,84,107,0.42);
+
+  --np-ok:            #4ADE80;  --np-ok-mark:  #22C55E;  --np-ok-soft:   rgba(34,197,94,0.15);  --np-ok-soft-bd:   rgba(74,222,128,0.40);
+  --np-warn:          #FBBF24;  --np-warn-mark:#F2B234;  --np-warn-soft: rgba(242,178,52,0.15); --np-warn-soft-bd: rgba(251,191,36,0.40);
+  --np-info:          #60A5FA;  --np-info-mark:#3B82F6;  --np-info-soft: rgba(59,130,246,0.16); --np-info-soft-bd: rgba(96,165,250,0.42);
+  --np-danger:        #F87171;  --np-danger-mark:#EF4444;--np-danger-soft:rgba(239,68,68,0.15); --np-danger-soft-bd:rgba(248,113,113,0.40);
+  --np-neutral:       #A0AEC2;  --np-neutral-mark:#8595AB;--np-neutral-soft:rgba(148,163,184,0.14);--np-neutral-soft-bd:rgba(148,163,184,0.32);
+
+  --np-axis:          #37475F;
+  --np-grid:          #1B2636;
+  --np-track:         #1E2A3D;
+  --np-tooltip-bg:    #EAF0F8;
+  --np-tooltip-text:  #0A0E16;
+
+  /* categorical — brightened where the light value goes muddy on dark */
+  --cat-wordpress:    #4C9BE0;
+  --cat-woocommerce:  #D98BB8;
+  --cat-prestashop:   #2DBF97;
+  --cat-wix:          #F0A93A;
+  --cat-joomla:       #7FC7F0;
+  --cat-drupal:       #F0713A;
+  --cat-shopify:      #E6C93A;
+  --cat-squarespace:  #B7BCC4;
+  --cat-custom:       #9AA6B5;
+
+  --np-shadow-card:   0 1px 2px rgba(0,0,0,0.45);
+  --np-shadow-raise:  0 1px 3px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.45);
+  --np-shadow-pop:    0 10px 34px rgba(0,0,0,0.6);
+  --np-shadow-drawer: -20px 0 56px rgba(0,0,0,0.62);
+  --np-shadow-brand:  0 6px 18px rgba(234,11,42,0.45);
+  --np-focus:         rgba(255,90,110,0.45);
+}
+
+/* ------------------------------------------------------------------ *
+ *  THEME-INDEPENDENT  (scale, geometry, motion, z-index)
+ * ------------------------------------------------------------------ */
+:root {
+  /* Type */
+  --np-font:        'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+  --np-fs-display:  26px;   /* page title            */
+  --np-fs-h1:       20px;   /* card / panel title    */
+  --np-fs-h2:       16px;
+  --np-fs-h3:       14px;
+  --np-fs-body:     14px;   /* base UI / table cell  */
+  --np-fs-sm:       13px;
+  --np-fs-xs:       12px;   /* meta, chips           */
+  --np-fs-2xs:      11px;   /* eyebrows, badges      */
+  --np-fs-micro:    10px;
+  --np-fw-regular:  400;
+  --np-fw-medium:   500;
+  --np-fw-semibold: 600;
+  --np-fw-bold:     700;
+  --np-fw-extrabold:800;
+  --np-fw-black:    900;
+  --np-ls-eyebrow:  0.12em;
+  --np-ls-wide:     0.06em;
+  --np-lh-tight:    1.15;
+  --np-lh-body:     1.5;
+
+  /* Spacing (8px grid) */
+  --np-s1: 4px;  --np-s2: 8px;  --np-s3: 12px; --np-s4: 16px;
+  --np-s5: 20px; --np-s6: 24px; --np-s8: 32px; --np-s10: 40px; --np-s12: 48px;
+
+  /* Density */
+  --np-row-h:         46px;   /* directory row            */
+  --np-row-h-compact: 38px;   /* dense mode / contacts    */
+  --np-cell-x:        14px;   /* table cell x-padding     */
+  --np-nav-w:         300px;  /* left nav width           */
+  --np-nav-w-collapsed:64px;
+  --np-topbar-h:      56px;
+  --np-drawer-w:      460px;
+
+  /* Radius */
+  --np-radius-xs:   4px;
+  --np-radius-sm:   6px;
+  --np-radius:      8px;
+  --np-radius-md:   10px;
+  --np-radius-lg:   12px;
+  --np-radius-xl:   16px;
+  --np-radius-pill: 999px;
+
+  /* Motion */
+  --np-ease:     cubic-bezier(0.16, 1, 0.3, 1);
+  --np-dur-fast: 120ms;
+  --np-dur:      190ms;
+  --np-dur-slow: 300ms;
+
+  /* Z-index */
+  --np-z-base:        0;
+  --np-z-sticky:      10;
+  --np-z-nav:         20;
+  --np-z-dropdown:    40;
+  --np-z-drawer-scrim:55;
+  --np-z-drawer:      60;
+  --np-z-toast:       80;
+  --np-z-tooltip:     90;
+}

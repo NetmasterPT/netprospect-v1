@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap">
+<link rel="stylesheet" href="tokens/netprospect.css">
+<style>
+  html, body { margin:0; padding:0; }
+  body { background:#0A0E16; }
+  *, *::before, *::after { box-sizing:border-box; }
+</style>
+</helmet>
+<div data-theme="dark" style="min-height:100vh; background:var(--np-bg); color:var(--np-text); font-family:var(--np-font);">
+
+  <!-- doc top bar -->
+  <header style="position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:16px; height:56px; padding:0 26px; background:var(--np-chrome); border-bottom:1px solid var(--np-chrome-border);">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span style="display:inline-flex; width:26px; height:26px; border-radius:7px; background:var(--np-brand-fill); align-items:center; justify-content:center;"><span style="width:11px; height:11px; border:2.5px solid #fff; border-radius:4px; transform:rotate(45deg);"></span></span>
+      <span style="font-weight:800; font-size:15px; color:var(--np-chrome-text);">Net<span style="color:var(--np-brand);">Prospect</span></span>
+    </div>
+    <span style="font-size:13px; color:var(--np-chrome-text-2);">Design Tokens</span>
+    <div style="flex:1;"></div>
+    <nav style="display:flex; gap:6px;">
+      <a href="Tokens.dc.html" style="{{ tabActive }}">Tokens</a>
+      <a href="Components.dc.html" style="{{ tabIdle }}">Componentes</a>
+      <a href="Overview.dc.html" style="{{ tabIdle }}">Abrir app →</a>
+    </nav>
+  </header>
+
+  <div style="max-width:1120px; margin:0 auto; padding:34px 26px 60px;">
+    <h1 style="margin:0 0 6px; font-size:30px; font-weight:800; letter-spacing:-0.02em;">Design tokens</h1>
+    <p style="margin:0 0 34px; font-size:14px; color:var(--np-text-3); max-width:640px; line-height:1.6;">Camada semântica sobre a marca NetMaster (vermelho de assinatura sobre neutros slate, Montserrat), estendida para um produto data-dense com temas claro e escuro. Todos os valores são <code style="background:var(--np-surface-2); padding:1px 5px; border-radius:4px; font-size:12px;">--np-*</code> ou <code style="background:var(--np-surface-2); padding:1px 5px; border-radius:4px; font-size:12px;">--cat-*</code>.</p>
+
+    <!-- color roles: light + dark -->
+    <h2 style="{{ h2 }}">Papéis de cor · claro & escuro</h2>
+    <div style="border:1px solid var(--np-border); border-radius:var(--np-radius-lg); overflow:hidden; margin-bottom:34px;">
+      <div style="display:grid; grid-template-columns:1.4fr 1fr 1fr; background:var(--np-surface-2); border-bottom:1px solid var(--np-border);">
+        <div style="{{ thCell }}">Token</div><div style="{{ thCell }}">Claro</div><div style="{{ thCell }}">Escuro</div>
+      </div>
+      <sc-for list="{{ roles }}" as="r" hint-placeholder-count="10">
+        <div style="display:grid; grid-template-columns:1.4fr 1fr 1fr; border-bottom:1px solid var(--np-divider); align-items:center;">
+          <div style="padding:10px 14px; min-width:0;"><code style="font-size:12px; font-weight:700; color:var(--np-text);">{{ r.name }}</code><div style="font-size:11px; color:var(--np-text-faint); margin-top:2px;">{{ r.role }}</div></div>
+          <div style="padding:8px 14px; display:flex; align-items:center; gap:9px;"><span style="width:26px; height:26px; border-radius:6px; border:1px solid var(--np-border); background:{{ r.light }}; flex:0 0 auto;"></span><code style="font-size:11px; color:var(--np-text-3);">{{ r.light }}</code></div>
+          <div style="padding:8px 14px; display:flex; align-items:center; gap:9px;"><span style="width:26px; height:26px; border-radius:6px; border:1px solid var(--np-border); background:{{ r.dark }}; flex:0 0 auto;"></span><code style="font-size:11px; color:var(--np-text-3);">{{ r.dark }}</code></div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- categorical -->
+    <h2 style="{{ h2 }}">Paleta categórica · plataformas <span style="font-size:12px; font-weight:600; color:var(--np-text-faint); text-transform:none; letter-spacing:0;">(Okabe–Ito, segura para daltonismo · nunca só cor)</span></h2>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; margin-bottom:34px;">
+      <sc-for list="{{ cats }}" as="c" hint-placeholder-count="9">
+        <div style="border:1px solid var(--np-border); border-radius:var(--np-radius); overflow:hidden; background:var(--np-surface);">
+          <div style="height:44px; background:{{ c.color }};"></div>
+          <div style="padding:9px 11px;"><div style="font-size:12px; font-weight:700; color:var(--np-text);">{{ c.label }}</div><code style="font-size:10px; color:var(--np-text-faint);">{{ c.name }}</code></div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- status -->
+    <h2 style="{{ h2 }}">Cores de estado <span style="font-size:12px; font-weight:600; color:var(--np-text-faint); text-transform:none; letter-spacing:0;">(sempre com ícone + etiqueta)</span></h2>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill,minmax(200px,1fr)); gap:12px; margin-bottom:34px;">
+      <sc-for list="{{ statuses }}" as="s" hint-placeholder-count="5">
+        <div style="border:1px solid var(--np-border); border-radius:var(--np-radius); padding:14px; background:var(--np-surface);">
+          <span style="display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; font-size:11px; font-weight:700; border-radius:999px; color:{{ s.text }}; background:{{ s.soft }}; border:1px solid {{ s.bd }};">{{ s.icon }}{{ s.label }}</span>
+          <div style="margin-top:10px; font-size:11px; color:var(--np-text-faint);">{{ s.use }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- type scale -->
+    <h2 style="{{ h2 }}">Escala tipográfica · Montserrat</h2>
+    <div style="border:1px solid var(--np-border); border-radius:var(--np-radius-lg); overflow:hidden; margin-bottom:34px;">
+      <sc-for list="{{ types }}" as="t" hint-placeholder-count="8">
+        <div style="display:flex; align-items:baseline; gap:20px; padding:12px 18px; border-bottom:1px solid var(--np-divider);">
+          <div style="flex:0 0 130px;"><code style="font-size:11px; font-weight:700; color:var(--np-text-2);">{{ t.name }}</code><div style="font-size:10px; color:var(--np-text-faint);">{{ t.size }} · {{ t.weight }}</div></div>
+          <div style="flex:1; min-width:0; font-size:{{ t.size }}; font-weight:{{ t.fw }}; color:var(--np-text); letter-spacing:-0.01em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ t.sample }}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <!-- spacing + radii -->
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:34px;">
+      <div>
+        <h2 style="{{ h2 }}">Espaçamento · grelha 8px</h2>
+        <sc-for list="{{ spaces }}" as="sp" hint-placeholder-count="7">
+          <div style="display:flex; align-items:center; gap:12px; padding:5px 0;">
+            <code style="flex:0 0 70px; font-size:11px; color:var(--np-text-3);">{{ sp.name }}</code>
+            <span style="height:14px; width:{{ sp.val }}; background:var(--np-brand); border-radius:3px;"></span>
+            <span style="font-size:11px; color:var(--np-text-faint);">{{ sp.val }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div>
+        <h2 style="{{ h2 }}">Raio</h2>
+        <div style="display:flex; flex-wrap:wrap; gap:14px;">
+          <sc-for list="{{ radii }}" as="rd" hint-placeholder-count="6">
+            <div style="text-align:center;"><div style="width:64px; height:52px; background:var(--np-surface-3); border:1px solid var(--np-border-2); border-radius:{{ rd.val }};"></div><code style="font-size:10px; color:var(--np-text-3); display:block; margin-top:6px;">{{ rd.name }}</code><div style="font-size:10px; color:var(--np-text-faint);">{{ rd.val }}</div></div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- shadows + z -->
+    <div style="display:grid; grid-template-columns:1.4fr 1fr; gap:24px;">
+      <div>
+        <h2 style="{{ h2 }}">Sombras</h2>
+        <div style="display:flex; flex-wrap:wrap; gap:20px; padding:8px 0;">
+          <sc-for list="{{ shadows }}" as="sh" hint-placeholder-count="4">
+            <div style="text-align:center;"><div style="width:96px; height:64px; background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius); box-shadow:{{ sh.val }};"></div><code style="font-size:10px; color:var(--np-text-3); display:block; margin-top:10px;">{{ sh.name }}</code></div>
+          </sc-for>
+        </div>
+      </div>
+      <div>
+        <h2 style="{{ h2 }}">Z-index</h2>
+        <sc-for list="{{ zindex }}" as="z" hint-placeholder-count="6">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid var(--np-divider);"><code style="font-size:11px; color:var(--np-text-2);">{{ z.name }}</code><span style="font-size:12px; font-weight:700; color:var(--np-text); font-variant-numeric:tabular-nums;">{{ z.val }}</span></div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1160,&quot;height&quot;:1200}}">
+class Component extends DCLogic {
+  ic(name, size = 12) {
+    const P = { check: ['M20 6 9 17l-5-5'], clock: ['M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0', 'M12 7v5l3 2'], globe: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z', 'M2 12h20', 'M12 2a15 15 0 0 1 0 20'], dash: ['M5 12h14'], x: ['M18 6 6 18', 'M6 6l12 12'] };
+    const paths = (P[name] || []).map((d, i) => React.createElement('path', { key: i, d }));
+    return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block' } }, paths);
+  }
+  renderVals() {
+    const tab = { display: 'inline-flex', alignItems: 'center', height: '32px', padding: '0 13px', borderRadius: 'var(--np-radius-sm)', fontSize: '13px', fontWeight: 700, textDecoration: 'none' };
+    const h2 = { fontSize: '13px', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--np-text-3)', margin: '0 0 14px' };
+    const thCell = { padding: '10px 14px', fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--np-text-faint)' };
+
+    const roles = [
+      ['--np-bg', 'Canvas da app', '#EEF1F6', '#0A0E16'],
+      ['--np-surface', 'Cartões, tabelas', '#FFFFFF', '#121A28'],
+      ['--np-surface-2', 'Cabeçalho de tabela', '#F7F9FC', '#172131'],
+      ['--np-surface-3', 'Hover de linha', '#EEF2F7', '#1E2A3D'],
+      ['--np-chrome', 'Barra topo + nav', '#121826', '#0B111C'],
+      ['--np-border', 'Fio de 1px', '#E2E8F0', '#253143'],
+      ['--np-text', 'Ink forte / dados', '#0F172A', '#EAF0F8'],
+      ['--np-text-2', 'Corpo', '#47536A', '#AFBDCF'],
+      ['--np-text-3', 'Legendas', '#64748B', '#8595AB'],
+      ['--np-brand', 'Marcas / acento', '#EA0B2A', '#FF5A6E'],
+      ['--np-brand-fill', 'Fundo de botão', '#EA0B2A', '#EA0B2A'],
+      ['--np-brand-soft', 'Tinta / chip', '#FDE2E4', 'rgba(234,11,42,.16)'],
+    ].map(([name, role, light, dark]) => ({ name, role, light, dark }));
+
+    const cats = [
+      ['WordPress', '--cat-wordpress', '#0072B2'], ['WooCommerce', '--cat-woocommerce', '#CC79A7'], ['PrestaShop', '--cat-prestashop', '#009E73'],
+      ['Wix', '--cat-wix', '#E69F00'], ['Joomla', '--cat-joomla', '#56B4E9'], ['Drupal', '--cat-drupal', '#D55E00'],
+      ['Shopify', '--cat-shopify', '#C9A400'], ['Squarespace', '--cat-squarespace', '#4D4D4D'], ['Custom', '--cat-custom', '#8C8C8C'],
+    ].map(([label, name, color]) => ({ label, name: name, color: `var(${name})` }));
+
+    const statuses = [
+      { label: 'Qualificado / Verificado / Live', text: 'var(--np-ok)', soft: 'var(--np-ok-soft)', bd: 'var(--np-ok-soft-bd)', icon: this.ic('check'), use: '--np-ok · sucesso' },
+      { label: 'Catch-all', text: 'var(--np-warn)', soft: 'var(--np-warn-soft)', bd: 'var(--np-warn-soft-bd)', icon: this.ic('clock'), use: '--np-warn · aviso' },
+      { label: 'Role-based', text: 'var(--np-info)', soft: 'var(--np-info-soft)', bd: 'var(--np-info-soft-bd)', icon: this.ic('globe'), use: '--np-info · informação' },
+      { label: 'Offline / Erro', text: 'var(--np-danger)', soft: 'var(--np-danger-soft)', bd: 'var(--np-danger-soft-bd)', icon: this.ic('x'), use: '--np-danger · falha' },
+      { label: 'Não verificado', text: 'var(--np-neutral)', soft: 'var(--np-neutral-soft)', bd: 'var(--np-neutral-soft-bd)', icon: this.ic('dash'), use: '--np-neutral · neutro' },
+    ];
+
+    const types = [
+      ['--np-fs-display', '26px', 'ExtraBold 800', 800, 'NetProspect · Visão geral'],
+      ['--np-fs-h1', '20px', 'ExtraBold 800', 800, 'Diretório de negócios'],
+      ['--np-fs-h2', '16px', 'ExtraBold 800', 800, 'Onde os prospetos estão alojados'],
+      ['--np-fs-body', '14px', 'Regular / Medium', 500, 'padariacentral.pt — WooCommerce em OVHcloud'],
+      ['--np-fs-sm', '13px', 'Medium 500', 500, 'A mostrar 1–25 de 78 240 resultados'],
+      ['--np-fs-xs', '12px', 'Semibold 600', 600, 'IP · PTR · ASN · CDN · país'],
+      ['--np-fs-2xs', '11px', 'Bold 700', 700, 'MAIS POPULAR · QUALIFICADO'],
+    ].map(([name, size, weight, fw, sample]) => ({ name, size, weight, fw, sample }));
+
+    const spaces = [['--np-s1', '4px'], ['--np-s2', '8px'], ['--np-s3', '12px'], ['--np-s4', '16px'], ['--np-s6', '24px'], ['--np-s8', '32px'], ['--np-s10', '40px']].map(([name, val]) => ({ name, val }));
+    const radii = [['--np-radius-sm', '6px'], ['--np-radius', '8px'], ['--np-radius-md', '10px'], ['--np-radius-lg', '12px'], ['--np-radius-xl', '16px'], ['--np-radius-pill', '999px']].map(([name, val]) => ({ name, val }));
+    const shadows = [['--np-shadow-card', '0 1px 2px rgba(0,0,0,.45)'], ['--np-shadow-raise', '0 6px 18px rgba(0,0,0,.45)'], ['--np-shadow-pop', '0 10px 34px rgba(0,0,0,.6)'], ['--np-shadow-brand', '0 6px 18px rgba(234,11,42,.45)']].map(([name, val]) => ({ name, val }));
+    const zindex = [['--np-z-sticky', '10'], ['--np-z-nav', '20'], ['--np-z-dropdown', '40'], ['--np-z-drawer-scrim', '55'], ['--np-z-drawer', '60'], ['--np-z-toast', '80'], ['--np-z-tooltip', '90']].map(([name, val]) => ({ name, val }));
+
+    return {
+      tabActive: { ...tab, background: 'rgba(255,255,255,0.1)', color: 'var(--np-chrome-text)' },
+      tabIdle: { ...tab, background: 'transparent', color: 'var(--np-chrome-text-2)' },
+      h2, thCell, roles, cats, statuses, types, spaces, radii, shadows, zindex,
+    };
+  }
+}
+</script>
+</body>
+</html>

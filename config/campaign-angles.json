@@ -1,0 +1,60 @@
+{
+  "_comment": "Fase F — ângulos de campanha. Cada ângulo tem: foco (sinais a realçar), guia de tom p/ a IA (Ollama) e um template de fallback (usado quando a IA não está disponível). Placeholders {{var}} resolvidos por lib/campaign-ai.js buildVariables().",
+  "sender_org": "Netmaster",
+  "angles": {
+    "general": {
+      "label": "Geral",
+      "focus": ["platform", "load_bucket", "seo_score", "security_findings", "no_gmb"],
+      "ai_guidance": "Apresentação breve da Netmaster (manutenção de sites + alojamento gerido). Refere 1-2 observações concretas do site do destinatário. Oferece uma auditoria gratuita.",
+      "fallback": {
+        "subject": "{{company}} — uma ideia rápida sobre o vosso site",
+        "body": "{{greeting}},\n\nReparei no {{domain}}{{platform_clause}} e notei alguns pontos que se podem melhorar{{pain_clause}}.\n\nNa Netmaster cuidamos da manutenção e do alojamento de sites como o vosso, para que fiquem rápidos, seguros e sempre atualizados — sem terem de se preocupar.\n\nQuer que vos envie uma auditoria gratuita ao {{domain}}?\n\nCumprimentos,\n{{from_name}}\nNetmaster"
+      }
+    },
+    "speed": {
+      "label": "Velocidade / performance",
+      "focus": ["load_bucket", "seo_score", "platform"],
+      "ai_guidance": "Foca a VELOCIDADE do site e o impacto em conversões/SEO. Menciona o bucket de carga concreto se for lento.",
+      "fallback": {
+        "subject": "O {{domain}} pode estar a perder visitas por ser lento",
+        "body": "{{greeting}},\n\nFiz um teste rápido ao {{domain}}{{speed_clause}}. Um site lento faz perder visitantes e prejudica o posicionamento no Google.\n\nNa Netmaster otimizamos e alojamos sites {{platform_word}} para carregarem em poucos segundos, com manutenção contínua incluída.\n\nPosso enviar-vos um relatório de performance gratuito?\n\nCumprimentos,\n{{from_name}}\nNetmaster"
+      }
+    },
+    "seo": {
+      "label": "SEO / visibilidade",
+      "focus": ["seo_score", "no_gmb", "load_bucket"],
+      "ai_guidance": "Foca a VISIBILIDADE (SEO + presença no Google). Refere o score de SEO baixo e/ou a ausência de ficha Google Business.",
+      "fallback": {
+        "subject": "{{company}}: aparecer mais no Google",
+        "body": "{{greeting}},\n\nAo analisar o {{domain}}{{seo_clause}}{{gmb_clause}}. São coisas que fazem diferença em quem vos encontra online.\n\nNa Netmaster tratamos do SEO técnico, da ficha de Google Business e da manutenção do site — para chegarem a mais clientes.\n\nQuer uma análise de visibilidade gratuita?\n\nCumprimentos,\n{{from_name}}\nNetmaster"
+      }
+    },
+    "security": {
+      "label": "Segurança",
+      "focus": ["security_findings", "cms_outdated", "spf_problem", "dmarc_problem", "ssl_days_left"],
+      "ai_guidance": "Foca a SEGURANÇA: vulnerabilidades, CMS desatualizado, SPF/DMARC em falta, certificado a expirar. Tom de alerta útil, não alarmista.",
+      "fallback": {
+        "subject": "{{domain}}: um par de riscos de segurança a corrigir",
+        "body": "{{greeting}},\n\nNuma verificação ao {{domain}} notei alguns pontos de segurança{{security_clause}}. Vale a pena resolver antes que se tornem um problema.\n\nNa Netmaster mantemos os sites atualizados e protegidos, com alojamento gerido e cópias de segurança automáticas.\n\nQuer que vos envie o resumo do que encontrei, gratuitamente?\n\nCumprimentos,\n{{from_name}}\nNetmaster"
+      }
+    },
+    "hosting": {
+      "label": "Alojamento gerido",
+      "focus": ["load_bucket", "ssl_days_left", "dns_provider", "expiring_soon"],
+      "ai_guidance": "Foca o ALOJAMENTO gerido: performance, certificado SSL, expiração de domínio, fim das dores de cabeça técnicas.",
+      "fallback": {
+        "subject": "Alojamento do {{domain}} sem dores de cabeça",
+        "body": "{{greeting}},\n\nSe a gestão do alojamento e do domínio do {{domain}} vos consome tempo{{hosting_clause}}, há uma alternativa mais simples.\n\nNa Netmaster tratamos de tudo — alojamento rápido, SSL, backups e manutenção — por um valor mensal previsível.\n\nQuer que vos mostre como ficaria para o {{company}}?\n\nCumprimentos,\n{{from_name}}\nNetmaster"
+      }
+    },
+    "maintenance": {
+      "label": "Manutenção contínua",
+      "focus": ["cms_outdated", "cms_version", "platform", "security_findings"],
+      "ai_guidance": "Foca a MANUTENÇÃO contínua: CMS/plugins desatualizados, atualizações, evitar que o site parta.",
+      "fallback": {
+        "subject": "{{company}}: manter o {{domain}} sempre atualizado",
+        "body": "{{greeting}},\n\nO {{domain}}{{maintenance_clause}}. Sites {{platform_word}} sem manutenção regular acabam por partir ou ficar vulneráveis.\n\nNa Netmaster fazemos a manutenção contínua (atualizações, segurança, backups) e o alojamento, para o site estar sempre a funcionar.\n\nQuer um plano de manutenção à medida do {{company}}?\n\nCumprimentos,\n{{from_name}}\nNetmaster"
+      }
+    }
+  }
+}

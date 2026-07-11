@@ -1,0 +1,68 @@
+# docker/docker-compose.worker.yml — FROTA REMOTA de workers (VMs cloud, Debian).
+#
+# Corre num VM que NÃO tem o stack central. Liga-se ao NATS + Directus CENTRAIS
+# (pela Tailnet) e drena jobs da fila. Caso de uso principal: worker de VERIFICAÇÃO
+# de email (WORKER_ROLES=verify) — cada VM = 1 IP = a SUA quota free de APIs
+# (chaves em config/verify-providers.json, montado abaixo, gitignored → não vai na
+# imagem). Um VM maior (Oracle A1) pode correr WORKER_ROLES=verify,base p/ ajudar
+# também no enrich/extract via fila. Ver docs/distributed-fleet.md.
+#
+#   cp docker/.env.worker.example docker/.env.worker      # e editar
+#   docker compose --env-file docker/.env.worker -f docker/docker-compose.worker.yml up -d --build
+#   docker compose --env-file docker/.env.worker -f docker/docker-compose.worker.yml logs -f
+name: netprospect-worker
+
+services:
+  worker:
+    build:
+      context: ..
+      dockerfile: worker/Dockerfile.base
+    image: netprospect-worker-base:latest
+    restart: unless-stopped
+    init: true
+    environment:
+      # --- Ligação ao stack CENTRAL (via Tailnet) ---
+      NATS_URL: ${NATS_URL:?define NATS_URL=nats://<host-central-tailnet>:4222 no .env.worker}
+      DIRECTUS_URL: ${DIRECTUS_URL:?define DIRECTUS_URL (tailnet http://<host>:8056 ou o URL público)}
+      DIRECTUS_TOKEN: ${DIRECTUS_TOKEN:?define DIRECTUS_TOKEN (o mesmo static token do docker/.env central)}
+      DIRECTUS_ADMIN_TOKEN: ${DIRECTUS_TOKEN}
+      # --- Papel deste worker (verify | base | verify,base | vazio=todos) ---
+      WORKER_ROLES: ${WORKER_ROLES:-verify}
+      VERIFY_CONCURRENCY: ${VERIFY_CONCURRENCY:-4}
+      VERIFY_TIMEOUT_MS: ${VERIFY_TIMEOUT_MS:-8000}
+      VERIFY_MAX_CANDIDATES: ${VERIFY_MAX_CANDIDATES:-4}
+      # Reacher opcional (verificação SMTP self-hosted); vazio = só APIs free.
+      REACHER_URL: ${REACHER_URL:-}
+      REACHER_FROM_EMAIL: ${REACHER_FROM_EMAIL:-}
+      # MinIO: só é preciso p/ roles que leem snapshots de página (base: fetch/contacts/
+      # industry). Um worker SÓ-verify NÃO precisa. Preencher se correres base aqui.
+      MINIO_URL: ${MINIO_URL:-}
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-}
+      MINIO_BUCKET: ${MINIO_BUCKET:-snapshots}
+      ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-6}
+      CONTACTS_CONCURRENCY: ${CONTACTS_CONCURRENCY:-4}
+      EGRESS_PROXY: ${EGRESS_PROXY:-}
+      # --- Escrita DIRETA no Postgres (A2) — só p/ roles `base` (enrich/contacts). Aponta ao
+      #     PgBouncer do host de DB (CT) via tailnet. Vazio/false = escreve via Directus REST. ---
+      DIRECT_PG_WRITE: ${DIRECT_PG_WRITE:-}
+      PG_WRITE_HOST: ${PG_WRITE_HOST:-}
+      PG_WRITE_PORT: ${PG_WRITE_PORT:-6432}
+      PG_WRITE_USER: ${PG_WRITE_USER:-}
+      PG_WRITE_PASSWORD: ${PG_WRITE_PASSWORD:-}
+      PG_WRITE_DB: ${PG_WRITE_DB:-}
+      PG_WRITE_POOL: ${PG_WRITE_POOL:-4}
+      # --- Telemetria (dashboard /workers) — REDIS do host central, via tailnet. Fail-soft. ---
+      REDIS_URL: ${REDIS_URL:-}
+      # --- WHOIS router (Part B): WhoisXML best-effort .pt (csv de keys, quota por conta/IP)
+      #     + rate-limit RDAP por-registry (partilhado via REDIS_URL se definido). ---
+      WHOISXML_API_KEYS: ${WHOISXML_API_KEYS:-}
+      RDAP_RATE_PER_SEC: ${RDAP_RATE_PER_SEC:-5}
+    volumes:
+      # As chaves free DESTE VM/IP (gitignored; não vão na imagem). Uma quota por IP.
+      # TEM de existir antes do `up` (senão o Docker cria uma pasta e o pool fica vazio).
+      - ../config/verify-providers.json:/app/config/verify-providers.json:ro
+      # Proxies opcionais — descomentar SÓ se rotear as APIs por vários IPs deste VM
+      # (e o ficheiro existir): # - ../config/verify-proxies.json:/app/config/verify-proxies.json:ro
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}   # 1 por VM: o recurso escasso é o IP/quota, não o CPU

@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap">
+<link rel="stylesheet" href="tokens/netprospect.css">
+<style>
+  html, body { margin:0; padding:0; }
+  *, *::before, *::after { box-sizing:border-box; }
+  @keyframes npshimmer { 0% { background-position:-400px 0; } 100% { background-position:400px 0; } }
+  @keyframes npspin { to { transform:rotate(360deg); } }
+</style>
+</helmet>
+<div data-theme="{{ theme }}" style="min-height:100vh; background:var(--np-bg); color:var(--np-text); font-family:var(--np-font);">
+
+  <header style="position:sticky; top:0; z-index:20; display:flex; align-items:center; gap:16px; height:56px; padding:0 26px; background:var(--np-chrome); border-bottom:1px solid var(--np-chrome-border);">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <span style="display:inline-flex; width:26px; height:26px; border-radius:7px; background:var(--np-brand-fill); align-items:center; justify-content:center;"><span style="width:11px; height:11px; border:2.5px solid #fff; border-radius:4px; transform:rotate(45deg);"></span></span>
+      <span style="font-weight:800; font-size:15px; color:var(--np-chrome-text);">Net<span style="color:var(--np-brand);">Prospect</span></span>
+    </div>
+    <span style="font-size:13px; color:var(--np-chrome-text-2);">Galeria de componentes</span>
+    <div style="flex:1;"></div>
+    <button onClick="{{ toggleTheme }}" style="display:inline-flex; align-items:center; gap:7px; height:32px; padding:0 12px; background:rgba(255,255,255,0.06); border:1px solid var(--np-chrome-border); border-radius:var(--np-radius-sm); color:var(--np-chrome-text); font-family:inherit; font-size:12px; font-weight:700; cursor:pointer;">{{ themeIcon }} {{ themeLabel }}</button>
+    <nav style="display:flex; gap:6px; margin-left:8px;">
+      <a href="Tokens.dc.html" style="{{ tabIdle }}">Tokens</a>
+      <a href="Components.dc.html" style="{{ tabActive }}">Componentes</a>
+      <a href="Overview.dc.html" style="{{ tabIdle }}">Abrir app →</a>
+    </nav>
+  </header>
+
+  <div style="max-width:1120px; margin:0 auto; padding:34px 26px 70px;">
+    <h1 style="margin:0 0 6px; font-size:30px; font-weight:800; letter-spacing:-0.02em;">Galeria de componentes</h1>
+    <p style="margin:0 0 8px; font-size:14px; color:var(--np-text-3); max-width:640px; line-height:1.6;">Cada componente reutilizável nos seus estados. Alterna o tema no topo para validar contraste em claro e escuro.</p>
+
+    <!-- ============ BUTTONS ============ -->
+    <div style="{{ sec }}"><div style="{{ secHead }}">Botões</div><div style="{{ secSub }}">Vermelho sólido para a ação primária; neutros para o resto. Estados: default · hover · foco · desativado.</div>
+      <div style="{{ panel }}">
+        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:12px;">
+          <sc-for list="{{ buttons }}" as="b" hint-placeholder-count="5"><button style="{{ b.style }}" style-hover="{{ b.hover }}">{{ b.icon }}{{ b.label }}</button></sc-for>
+        </div>
+        <div style="{{ noteRow }}"><span style="{{ tag }}">default</span><span style="{{ tag }}">hover (passe o rato)</span><span style="{{ tag }}">disabled</span><span style="{{ tag }}">sm / md</span></div>
+      </div>
+    </div>
+
+    <!-- ============ STATUS BADGES ============ -->
+    <div style="{{ sec }}"><div style="{{ secHead }}">Badges de estado</div><div style="{{ secSub }}">Nunca só cor — cada estado tem ícone + etiqueta. Seguros para daltonismo.</div>
+      <div style="{{ panel }}">
+        <div style="{{ subLabel }}">Qualificação · verificação · disponibilidade</div>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px;"><sc-for list="{{ statusBadges }}" as="s" hint-placeholder-count="6"><span style="{{ s.style }}">{{ s.icon }}{{ s.label }}</span></sc-for></div>
+        <div style="{{ subLabel }}">Workflow de outreach</div>
+        <div style="display:flex; flex-wrap:wrap; gap:10px; margin-bottom:18px;"><sc-for list="{{ outreachBadges }}" as="o" hint-placeholder-count="4"><span style="{{ o.style }}">{{ o.icon }}{{ o.label }}</span></sc-for></div>
+        <div style="{{ subLabel }}">Chips de plataforma (categórico)</div>
+        <div style="display:flex; flex-wrap:wrap; gap:8px;"><sc-for list="{{ platformChips }}" as="p" hint-placeholder-count="6"><span style="display:inline-flex; align-items:center; gap:6px; height:24px; padding:0 10px; font-size:12px; font-weight:600; color:var(--np-text-2); background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:999px;"><span style="width:8px; height:8px; border-radius:3px; background:{{ p.color }};"></span>{{ p.label }}</span></sc-for></div>
+      </div>
+    </div>
+
+    <!-- ============ KPI TILE ============ -->
+    <div style="{{ sec }}"><div style="{{ secHead }}">KPI / stat tile</div><div style="{{ secSub }}">Rótulo com ícone, valor tabular, delta e sparkline. Também no estado skeleton.</div>
+      <div style="{{ panel }}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px;">
+          <div style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); padding:15px 16px; box-shadow:var(--np-shadow-card);">
+            <div style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:600; color:var(--np-text-3);"><span style="display:inline-flex; width:26px; height:26px; border-radius:8px; background:var(--np-brand-soft); color:var(--np-brand); align-items:center; justify-content:center;">{{ globeIcon }}</span>Sites</div>
+            <div style="margin-top:12px; display:flex; align-items:flex-end; justify-content:space-between;"><div style="font-size:26px; font-weight:800; letter-spacing:-0.02em; color:var(--np-text); font-variant-numeric:tabular-nums; line-height:1;">78 240</div><div>{{ sparkUp }}</div></div>
+            <div style="margin-top:9px; display:flex; align-items:center; gap:6px;"><span style="display:inline-flex; align-items:center; gap:3px; font-size:11px; font-weight:700; color:var(--np-ok); background:var(--np-ok-soft); padding:2px 6px; border-radius:999px;">▲ +3.1%</span><span style="font-size:11px; color:var(--np-text-faint);">vs. anterior</span></div>
+          </div>
+          <div style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); padding:15px 16px; box-shadow:var(--np-shadow-card);">
+            <div style="{{ sk }}; width:70px; height:12px; margin-bottom:16px;"></div>
+            <div style="{{ sk }}; width:110px; height:26px; margin-bottom:14px;"></div>
+            <div style="{{ sk }}; width:90px; height:12px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ CHARTS ============ -->
+    <div style="{{ sec }}"><div style="{{ secHead }}">Cartões de gráfico</div><div style="{{ secSub }}">Só barras / funil / área. Eixos recessivos, marcas finas, alternador gráfico↔tabela, tooltip no hover.</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+        <div style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); padding:16px 18px;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;"><h3 style="margin:0; font-size:15px; font-weight:800; color:var(--np-text);">Barra</h3><div style="display:inline-flex; background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:var(--np-radius-sm); padding:2px;"><span style="height:24px; padding:0 10px; display:inline-flex; align-items:center; border-radius:5px; font-size:11px; font-weight:700; background:var(--np-surface); color:var(--np-text); box-shadow:var(--np-shadow-card);">Gráfico</span><span style="height:24px; padding:0 10px; display:inline-flex; align-items:center; font-size:11px; font-weight:700; color:var(--np-text-3);">Tabela</span></div></div>
+          <sc-for list="{{ bars }}" as="b" hint-placeholder-count="4"><div style="display:flex; align-items:center; gap:10px; padding:4px 0;"><span style="flex:0 0 92px; font-size:12px; font-weight:600; color:var(--np-text-2);">{{ b.label }}</span><span style="flex:1; height:16px; background:var(--np-track); border-radius:4px; overflow:hidden;"><span style="display:block; height:100%; width:{{ b.w }}; background:{{ b.color }}; border-radius:4px;"></span></span><span style="flex:0 0 54px; text-align:right; font-size:12px; font-weight:700; color:var(--np-text); font-variant-numeric:tabular-nums;">{{ b.v }}</span></div></sc-for>
+        </div>
+        <div style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); padding:16px 18px;">
+          <h3 style="margin:0 0 16px; font-size:15px; font-weight:800; color:var(--np-text);">Funil</h3>
+          <sc-for list="{{ funnel }}" as="f" hint-placeholder-count="3"><div style="margin-bottom:13px;"><div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:12px;"><span style="font-weight:600; color:var(--np-text-2);">{{ f.label }}</span><span style="font-weight:800; color:var(--np-text); font-variant-numeric:tabular-nums;">{{ f.v }}</span></div><div style="height:22px; border-radius:5px; background:var(--np-track); overflow:hidden;"><div style="height:100%; width:{{ f.w }}; background:{{ f.color }}; border-radius:5px;"></div></div></div></sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ DATA TABLE ============ -->
+    <div style="{{ sec }}"><div style="{{ secHead }}">Tabela de dados</div><div style="{{ secSub }}">Cabeçalho fixo, indicador de ordenação, hover, linha selecionada, checkbox.</div>
+      <div style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); overflow:hidden;">
+        <table style="width:100%; border-collapse:separate; border-spacing:0;">
+          <thead><tr>
+            <th style="{{ thc }}; width:44px;"><span style="{{ cbOn }}">{{ checkIcon }}</span></th>
+            <th style="{{ thc }}"><span style="display:inline-flex; align-items:center; gap:5px;">Domínio <span style="color:var(--np-brand);">▲</span></span></th>
+            <th style="{{ thc }}">Plataforma</th><th style="{{ thc }}">Contactos</th><th style="{{ thc }}">Estado</th>
+          </tr></thead>
+          <tbody>
+            <sc-for list="{{ tableRows }}" as="r" hint-placeholder-count="3">
+              <tr style="{{ r.rowStyle }}"><td style="{{ tdc }}"><span style="{{ r.cb }}">{{ r.cbMark }}</span></td><td style="{{ tdc }}; font-weight:700; color:var(--np-text);">{{ r.domain }}</td><td style="{{ tdc }}"><span style="display:inline-flex; align-items:center; gap:6px; color:var(--np-text-2);"><span style="width:8px; height:8px; border-radius:3px; background:{{ r.pColor }};"></span>{{ r.platform }}</span></td><td style="{{ tdc }}; color:var(--np-text-2);">{{ r.contacts }}</td><td style="{{ tdc }}"><span style="{{ r.badge.style }}">{{ r.badge.icon }}{{ r.badge.label }}</span></td></tr>
+            </sc-for>
+          </tbody>
+        </table>
+        <div style="padding:9px 14px; display:flex; gap:8px; background:var(--np-surface-2); border-top:1px solid var(--np-border); font-size:11px; color:var(--np-text-faint);"><span style="{{ tag }}">linha default</span><span style="{{ tag }}">hover</span><span style="{{ tag }}">selecionada</span></div>
+      </div>
+    </div>
+
+    <!-- ============ FILTERS ============ -->
+    <div style="{{ sec }}"><div style="{{ secHead }}">Barra de filtros, chips & facetas</div><div style="{{ secSub }}">Pesquisa com debounce, botões de faceta com contagem ativa, chips removíveis, dropdown de faceta aberto.</div>
+      <div style="{{ panel }}">
+        <div style="display:flex; align-items:center; gap:9px; flex-wrap:wrap; margin-bottom:16px; position:relative;">
+          <div style="flex:1 1 200px; min-width:180px; display:flex; align-items:center; gap:8px; height:36px; padding:0 12px; background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:var(--np-radius); color:var(--np-text-3);">{{ searchIcon }}<span style="flex:1; font-size:13px; color:var(--np-text-faint);">Procurar…</span><span style="width:13px; height:13px; border:2px solid var(--np-border-2); border-top-color:var(--np-brand); border-radius:999px; animation:npspin 0.7s linear infinite;"></span></div>
+          <button style="display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 11px; border-radius:var(--np-radius); border:1px solid var(--np-brand-soft-bd); background:var(--np-brand-soft); color:var(--np-brand-ink); font-family:inherit; font-size:13px; font-weight:600;">Plataforma <span style="min-width:16px; height:16px; padding:0 4px; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:800; border-radius:999px; background:var(--np-brand-fill); color:#fff;">2</span> {{ chevIcon }}</button>
+          <button style="display:inline-flex; align-items:center; gap:7px; height:36px; padding:0 11px; border-radius:var(--np-radius); border:1px solid var(--np-border); background:var(--np-surface-2); color:var(--np-text-2); font-family:inherit; font-size:13px; font-weight:600;">País {{ chevIcon }}</button>
+          <div style="position:absolute; top:44px; right:0; min-width:210px; background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-md); box-shadow:var(--np-shadow-pop); padding:6px;">
+            <sc-for list="{{ facetOpts }}" as="o" hint-placeholder-count="4"><div style="display:flex; align-items:center; gap:9px; padding:7px 9px; border-radius:var(--np-radius-sm); font-size:13px; color:var(--np-text-2);"><span style="width:16px; height:16px; border-radius:4px; border:1.5px solid {{ o.bd }}; background:{{ o.bg }}; display:inline-flex; align-items:center; justify-content:center; color:#fff;">{{ o.check }}</span><span style="flex:1;">{{ o.label }}</span><span style="font-size:11px; color:var(--np-text-faint);">{{ o.count }}</span></div></sc-for>
+          </div>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;"><span style="font-size:12px; color:var(--np-text-faint);">Filtros:</span><sc-for list="{{ chips }}" as="c" hint-placeholder-count="2"><span style="display:inline-flex; align-items:center; gap:7px; height:28px; padding:0 6px 0 11px; background:var(--np-brand-soft); border:1px solid var(--np-brand-soft-bd); border-radius:999px; font-size:12px; font-weight:600; color:var(--np-brand-ink);">{{ c }}<span style="width:18px; height:18px; display:inline-flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.06); border-radius:999px;">×</span></span></sc-for></div>
+      </div>
+    </div>
+
+    <!-- ============ FORMS ============ -->
+    <div style="{{ sec }}"><div style="{{ secHead }}">Controlos de formulário</div><div style="{{ secSub }}">Input (default · foco · erro), select, checkbox, toggle, controlo segmentado.</div>
+      <div style="{{ panel }}">
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:18px;">
+          <label><span style="{{ lbl }}">Input</span><div style="{{ inp }}">exemplo@netmaster.pt</div></label>
+          <label><span style="{{ lbl }}">Input · foco</span><div style="{{ inp }}; border-color:var(--np-brand); box-shadow:0 0 0 3px var(--np-focus);">a escrever…</div></label>
+          <label><span style="{{ lbl }}">Input · erro</span><div style="{{ inp }}; border-color:var(--np-danger); color:var(--np-danger);">valor inválido</div><span style="font-size:11px; color:var(--np-danger); margin-top:4px; display:block;">E-mail inválido</span></label>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; align-items:center; gap:24px; margin-top:22px;">
+          <label style="display:flex; align-items:center; gap:9px; font-size:13px; color:var(--np-text-2);"><span style="{{ cbOn }}">{{ checkIcon }}</span>Checkbox ativo</label>
+          <label style="display:flex; align-items:center; gap:9px; font-size:13px; color:var(--np-text-2);"><span style="{{ cbOff }}"></span>Checkbox vazio</label>
+          <div style="display:flex; align-items:center; gap:9px; font-size:13px; color:var(--np-text-2);"><span style="width:44px; height:24px; border-radius:999px; background:var(--np-brand-fill); position:relative;"><span style="position:absolute; top:3px; left:23px; width:18px; height:18px; border-radius:999px; background:#fff;"></span></span>Toggle on</div>
+          <div style="display:flex; align-items:center; gap:9px; font-size:13px; color:var(--np-text-2);"><span style="width:44px; height:24px; border-radius:999px; background:var(--np-border-2); position:relative;"><span style="position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:999px; background:#fff;"></span></span>Toggle off</div>
+          <div style="display:inline-flex; background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:var(--np-radius-sm); padding:2px;"><span style="height:28px; padding:0 12px; display:inline-flex; align-items:center; border-radius:5px; font-size:12px; font-weight:700; background:var(--np-brand-fill); color:#fff;">30d</span><span style="height:28px; padding:0 12px; display:inline-flex; align-items:center; font-size:12px; font-weight:700; color:var(--np-text-3);">90d</span><span style="height:28px; padding:0 12px; display:inline-flex; align-items:center; font-size:12px; font-weight:700; color:var(--np-text-3);">12m</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ FEEDBACK STATES ============ -->
+    <div style="{{ sec }}"><div style="{{ secHead }}">Estados: loading · vazio · erro · toast</div><div style="{{ secSub }}">Todos os ecrãs herdam estes estados de sistema.</div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+        <!-- skeleton -->
+        <div style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); padding:16px 18px;">
+          <div style="{{ subLabel }}">Skeleton (a carregar)</div>
+          <sc-for list="{{ skeletonRows }}" as="k" hint-placeholder-count="4"><div style="display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--np-divider);"><div style="{{ sk }}; width:28px; height:28px; border-radius:8px;"></div><div style="{{ sk }}; flex:1; height:12px;"></div><div style="{{ sk }}; width:60px; height:12px;"></div></div></sc-for>
+        </div>
+        <!-- empty + error stacked -->
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card); padding:22px; text-align:center;">
+            <div style="width:44px; height:44px; margin:0 auto 12px; border-radius:12px; background:var(--np-surface-3); display:flex; align-items:center; justify-content:center; color:var(--np-text-faint);">{{ searchIcon2 }}</div>
+            <div style="font-size:14px; font-weight:800; color:var(--np-text);">Sem resultados</div>
+            <div style="font-size:12px; color:var(--np-text-3); margin-top:3px;">Alargue os critérios de filtro.</div>
+          </div>
+          <div style="background:var(--np-danger-soft); border:1px solid var(--np-danger-soft-bd); border-radius:var(--np-radius-lg); padding:16px; display:flex; gap:12px; align-items:flex-start;">
+            <span style="color:var(--np-danger); flex:0 0 auto;">{{ alertIcon }}</span>
+            <div><div style="font-size:13px; font-weight:800; color:var(--np-text);">Falha ao carregar dados</div><div style="font-size:12px; color:var(--np-text-2); margin-top:2px;">Não foi possível contactar a API. <a href="#" style="color:var(--np-danger); font-weight:700;">Tentar novamente</a></div></div>
+          </div>
+        </div>
+      </div>
+      <!-- toasts -->
+      <div style="{{ subLabel }}; margin-top:18px;">Toasts</div>
+      <div style="display:flex; flex-direction:column; gap:10px; max-width:420px;">
+        <sc-for list="{{ toasts }}" as="t" hint-placeholder-count="3"><div style="display:flex; align-items:center; gap:11px; padding:12px 14px; background:var(--np-surface); border:1px solid var(--np-border); border-left:3px solid {{ t.accent }}; border-radius:var(--np-radius); box-shadow:var(--np-shadow-raise);"><span style="color:{{ t.accent }}; flex:0 0 auto;">{{ t.icon }}</span><span style="flex:1; font-size:13px; color:var(--np-text);">{{ t.msg }}</span><span style="color:var(--np-text-faint);">{{ closeIcon }}</span></div></sc-for>
+      </div>
+    </div>
+
+    <!-- ============ MISC ============ -->
+    <div style="{{ sec }}"><div style="{{ secHead }}">Paginação · avatar · icon tile</div>
+      <div style="{{ panel }}">
+        <div style="display:flex; align-items:center; gap:24px; flex-wrap:wrap;">
+          <div style="display:flex; align-items:center; gap:4px;"><span style="{{ pg }}">‹</span><span style="{{ pgA }}">1</span><span style="{{ pg }}">2</span><span style="{{ pg }}">3</span><span style="{{ pg }}; border:none; color:var(--np-text-faint);">…</span><span style="{{ pg }}">3130</span><span style="{{ pg }}">›</span></div>
+          <div style="display:flex; align-items:center; gap:10px;"><span style="width:34px; height:34px; border-radius:999px; background:linear-gradient(135deg,#EA0B2A,#F2B234); display:inline-flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:12px;">RA</span><span style="width:34px; height:34px; border-radius:999px; background:var(--cat-wordpress); display:inline-flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:12px;">AF</span></div>
+          <span style="display:inline-flex; width:40px; height:40px; border-radius:12px; background:var(--np-brand-soft); color:var(--np-brand); align-items:center; justify-content:center;">{{ globeIcon2 }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1160,&quot;height&quot;:1400}}">
+class Component extends DCLogic {
+  state = { theme: 'dark' };
+  componentDidMount() { try { this.setState({ theme: localStorage.getItem('np-theme') || 'dark' }); } catch (e) {} }
+  toggleTheme = () => { const t = this.state.theme === 'dark' ? 'light' : 'dark'; try { localStorage.setItem('np-theme', t); } catch (e) {} this.setState({ theme: t }); };
+
+  ic(name, size = 13) {
+    const P = {
+      check: ['M20 6 9 17l-5-5'], clock: ['M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0', 'M12 7v5l3 2'], globe: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z', 'M2 12h20', 'M12 2a15 15 0 0 1 0 20', 'M12 2a15 15 0 0 0 0 20'],
+      dash: ['M5 12h14'], x: ['M18 6 6 18', 'M6 6l12 12'], power: ['M12 2v10', 'M6.3 6.3a8 8 0 1 0 11.4 0'], plus: ['M12 5v14', 'M5 12h14'],
+      send: ['M22 2 11 13', 'M22 2 15 22l-4-9-9-4 20-7Z'], reply: ['M9 17 4 12l5-5', 'M20 18v-2a4 4 0 0 0-4-4H4'], download: ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'],
+      search: ['M11 11m-8 0a8 8 0 1 0 16 0a8 8 0 1 0-16 0', 'm21 21-4.3-4.3'], chev: ['m6 9 6 6 6-6'], alert: ['M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z', 'M12 9v4', 'M12 17h.01'],
+      sun: ['M12 12m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0', 'M12 2v2', 'M12 20v2', 'm4.9 4.9 1.4 1.4', 'm17.7 17.7 1.4 1.4', 'M2 12h2', 'M20 12h2', 'm6.3 17.7-1.4 1.4', 'm19.1 4.9-1.4 1.4'], moon: ['M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z'],
+    };
+    const paths = (P[name] || []).map((d, i) => React.createElement('path', { key: i, d }));
+    return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block', flex: '0 0 auto' } }, paths);
+  }
+  spark(pts, color) {
+    const w = 60, h = 24, mx = Math.max(...pts), mn = Math.min(...pts), rg = (mx - mn) || 1;
+    const line = pts.map((v, i) => `${(i / (pts.length - 1) * w).toFixed(1)},${(h - 2 - (v - mn) / rg * (h - 4)).toFixed(1)}`).join(' ');
+    return React.createElement('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}` }, [React.createElement('polygon', { key: 'a', points: `0,${h} ${line} ${w},${h}`, fill: color, opacity: 0.14 }), React.createElement('polyline', { key: 'l', points: line, fill: 'none', stroke: color, strokeWidth: 1.8, strokeLinejoin: 'round' })]);
+  }
+  badge(color, soft, bd, icon, label) { return { style: { display: 'inline-flex', alignItems: 'center', gap: '5px', height: '24px', padding: '0 10px', fontSize: '11px', fontWeight: 700, color: `var(${color})`, background: `var(${soft})`, border: `1px solid var(${bd})`, borderRadius: '999px', whiteSpace: 'nowrap' }, icon: this.ic(icon, 12), label }; }
+
+  renderVals() {
+    const tab = { display: 'inline-flex', alignItems: 'center', height: '32px', padding: '0 13px', borderRadius: 'var(--np-radius-sm)', fontSize: '13px', fontWeight: 700, textDecoration: 'none' };
+    const sec = { marginTop: '34px' };
+    const secHead = { fontSize: '13px', fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--np-text-3)', marginBottom: '4px' };
+    const secSub = { fontSize: '13px', color: 'var(--np-text-3)', marginBottom: '14px', maxWidth: '640px', lineHeight: 1.5 };
+    const panel = { background: 'var(--np-surface)', border: '1px solid var(--np-border)', borderRadius: 'var(--np-radius-lg)', boxShadow: 'var(--np-shadow-card)', padding: '20px 22px' };
+    const subLabel = { fontSize: '11px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--np-text-faint)', marginBottom: '10px' };
+    const noteRow = { display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '16px' };
+    const tag = { fontSize: '10px', fontWeight: 700, color: 'var(--np-text-faint)', background: 'var(--np-surface-2)', border: '1px solid var(--np-border)', padding: '2px 8px', borderRadius: '999px' };
+    const sk = { background: 'linear-gradient(90deg, var(--np-surface-2) 0px, var(--np-surface-3) 200px, var(--np-surface-2) 400px)', backgroundSize: '800px 100%', animation: 'npshimmer 1.3s linear infinite', borderRadius: '5px' };
+    const thc = { position: 'sticky', top: 0, background: 'var(--np-surface-2)', padding: '0 14px', height: '40px', borderBottom: '1px solid var(--np-border)', textAlign: 'left', fontSize: '11px', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--np-text-3)' };
+    const tdc = { padding: '10px 14px', borderBottom: '1px solid var(--np-divider)', fontSize: '13px' };
+
+    const cbOn = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '17px', height: '17px', borderRadius: '5px', border: '1.5px solid var(--np-brand-fill)', background: 'var(--np-brand-fill)', color: '#fff', flex: '0 0 auto' };
+    const cbOff = { display: 'inline-flex', width: '17px', height: '17px', borderRadius: '5px', border: '1.5px solid var(--np-border-2)', flex: '0 0 auto' };
+
+    const pbtn = (bg, color, border, hover, glow) => ({ display: 'inline-flex', alignItems: 'center', gap: '7px', height: '38px', padding: '0 16px', border: border || 'none', borderRadius: 'var(--np-radius)', background: bg, color, fontFamily: 'inherit', fontSize: '13px', fontWeight: 700, cursor: 'pointer', boxShadow: glow || 'none', transition: 'all var(--np-dur)' });
+    const buttons = [
+      { label: 'Exportar CSV', icon: this.ic('download', 15), style: pbtn('var(--np-brand-fill)', '#fff', null, null, 'var(--np-shadow-brand)'), hover: 'background:var(--np-brand-hover)' },
+      { label: 'Guardar', icon: '', style: pbtn('var(--np-surface-2)', 'var(--np-text-2)', '1px solid var(--np-border)'), hover: 'border-color:var(--np-border-2); color:var(--np-text)' },
+      { label: 'Ghost', icon: '', style: pbtn('transparent', 'var(--np-text-2)', '1px solid transparent'), hover: 'background:var(--np-surface-3)' },
+      { label: 'Remover', icon: this.ic('x', 14), style: pbtn('transparent', 'var(--np-danger)', '1px solid var(--np-danger-soft-bd)'), hover: 'background:var(--np-danger-soft)' },
+      { label: 'Desativado', icon: '', style: { ...pbtn('var(--np-surface-2)', 'var(--np-text-faint)', '1px solid var(--np-border)'), cursor: 'not-allowed', opacity: 0.6 }, hover: '' },
+      { label: 'sm', icon: '', style: { ...pbtn('var(--np-brand-fill)', '#fff'), height: '30px', padding: '0 12px', fontSize: '12px' }, hover: 'background:var(--np-brand-hover)' },
+    ];
+
+    const statusBadges = [
+      this.badge('--np-ok', '--np-ok-soft', '--np-ok-soft-bd', 'check', 'Qualificado'),
+      this.badge('--np-ok', '--np-ok-soft', '--np-ok-soft-bd', 'check', 'E-mail verificado'),
+      this.badge('--np-warn', '--np-warn-soft', '--np-warn-soft-bd', 'clock', 'Catch-all'),
+      this.badge('--np-info', '--np-info-soft', '--np-info-soft-bd', 'globe', 'Role-based'),
+      this.badge('--np-neutral', '--np-neutral-soft', '--np-neutral-soft-bd', 'dash', 'Não verificado'),
+      this.badge('--np-ok', '--np-ok-soft', '--np-ok-soft-bd', 'power', 'Live'),
+      this.badge('--np-neutral', '--np-neutral-soft', '--np-neutral-soft-bd', 'x', 'Offline'),
+    ];
+    const outreachBadges = [
+      this.badge('--np-neutral', '--np-neutral-soft', '--np-neutral-soft-bd', 'plus', 'Novo'),
+      this.badge('--np-info', '--np-info-soft', '--np-info-soft-bd', 'clock', 'A contactar'),
+      this.badge('--np-warn', '--np-warn-soft', '--np-warn-soft-bd', 'send', 'Contactado'),
+      this.badge('--np-ok', '--np-ok-soft', '--np-ok-soft-bd', 'reply', 'Respondeu'),
+    ];
+    const platformChips = [['WordPress', 'wordpress'], ['WooCommerce', 'woocommerce'], ['Shopify', 'shopify'], ['Wix', 'wix'], ['PrestaShop', 'prestashop'], ['Custom', 'custom']].map(([label, k]) => ({ label, color: `var(--cat-${k})` }));
+
+    const bars = [['WordPress', 'wordpress', '100%', '32 240'], ['WooCommerce', 'woocommerce', '45%', '14 560'], ['Wix', 'wix', '28%', '8 920'], ['PrestaShop', 'prestashop', '19%', '6 110']].map(([label, k, w, v]) => ({ label, color: `var(--cat-${k})`, w, v }));
+    const funnel = [['Total', 'var(--np-neutral-mark)', '100%', '78 240'], ['Live', 'var(--cat-wordpress)', '82%', '64 105'], ['Qualificados', 'var(--np-ok-mark)', '23%', '18 342']].map(([label, color, w, v]) => ({ label, color, w, v }));
+
+    const tableRows = [
+      { domain: 'padariacentral.pt', platform: 'WooCommerce', pColor: 'var(--cat-woocommerce)', contacts: '3', badge: this.badge('--np-ok', '--np-ok-soft', '--np-ok-soft-bd', 'check', 'Qualificado'), sel: false },
+      { domain: 'bloomdesign.nl', platform: 'WordPress', pColor: 'var(--cat-wordpress)', contacts: '2', badge: this.badge('--np-neutral', '--np-neutral-soft', '--np-neutral-soft-bd', 'plus', 'Novo'), sel: true },
+      { domain: 'kaffesthlm.se', platform: 'Shopify', pColor: 'var(--cat-shopify)', contacts: '1', badge: this.badge('--np-warn', '--np-warn-soft', '--np-warn-soft-bd', 'clock', 'Catch-all'), sel: false },
+    ].map((r, i) => ({ ...r, rowStyle: { background: r.sel ? 'var(--np-surface-sel)' : 'transparent' }, cb: r.sel ? cbOn : cbOff, cbMark: r.sel ? this.ic('check', 12) : '' }));
+
+    const facetOpts = [['WordPress', 4, true], ['WooCommerce', 3, true], ['Shopify', 1, false], ['Wix', 1, false]].map(([label, count, on]) => ({ label, count, check: on ? this.ic('check', 11) : '', bg: on ? 'var(--np-brand-fill)' : 'transparent', bd: on ? 'var(--np-brand-fill)' : 'var(--np-border-2)' }));
+
+    const toasts = [
+      { msg: 'Exportação de 4 118 sites concluída', accent: 'var(--np-ok-mark)', icon: this.ic('check', 15), closeIcon: this.ic('x', 14) },
+      { msg: '2 706 contactos adicionados ao segmento', accent: 'var(--np-info-mark)', icon: this.ic('plus', 15), closeIcon: this.ic('x', 14) },
+      { msg: 'Limite de API atingido — tente em 1 min', accent: 'var(--np-danger-mark)', icon: this.ic('alert', 15), closeIcon: this.ic('x', 14) },
+    ].map(t => ({ ...t, closeIcon: this.ic('x', 14) }));
+
+    const lbl = { display: 'block', fontSize: '12px', fontWeight: 700, color: 'var(--np-text-2)', marginBottom: '6px' };
+    const inp = { height: '38px', padding: '0 12px', display: 'flex', alignItems: 'center', border: '1px solid var(--np-border)', borderRadius: 'var(--np-radius-sm)', background: 'var(--np-surface-2)', color: 'var(--np-text)', fontSize: '13px' };
+    const pg = { minWidth: '32px', height: '32px', padding: '0 8px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--np-border)', background: 'var(--np-surface)', color: 'var(--np-text-2)', borderRadius: 'var(--np-radius-sm)', fontSize: '12px', fontWeight: 700 };
+    const pgA = { ...pg, border: '1px solid var(--np-brand-fill)', background: 'var(--np-brand-fill)', color: '#fff' };
+
+    return {
+      theme: this.state.theme, toggleTheme: this.toggleTheme,
+      themeIcon: this.ic(this.state.theme === 'dark' ? 'sun' : 'moon', 15), themeLabel: this.state.theme === 'dark' ? 'Claro' : 'Escuro',
+      tabActive: { ...tab, background: 'rgba(255,255,255,0.1)', color: 'var(--np-chrome-text)' },
+      tabIdle: { ...tab, background: 'transparent', color: 'var(--np-chrome-text-2)' },
+      sec, secHead, secSub, panel, subLabel, noteRow, tag, sk, thc, tdc, cbOn, cbOff, lbl, inp, pg, pgA,
+      buttons, statusBadges, outreachBadges, platformChips, bars, funnel, tableRows, facetOpts, toasts,
+      chips: ['Plataforma: WordPress', 'Qualificado: Sim'],
+      sparkUp: this.spark([61, 63, 66, 69, 72, 75, 78], 'var(--np-ok-mark)'),
+      globeIcon: this.ic('globe', 15), globeIcon2: this.ic('globe', 20), searchIcon: this.ic('search', 16), searchIcon2: this.ic('search', 20),
+      chevIcon: this.ic('chev', 14), checkIcon: this.ic('check', 12), alertIcon: this.ic('alert', 18), closeIcon: this.ic('x', 14),
+      skeletonRows: [1, 2, 3, 4],
+    };
+  }
+}
+</script>
+</body>
+</html>

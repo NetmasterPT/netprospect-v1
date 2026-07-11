@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --check crtsh-enum.js)",
+      "Bash(timeout 90 node crtsh-enum.js dns.pt)",
+      "Bash(timeout 90 node crtsh-enum.js dns.pt --active-only)",
+      "Bash(cd /root/Github/netprospect-v1 *)",
+      "Read(//home/claude/.claude/plans/dev/**)"
+    ]
+  }
+}

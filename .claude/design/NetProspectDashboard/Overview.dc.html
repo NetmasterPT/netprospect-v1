@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,500;0,600;0,700;0,800;0,900&display=swap">
+<link rel="stylesheet" href="tokens/netprospect.css">
+<script src="_ds/netmaster-design-system-afcc6f5c-433f-4078-8dbe-f97343007c6b/_ds_bundle.js"></script>
+</helmet>
+<dc-import name="Shell" active="overview" hint-size="100%,100%">
+
+  <!-- ======= tooltip (floating) ======= -->
+  <sc-if value="{{ tip.show }}" hint-placeholder-val="">
+    <div style="{{ tipStyle }}">
+      <div style="font-size:11px; font-weight:700; color:var(--np-tooltip-text); margin-bottom:5px; letter-spacing:0.01em;">{{ tip.title }}</div>
+      <sc-for list="{{ tip.rows }}" as="r" hint-placeholder-count="2">
+        <div style="display:flex; align-items:center; gap:10px; justify-content:space-between; font-size:11px; color:var(--np-tooltip-text); opacity:0.9;">
+          <span style="display:flex; align-items:center; gap:6px;"><span style="width:8px; height:8px; border-radius:2px; background:{{ r.color }};"></span>{{ r.k }}</span>
+          <span style="font-weight:700; font-variant-numeric:tabular-nums;">{{ r.v }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <!-- ======= page header / toolbar ======= -->
+  <div style="padding:22px 26px 0; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+    <div>
+      <div style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--np-brand-ink);">Inteligência de mercado</div>
+      <h1 style="margin:4px 0 3px; font-size:var(--np-fs-display); font-weight:800; letter-spacing:-0.01em; color:var(--np-text);">Visão geral</h1>
+      <div style="font-size:13px; color:var(--np-text-3);">Base de <strong style="color:var(--np-text-2); font-weight:700;">78 240</strong> domínios registados · .pt · .nl · .se · .fi · .no</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="display:inline-flex; background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius); padding:3px;">
+        <sc-for list="{{ ranges }}" as="rg" hint-placeholder-count="4">
+          <button onClick="{{ rg.onClick }}" style="{{ rg.style }}">{{ rg.label }}</button>
+        </sc-for>
+      </div>
+      <button style="display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 14px; border-radius:var(--np-radius); border:1px solid var(--np-border); background:var(--np-surface); color:var(--np-text-2); font-family:inherit; font-size:13px; font-weight:600; cursor:pointer;" style-hover="border-color:var(--np-border-2); color:var(--np-text)">
+        {{ downloadIcon }} Exportar
+      </button>
+    </div>
+  </div>
+
+  <!-- ======= KPI tiles ======= -->
+  <div style="padding:18px 26px 0; display:grid; grid-template-columns:repeat(auto-fit,minmax(184px,1fr)); gap:14px;">
+    <sc-for list="{{ kpis }}" as="k" hint-placeholder-count="6">
+      <div style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); padding:15px 16px; box-shadow:var(--np-shadow-card); position:relative; overflow:hidden;">
+        <div style="display:flex; align-items:center; gap:8px; font-size:12px; font-weight:600; color:var(--np-text-3);">
+          <span style="display:inline-flex; width:26px; height:26px; border-radius:8px; background:var(--np-brand-soft); color:var(--np-brand); align-items:center; justify-content:center;">{{ k.icon }}</span>
+          {{ k.label }}
+        </div>
+        <div style="margin-top:12px; display:flex; align-items:flex-end; justify-content:space-between; gap:8px;">
+          <div style="font-size:26px; font-weight:800; letter-spacing:-0.02em; color:var(--np-text); font-variant-numeric:tabular-nums; line-height:1; white-space:nowrap;">{{ k.value }}</div>
+          <div style="flex:0 0 auto;">{{ k.spark }}</div>
+        </div>
+        <div style="margin-top:9px; display:flex; align-items:center; gap:6px;">
+          <span style="display:inline-flex; align-items:center; gap:3px; font-size:11px; font-weight:700; color:{{ k.deltaColor }}; background:{{ k.deltaBg }}; padding:2px 6px; border-radius:999px;">{{ k.deltaIcon }}{{ k.delta }}</span>
+          <span style="font-size:11px; color:var(--np-text-faint);">vs. período anterior</span>
+        </div>
+      </div>
+    </sc-for>
+  </div>
+
+  <!-- ======= row: funnel + platform ======= -->
+  <div style="padding:16px 26px 0; display:grid; grid-template-columns:repeat(auto-fit,minmax(390px,1fr)); gap:16px;">
+
+    <!-- funnel -->
+    <section style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card);">
+      <div style="padding:16px 18px 12px; border-bottom:1px solid var(--np-divider);">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div>
+            <h2 style="margin:0; font-size:var(--np-fs-h1); font-weight:800; letter-spacing:-0.01em; color:var(--np-text);">Funil de qualificação</h2>
+            <div style="margin-top:2px; font-size:12px; color:var(--np-text-3);">Do total registado ao prospeto qualificado</div>
+          </div>
+        </div>
+      </div>
+      <div style="padding:20px 18px 22px;">
+        <sc-for list="{{ funnel }}" as="f" hint-placeholder-count="3">
+          <div style="margin-bottom:16px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:6px;">
+              <div style="display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; color:var(--np-text-2);">
+                <span style="width:10px; height:10px; border-radius:3px; background:{{ f.color }};"></span>{{ f.label }}
+              </div>
+              <div style="display:flex; align-items:baseline; gap:8px;">
+                <span style="font-size:16px; font-weight:800; color:var(--np-text); font-variant-numeric:tabular-nums;">{{ f.value }}</span>
+                <span style="font-size:11px; font-weight:700; color:var(--np-text-faint); font-variant-numeric:tabular-nums;">{{ f.pctLabel }}</span>
+              </div>
+            </div>
+            <div style="height:26px; border-radius:var(--np-radius-sm); background:var(--np-track); overflow:hidden;">
+              <div style="height:100%; width:{{ f.width }}; background:{{ f.color }}; border-radius:var(--np-radius-sm); transition:width var(--np-dur-slow) var(--np-ease);"></div>
+            </div>
+            <sc-if value="{{ f.conv }}" hint-placeholder-val="">
+              <div style="margin-top:6px; font-size:11px; color:var(--np-text-3);">{{ f.conv }}</div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- platform breakdown -->
+    <section style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card);">
+      <div style="padding:16px 18px 12px; border-bottom:1px solid var(--np-divider); display:flex; align-items:flex-start; justify-content:space-between; gap:12px;">
+        <div>
+          <h2 style="margin:0; font-size:var(--np-fs-h1); font-weight:800; letter-spacing:-0.01em; color:var(--np-text);">Plataformas</h2>
+          <div style="margin-top:2px; font-size:12px; color:var(--np-text-3);">Sites por CMS / e-commerce detetado</div>
+        </div>
+        <div style="display:inline-flex; background:var(--np-surface-2); border:1px solid var(--np-border); border-radius:var(--np-radius-sm); padding:2px;">
+          <button onClick="{{ togglePlatformChart }}" style="{{ platformChartBtn }}">Gráfico</button>
+          <button onClick="{{ togglePlatformTable }}" style="{{ platformTableBtn }}">Tabela</button>
+        </div>
+      </div>
+      <div style="padding:16px 18px 18px;">
+        <sc-if value="{{ platformIsChart }}" hint-placeholder-val="{{ true }}">
+          <div>
+            <sc-for list="{{ platforms }}" as="p" hint-placeholder-count="9">
+              <div onMouseEnter="{{ p.onEnter }}" onMouseMove="{{ p.onMove }}" onMouseLeave="{{ onLeave }}" style="display:flex; align-items:center; gap:10px; padding:4px 0; cursor:default;">
+                <span style="flex:0 0 116px; display:flex; align-items:center; gap:7px; font-size:12px; font-weight:600; color:var(--np-text-2); white-space:nowrap; overflow:hidden;">
+                  <span style="width:16px; height:16px; border-radius:4px; background:{{ p.color }}; color:#fff; font-size:9px; font-weight:800; display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto;">{{ p.mono }}</span>
+                  <span style="overflow:hidden; text-overflow:ellipsis;">{{ p.label }}</span>
+                </span>
+                <span style="flex:1; height:16px; background:var(--np-track); border-radius:4px; overflow:hidden;">
+                  <span style="display:block; height:100%; width:{{ p.width }}; background:{{ p.color }}; border-radius:4px;"></span>
+                </span>
+                <span style="flex:0 0 84px; text-align:right; font-size:12px; font-weight:700; color:var(--np-text); font-variant-numeric:tabular-nums;">{{ p.value }}</span>
+                <span style="flex:0 0 42px; text-align:right; font-size:11px; color:var(--np-text-faint); font-variant-numeric:tabular-nums;">{{ p.pct }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <sc-if value="{{ platformIsTable }}" hint-placeholder-val="">
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; font-size:12px;">
+              <thead>
+                <tr style="text-align:left; color:var(--np-text-3);">
+                  <th style="padding:6px 8px; font-weight:700; border-bottom:1px solid var(--np-border);">Plataforma</th>
+                  <th style="padding:6px 8px; font-weight:700; text-align:right; border-bottom:1px solid var(--np-border);">Sites</th>
+                  <th style="padding:6px 8px; font-weight:700; text-align:right; border-bottom:1px solid var(--np-border);">%</th>
+                </tr>
+              </thead>
+              <tbody>
+                <sc-for list="{{ platforms }}" as="p" hint-placeholder-count="9">
+                  <tr>
+                    <td style="padding:7px 8px; border-bottom:1px solid var(--np-divider); color:var(--np-text-2);"><span style="display:inline-flex; align-items:center; gap:7px;"><span style="width:10px; height:10px; border-radius:3px; background:{{ p.color }};"></span>{{ p.label }}</span></td>
+                    <td style="padding:7px 8px; border-bottom:1px solid var(--np-divider); text-align:right; font-weight:700; color:var(--np-text); font-variant-numeric:tabular-nums;">{{ p.value }}</td>
+                    <td style="padding:7px 8px; border-bottom:1px solid var(--np-divider); text-align:right; color:var(--np-text-3); font-variant-numeric:tabular-nums;">{{ p.pct }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </sc-if>
+      </div>
+    </section>
+  </div>
+
+  <!-- ======= row: ISP + geography ======= -->
+  <div style="padding:16px 26px 0; display:grid; grid-template-columns:repeat(auto-fit,minmax(390px,1fr)); gap:16px;">
+
+    <!-- hosting ISPs -->
+    <section style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card);">
+      <div style="padding:16px 18px 12px; border-bottom:1px solid var(--np-divider);">
+        <h2 style="margin:0; font-size:var(--np-fs-h1); font-weight:800; letter-spacing:-0.01em; color:var(--np-text);">Onde os prospetos estão alojados</h2>
+        <div style="margin-top:2px; font-size:12px; color:var(--np-text-3);">Top ISPs / hosts por nº de sites · <span style="color:var(--np-brand-ink); font-weight:700;">hosts com 10k+ = alvo competitivo</span></div>
+      </div>
+      <div style="padding:16px 18px 18px;">
+        <sc-for list="{{ isps }}" as="h" hint-placeholder-count="8">
+          <div onMouseEnter="{{ h.onEnter }}" onMouseMove="{{ h.onMove }}" onMouseLeave="{{ onLeave }}" style="display:flex; align-items:center; gap:10px; padding:5px 0; cursor:default;">
+            <span style="flex:0 0 130px; display:flex; align-items:center; gap:6px; font-size:12px; font-weight:600; color:var(--np-text-2); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+              {{ h.label }}
+              <sc-if value="{{ h.flag }}" hint-placeholder-val=""><span style="font-size:9px; font-weight:800; letter-spacing:0.04em; color:var(--np-brand); background:var(--np-brand-soft); padding:1px 5px; border-radius:999px;">PT</span></sc-if>
+            </span>
+            <span style="flex:1; height:16px; background:var(--np-track); border-radius:4px; overflow:hidden;">
+              <span style="display:block; height:100%; width:{{ h.width }}; background:{{ h.color }}; border-radius:4px;"></span>
+            </span>
+            <span style="flex:0 0 66px; text-align:right; font-size:12px; font-weight:700; color:var(--np-text); font-variant-numeric:tabular-nums;">{{ h.value }}</span>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <!-- geography -->
+    <section style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card);">
+      <div style="padding:16px 18px 12px; border-bottom:1px solid var(--np-divider);">
+        <h2 style="margin:0; font-size:var(--np-fs-h1); font-weight:800; letter-spacing:-0.01em; color:var(--np-text);">Geografia</h2>
+        <div style="margin-top:2px; font-size:12px; color:var(--np-text-3);">Distribuição por país e cidade</div>
+      </div>
+      <div style="padding:16px 18px 18px; display:flex; gap:20px; flex-wrap:wrap;">
+        <div style="flex:1 1 180px; min-width:170px;">
+          <div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--np-text-faint); margin-bottom:10px;">Países</div>
+          <sc-for list="{{ countries }}" as="c" hint-placeholder-count="5">
+            <div style="display:flex; align-items:center; gap:9px; padding:4px 0;">
+              <span style="flex:0 0 30px; font-size:12px; font-weight:700; color:var(--np-text-2);">{{ c.code }}</span>
+              <span style="flex:1; height:14px; background:var(--np-track); border-radius:4px; overflow:hidden;"><span style="display:block; height:100%; width:{{ c.width }}; background:{{ c.color }}; border-radius:4px;"></span></span>
+              <span style="flex:0 0 56px; text-align:right; font-size:12px; font-weight:700; color:var(--np-text); font-variant-numeric:tabular-nums;">{{ c.value }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex:1 1 150px; min-width:150px;">
+          <div style="font-size:11px; font-weight:700; letter-spacing:0.08em; text-transform:uppercase; color:var(--np-text-faint); margin-bottom:10px;">Principais cidades</div>
+          <sc-for list="{{ cities }}" as="ct" hint-placeholder-count="6">
+            <div style="display:flex; align-items:center; justify-content:space-between; padding:5px 0; border-bottom:1px solid var(--np-divider); font-size:12px;">
+              <span style="color:var(--np-text-2); font-weight:600;">{{ ct.name }}</span>
+              <span style="color:var(--np-text); font-weight:700; font-variant-numeric:tabular-nums;">{{ ct.value }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ======= growth over time ======= -->
+  <div style="padding:16px 26px 0;">
+    <section style="background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); box-shadow:var(--np-shadow-card);">
+      <div style="padding:16px 18px 12px; border-bottom:1px solid var(--np-divider); display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+        <div>
+          <h2 style="margin:0; font-size:var(--np-fs-h1); font-weight:800; letter-spacing:-0.01em; color:var(--np-text);">Crescimento da base</h2>
+          <div style="margin-top:2px; font-size:12px; color:var(--np-text-3);">Sites acumulados à medida que os dados entram</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:16px; font-size:12px; color:var(--np-text-2);">
+          <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:3px; border-radius:2px; background:var(--np-brand);"></span>Total de sites</span>
+          <span style="display:inline-flex; align-items:center; gap:6px;"><span style="width:14px; height:3px; border-radius:2px; background:var(--np-ok-mark);"></span>Qualificados</span>
+        </div>
+      </div>
+      <div style="padding:12px 8px 8px; overflow-x:auto;">
+        {{ areaChart }}
+      </div>
+    </section>
+  </div>
+
+  <!-- ======= quick segments ======= -->
+  <div style="padding:20px 26px 30px;">
+    <div style="font-size:11px; font-weight:700; letter-spacing:0.12em; text-transform:uppercase; color:var(--np-text-faint); margin-bottom:12px;">Segmentos rápidos</div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:14px;">
+      <sc-for list="{{ quickSegs }}" as="s" hint-placeholder-count="4">
+        <a href="Directory.dc.html" style="display:block; text-decoration:none; background:var(--np-surface); border:1px solid var(--np-border); border-radius:var(--np-radius-lg); padding:16px; box-shadow:var(--np-shadow-card); transition:border-color var(--np-dur) var(--np-ease), transform var(--np-dur) var(--np-ease);" style-hover="border-color:var(--np-brand-soft-bd); transform:translateY(-2px)">
+          <div style="display:flex; align-items:center; justify-content:space-between;">
+            <span style="display:inline-flex; width:32px; height:32px; border-radius:9px; background:{{ s.tileBg }}; color:{{ s.tileColor }}; align-items:center; justify-content:center;">{{ s.icon }}</span>
+            <span style="font-size:20px; font-weight:800; color:var(--np-text); font-variant-numeric:tabular-nums;">{{ s.count }}</span>
+          </div>
+          <div style="margin-top:12px; font-size:13px; font-weight:700; color:var(--np-text);">{{ s.title }}</div>
+          <div style="margin-top:3px; font-size:12px; color:var(--np-text-3); line-height:1.45;">{{ s.desc }}</div>
+          <div style="margin-top:11px; display:flex; align-items:center; gap:5px; font-size:12px; font-weight:700; color:var(--np-brand-ink);">Ver no diretório {{ arrowIcon }}</div>
+        </a>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="height:8px;"></div>
+</dc-import>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:1100}}">
+class Component extends DCLogic {
+  state = { range: '90d', platformView: 'chart', tip: { show: false, x: 0, y: 0, title: '', rows: [] } };
+
+  // ---------- icons ----------
+  ic(name, size = 14) {
+    const P = {
+      globe: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z', 'M2 12h20', 'M12 2a15 15 0 0 1 0 20', 'M12 2a15 15 0 0 0 0 20'],
+      power: ['M12 2v10', 'M6.3 6.3a8 8 0 1 0 11.4 0'],
+      check: ['M20 6 9 17l-5-5'],
+      building: ['M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z', 'M9 7h1', 'M14 7h1', 'M9 11h1', 'M14 11h1', 'M9 15h1', 'M14 15h1'],
+      users: ['M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2', 'M9 7m-4 0a4 4 0 1 0 8 0a4 4 0 1 0-8 0', 'M22 21v-2a4 4 0 0 0-3-3.87', 'M16 3.13a4 4 0 0 1 0 7.75'],
+      mailcheck: ['M22 13V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h9', 'm2 7 10 6 10-6', 'm16 19 2 2 4-4'],
+      download: ['M12 3v12', 'm7 10 5 5 5-5', 'M5 21h14'],
+      arrow: ['M5 12h14', 'm12 5 7 7-7 7'],
+      wp: ['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Z', 'm4 8 4 11 3-8 3 8 4-11'],
+      cart: ['M3 4h2l2 12h11', 'M7 16h11l2-8H6', 'M9 20m-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0', 'M17 20m-1 0a1 1 0 1 0 2 0a1 1 0 1 0-2 0'],
+      layers: ['m12 2 9 5-9 5-9-5 9-5Z', 'm3 12 9 5 9-5', 'm3 17 9 5 9-5'],
+      clock: ['M12 12m-9 0a9 9 0 1 0 18 0a9 9 0 1 0-18 0', 'M12 7v5l3 2'],
+    };
+    const paths = (P[name] || []).map((d, i) => React.createElement('path', { key: i, d }));
+    return React.createElement('svg', { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round', style: { display: 'block' } }, paths);
+  }
+
+  spark(points, color) {
+    const w = 66, h = 26, max = Math.max(...points), min = Math.min(...points);
+    const rng = (max - min) || 1;
+    const pts = points.map((v, i) => [(i / (points.length - 1)) * w, h - 3 - ((v - min) / rng) * (h - 6)]);
+    const line = pts.map(p => p[0].toFixed(1) + ',' + p[1].toFixed(1)).join(' ');
+    const area = 'M' + pts[0][0].toFixed(1) + ',' + h + ' L' + line.replace(/ /g, ' L') + ' L' + w + ',' + h + ' Z';
+    return React.createElement('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}`, style: { display: 'block' } }, [
+      React.createElement('polygon', { key: 'a', points: `0,${h} ${line} ${w},${h}`, fill: color, opacity: 0.14 }),
+      React.createElement('polyline', { key: 'l', points: line, fill: 'none', stroke: color, strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }),
+    ]);
+  }
+
+  // ---------- tooltip handlers ----------
+  setTip = (e, title, rows) => this.setState({ tip: { show: true, x: e.clientX, y: e.clientY, title, rows } });
+  moveTip = (e) => this.setState(s => ({ tip: { ...s.tip, x: e.clientX, y: e.clientY } }));
+  onLeave = () => this.setState(s => ({ tip: { ...s.tip, show: false } }));
+
+  fmt(n) { return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ' '); }
+
+  renderVals() {
+    const brand = 'var(--np-brand)';
+    const catColors = {
+      wordpress: 'var(--cat-wordpress)', woocommerce: 'var(--cat-woocommerce)', prestashop: 'var(--cat-prestashop)',
+      wix: 'var(--cat-wix)', joomla: 'var(--cat-joomla)', drupal: 'var(--cat-drupal)', shopify: 'var(--cat-shopify)',
+      squarespace: 'var(--cat-squarespace)', custom: 'var(--cat-custom)'
+    };
+
+    // ---- range selector ----
+    const ranges = ['30d', '90d', '12m', 'Tudo'].map((r) => {
+      const active = this.state.range === (r === 'Tudo' ? 'all' : r);
+      const key = r === 'Tudo' ? 'all' : r;
+      return {
+        label: r,
+        onClick: () => this.setState({ range: key }),
+        style: {
+          height: '30px', padding: '0 12px', border: 'none', borderRadius: '6px',
+          fontFamily: 'inherit', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+          color: active ? 'var(--np-on-brand)' : 'var(--np-text-3)',
+          background: active ? 'var(--np-brand-fill)' : 'transparent',
+        },
+      };
+    });
+
+    // ---- KPIs ----
+    const kpi = (label, icon, value, delta, up, spark) => ({
+      label, icon: this.ic(icon, 15), value,
+      delta, deltaIcon: up ? '▲ ' : '▼ ',
+      deltaColor: up ? 'var(--np-ok)' : 'var(--np-danger)',
+      deltaBg: up ? 'var(--np-ok-soft)' : 'var(--np-danger-soft)',
+      spark: this.spark(spark, up ? 'var(--np-ok-mark)' : 'var(--np-danger-mark)'),
+    });
+    const kpis = [
+      kpi('Sites', 'globe', '78 240', '+3.1%', true, [61, 63, 64, 66, 69, 72, 75, 78]),
+      kpi('Live', 'power', '64 105', '+2.4%', true, [50, 52, 53, 55, 57, 60, 62, 64]),
+      kpi('Qualificados', 'check', '18 342', '+6.8%', true, [11, 12, 13, 14, 15, 16, 17, 18]),
+      kpi('Empresas', 'building', '75 110', '+2.9%', true, [59, 61, 63, 65, 68, 70, 73, 75]),
+      kpi('Contactos', 'users', '61 903', '+4.2%', true, [44, 47, 50, 52, 55, 57, 59, 62]),
+      kpi('E-mails verif.', 'mailcheck', '22 470', '+5.5%', true, [14, 15, 17, 18, 19, 20, 21, 22]),
+    ];
+
+    // ---- funnel ----
+    const total = 78240, live = 64105, qual = 18342;
+    const funnel = [
+      { label: 'Total de sites', value: this.fmt(total), width: '100%', pctLabel: '100%', color: 'var(--np-neutral-mark)', conv: null },
+      { label: 'Sites live (HTTP 2xx)', value: this.fmt(live), width: (live / total * 100).toFixed(1) + '%', pctLabel: (live / total * 100).toFixed(1) + '%', color: 'var(--cat-wordpress)', conv: (live / total * 100).toFixed(1) + '% do total estão online' },
+      { label: 'Qualificados', value: this.fmt(qual), width: (qual / total * 100).toFixed(1) + '%', pctLabel: (qual / total * 100).toFixed(1) + '%', color: 'var(--np-ok-mark)', conv: (qual / live * 100).toFixed(1) + '% dos sites live qualificam para manutenção / hosting' },
+    ];
+
+    // ---- platforms ----
+    const platRaw = [
+      ['WordPress', 32240, 'wordpress', 'W'], ['WooCommerce', 14560, 'woocommerce', 'Wo'],
+      ['Wix', 8920, 'wix', 'Wx'], ['PrestaShop', 6110, 'prestashop', 'P'],
+      ['Shopify', 4780, 'shopify', 'S'], ['Joomla', 3680, 'joomla', 'J'],
+      ['Squarespace', 3050, 'squarespace', 'Sq'], ['Drupal', 2190, 'drupal', 'D'], ['Custom / outro', 2710, 'custom', 'C'],
+    ];
+    const platMax = Math.max(...platRaw.map(p => p[1]));
+    const platforms = platRaw.map(([label, val, key, mono]) => ({
+      label, mono, value: this.fmt(val), pct: (val / total * 100).toFixed(1) + '%',
+      width: (val / platMax * 100).toFixed(1) + '%', color: catColors[key],
+      onEnter: (e) => this.setTip(e, label, [
+        { k: 'Sites', v: this.fmt(val), color: catColors[key] },
+        { k: '% da base', v: (val / total * 100).toFixed(1) + '%', color: 'transparent' },
+      ]),
+      onMove: this.moveTip,
+    }));
+
+    // ---- ISPs ----
+    const ispRaw = [
+      ['OVHcloud', 11240, false], ['Cloudflare', 9880, false], ['Hetzner', 7410, false],
+      ['Amazon AWS', 6320, false], ['Google Cloud', 4180, false], ['Amen (PTISP)', 3560, true],
+      ['Dominios.pt', 2240, true], ['1&1 IONOS', 2010, false],
+    ];
+    const ispMax = Math.max(...ispRaw.map(p => p[1]));
+    const isps = ispRaw.map(([label, val, flag]) => ({
+      label, value: this.fmt(val), flag,
+      width: (val / ispMax * 100).toFixed(1) + '%',
+      color: val >= 10000 ? 'var(--np-brand)' : 'var(--cat-wordpress)',
+      onEnter: (e) => this.setTip(e, label, [
+        { k: 'Sites alojados', v: this.fmt(val), color: val >= 10000 ? 'var(--np-brand)' : 'var(--cat-wordpress)' },
+        { k: 'Sinal', v: val >= 10000 ? 'Alvo competitivo' : 'Padrão', color: 'transparent' },
+      ]),
+      onMove: this.moveTip,
+    }));
+
+    // ---- geography ----
+    const ctRaw = [['PT', 38100], ['NL', 12400], ['SE', 9900], ['FI', 8600], ['NO', 6200]];
+    const ctMax = Math.max(...ctRaw.map(c => c[1]));
+    const palette = ['var(--cat-wordpress)', 'var(--cat-prestashop)', 'var(--cat-wix)', 'var(--cat-joomla)', 'var(--cat-drupal)'];
+    const countries = ctRaw.map(([code, val], i) => ({ code, value: this.fmt(val), width: (val / ctMax * 100).toFixed(1) + '%', color: palette[i] }));
+    const cities = [['Lisboa', 14820], ['Porto', 9310], ['Amesterdão', 6640], ['Estocolmo', 5120], ['Helsínquia', 4380], ['Braga', 3910]]
+      .map(([name, v]) => ({ name, value: this.fmt(v) }));
+
+    // ---- growth area chart ----
+    const areaChart = this.buildArea();
+
+    // ---- quick segments ----
+    const seg = (icon, tileBg, tileColor, count, title, desc) => ({ icon: this.ic(icon, 16), tileBg, tileColor, count, title, desc, arrowIcon: this.ic('arrow', 13) });
+    const quickSegs = [
+      seg('cart', 'var(--cat-woocommerce)', '#fff', '4 118', 'WooCommerce sem contacto', 'Lojas ativas sem decisor identificado — prioridade de enriquecimento.'),
+      seg('wp', 'var(--np-brand-soft)', 'var(--np-brand)', '6 540', 'WordPress desatualizado', 'Core anterior a 6.0 — argumento direto para manutenção.'),
+      seg('layers', 'var(--np-info-soft)', 'var(--np-info)', '9 442', 'Alojados em OVH · não qualificados', 'Grande bolsa por triar num único host.'),
+      seg('clock', 'var(--np-ok-soft)', 'var(--np-ok)', '312', 'Novos sites .nl esta semana', 'Domínios recém-detetados no mercado holandês.'),
+    ];
+
+    return {
+      ranges, kpis, funnel, platforms, isps, countries, cities, areaChart, quickSegs,
+      downloadIcon: this.ic('download', 15), arrowIcon: this.ic('arrow', 13),
+      tip: this.state.tip,
+      tipStyle: { position: 'fixed', left: (this.state.tip.x + 14) + 'px', top: (this.state.tip.y + 14) + 'px', zIndex: 'var(--np-z-tooltip)', background: 'var(--np-tooltip-bg)', color: 'var(--np-tooltip-text)', padding: '9px 11px', borderRadius: '8px', boxShadow: 'var(--np-shadow-pop)', pointerEvents: 'none', minWidth: '150px' },
+      platformIsChart: this.state.platformView === 'chart',
+      platformIsTable: this.state.platformView === 'table',
+      togglePlatformChart: () => this.setState({ platformView: 'chart' }),
+      togglePlatformTable: () => this.setState({ platformView: 'table' }),
+      platformChartBtn: this.segBtn(this.state.platformView === 'chart'),
+      platformTableBtn: this.segBtn(this.state.platformView === 'table'),
+    };
+  }
+
+  segBtn(active) {
+    return {
+      height: '26px', padding: '0 11px', border: 'none', borderRadius: '5px',
+      fontFamily: 'inherit', fontSize: '12px', fontWeight: 700, cursor: 'pointer',
+      color: active ? 'var(--np-text)' : 'var(--np-text-3)',
+      background: active ? 'var(--np-surface)' : 'transparent',
+      boxShadow: active ? 'var(--np-shadow-card)' : 'none',
+    };
+  }
+
+  buildArea() {
+    const W = 900, H = 220, padL = 44, padR = 16, padT = 14, padB = 26;
+    const months = ['Nov', 'Dez', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun'];
+    const totalSeries = [40100, 45200, 50600, 56100, 61800, 68400, 73900, 78240];
+    const qualSeries = [8200, 9600, 11100, 12800, 14400, 16000, 17300, 18342];
+    const maxY = 80000;
+    const x = (i) => padL + (i / (months.length - 1)) * (W - padL - padR);
+    const y = (v) => padT + (1 - v / maxY) * (H - padT - padB);
+    const lineOf = (s) => s.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const areaOf = (s) => `M${x(0).toFixed(1)},${y(0).toFixed(1)} L` + s.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' L') + ` L${x(months.length - 1).toFixed(1)},${y(0).toFixed(1)} Z`;
+
+    const gridVals = [0, 20000, 40000, 60000, 80000];
+    const grid = gridVals.map((gv, i) => React.createElement('g', { key: 'g' + i }, [
+      React.createElement('line', { key: 'l', x1: padL, x2: W - padR, y1: y(gv), y2: y(gv), stroke: 'var(--np-grid)', strokeWidth: 1 }),
+      React.createElement('text', { key: 't', x: padL - 8, y: y(gv) + 3, textAnchor: 'end', fill: 'var(--np-text-faint)', fontSize: 10, fontFamily: 'var(--np-font)' }, gv === 0 ? '0' : (gv / 1000) + 'k'),
+    ]));
+    const xlabels = months.map((m, i) => React.createElement('text', { key: 'x' + i, x: x(i), y: H - 8, textAnchor: 'middle', fill: 'var(--np-text-faint)', fontSize: 10, fontFamily: 'var(--np-font)' }, m));
+
+    // selective direct labels: only the final point of each series
+    const lastI = months.length - 1;
+    const endLabels = [
+      React.createElement('g', { key: 'e1' }, [
+        React.createElement('circle', { key: 'c', cx: x(lastI), cy: y(totalSeries[lastI]), r: 3.5, fill: 'var(--np-brand)' }),
+        React.createElement('text', { key: 't', x: x(lastI), y: y(totalSeries[lastI]) - 9, textAnchor: 'end', fill: 'var(--np-text)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--np-font)' }, '78 240'),
+      ]),
+      React.createElement('g', { key: 'e2' }, [
+        React.createElement('circle', { key: 'c', cx: x(lastI), cy: y(qualSeries[lastI]), r: 3.5, fill: 'var(--np-ok-mark)' }),
+        React.createElement('text', { key: 't', x: x(lastI), y: y(qualSeries[lastI]) + 15, textAnchor: 'end', fill: 'var(--np-ok)', fontSize: 11, fontWeight: 800, fontFamily: 'var(--np-font)' }, '18 342'),
+      ]),
+    ];
+
+    return React.createElement('svg', { viewBox: `0 0 ${W} ${H}`, width: '100%', style: { display: 'block', minWidth: '560px', height: 'auto' }, preserveAspectRatio: 'none' }, [
+      React.createElement('defs', { key: 'd' }, [
+        React.createElement('linearGradient', { key: 'g1', id: 'npAreaBrand', x1: 0, y1: 0, x2: 0, y2: 1 }, [
+          React.createElement('stop', { key: 0, offset: '0%', stopColor: 'var(--np-brand)', stopOpacity: 0.28 }),
+          React.createElement('stop', { key: 1, offset: '100%', stopColor: 'var(--np-brand)', stopOpacity: 0.02 }),
+        ]),
+      ]),
+      React.createElement('g', { key: 'grid' }, grid),
+      React.createElement('path', { key: 'area', d: areaOf(totalSeries), fill: 'url(#npAreaBrand)' }),
+      React.createElement('polyline', { key: 'ltot', points: lineOf(totalSeries), fill: 'none', stroke: 'var(--np-brand)', strokeWidth: 2.4, strokeLinecap: 'round', strokeLinejoin: 'round' }),
+      React.createElement('polyline', { key: 'lqual', points: lineOf(qualSeries), fill: 'none', stroke: 'var(--np-ok-mark)', strokeWidth: 2.2, strokeLinecap: 'round', strokeLinejoin: 'round', strokeDasharray: '1 0' }),
+      React.createElement('g', { key: 'xl' }, xlabels),
+      React.createElement('g', { key: 'el' }, endLabels),
+    ]);
+  }
+}
+</script>
+</body>
+</html>

@@ -231,6 +231,11 @@ core/RAM pinning**; a dedicated VM is the portable alternative. Scale plan: `.cl
 > Postgres tuned to the RAM (`shared_buffers ~16 GB`, `effective_cache_size ~44 GB`, `synchronous_commit=off`,
 > `wal_compression=on`). Full tuning + a ~10 GB `pg_dump | pg_restore` migration in the runbook above.
 
+> 📊 **Fleet benchmark** — measured throughput per job type × per worker host (specs + worker counts),
+> combined-fleet peaks, and the tuning levers (per-consumer `maxAckPending` cap, `FINGERPRINT_CONC`,
+> host load ceilings, why the DB is never the bottleneck): **[`BENCHMARK.md`](BENCHMARK.md)**. Living
+> doc — update it whenever you tune concurrency, change a VM's specs, or add a worker host.
+
 ### Services & ports
 
 Every container we run, with its **published host port** (or why it has none). Two

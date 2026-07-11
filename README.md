@@ -1087,6 +1087,8 @@ db/data-quality.sql      Read-only coverage/gaps/red-flags report per TLD
 config/verify-providers.example.json  API-pool config shape (multi-key / keyless / proxy)
 config/verify-proxies.example.json  Shape of the clean-proxy config (outreach Phase 1)
 docs/distributed-fleet.md  Runbook: free-tier cloud VMs (Debian+Docker+Tailscale) verify fleet
+docs/runbook-db-host.md    Runbook: dedicated Postgres+PgBouncer+Tailscale CT (Proxmox) — the "fat DB host"
+docs/runbook-worker-vms.md Runbook: worker VMs (Docker+Tailscale) for a 2nd Proxmox host + free clouds
 docs/outreach-ops/       Provisioning runbooks: port-25 gate, blocklists, Dante, Reacher, DMS, warm-up
 ```
 

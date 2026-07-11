@@ -14,8 +14,15 @@ say() { echo "$(date +%T) $*" | tee -a "$ORCH"; }
 EC=${CONC_ENRICH:-18}     # concorrência de enrich por stream
 XC=${CONC_EXTRACT:-16}    # concorrência de extract por stream
 
+# Postgres migrado p/ o CT np-db → psql via `docker run` (o host não tem psql). Creds/host do .env.
+PASS=$(grep -E '^POSTGRES_PASSWORD=' docker/.env | cut -d= -f2-)
+PGHOST=$(grep -E '^PG_WRITE_HOST=' docker/.env | cut -d= -f2-); PGHOST=${PGHOST:-100.77.60.44}
+PGPORT=$(grep -E '^PG_DIRECT_PORT=' docker/.env | cut -d= -f2-); PGPORT=${PGPORT:-5432}
+IMG=${PG_CLIENT_IMAGE:-postgis/postgis:16-3.4-alpine}
+psql_ct() { docker run --rm -e PGPASSWORD="$PASS" "$IMG" psql -h "$PGHOST" -p "$PGPORT" -U netprospect -d netprospect "$@"; }
+
 left_tld() { # nº de qualificados .$1 ainda sem contactos
-  docker exec -i netprospect-postgres-1 psql -U netprospect -d netprospect -tAc \
+  psql_ct -tAc \
     "SELECT count(*) FROM sites WHERE qualified AND contacts_checked_at IS NULL AND domain LIKE '%.$1';" 2>/dev/null | tr -d '[:space:]'
 }
 

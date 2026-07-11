@@ -10,55 +10,56 @@
 name: netprospect
 
 services:
-  postgres:
-    image: postgis/postgis:16-3.4-alpine
-    restart: unless-stopped
-    # Tuning p/ a máquina (125G RAM, 12 vCPU): o default (shared_buffers 128MB, work_mem
-    # 4MB) estrangulava o Directus sob concorrência (3 host jobs + workers) → 503 "under
-    # pressure". Isto dá folga p/ MUITO mais calls simultâneas. Ajustar se a RAM for precisa
-    # noutro lado. shm_size p/ os parallel workers.
-    shm_size: 2gb
-    command:
-      - postgres
-      - -c
-      - shared_buffers=12GB
-      - -c
-      - effective_cache_size=64GB
-      - -c
-      - work_mem=48MB
-      - -c
-      - maintenance_work_mem=2GB
-      - -c
-      - max_connections=200
-      - -c
-      - max_worker_processes=12
-      - -c
-      - max_parallel_workers=8
-      - -c
-      - max_parallel_workers_per_gather=4
-      - -c
-      - random_page_cost=1.1
-      - -c
-      - effective_io_concurrency=200
-      - -c
-      - checkpoint_completion_target=0.9
-      - -c
-      - max_wal_size=8GB
-      - -c
-      - wal_buffers=64MB
-      - -c
-      - synchronous_commit=off
-    environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
-    volumes:
-      - ./.data/postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
-      interval: 10s
-      timeout: 5s
-      retries: 5
+  # --- MIGRADO p/ o CT np-db (100.77.60.44) — runbook passo 9. Rollback: git checkout. ---
+#   postgres:
+#     image: postgis/postgis:16-3.4-alpine
+#     restart: unless-stopped
+#     # Tuning p/ a máquina (125G RAM, 12 vCPU): o default (shared_buffers 128MB, work_mem
+#     # 4MB) estrangulava o Directus sob concorrência (3 host jobs + workers) → 503 "under
+#     # pressure". Isto dá folga p/ MUITO mais calls simultâneas. Ajustar se a RAM for precisa
+#     # noutro lado. shm_size p/ os parallel workers.
+#     shm_size: 2gb
+#     command:
+#       - postgres
+#       - -c
+#       - shared_buffers=12GB
+#       - -c
+#       - effective_cache_size=64GB
+#       - -c
+#       - work_mem=48MB
+#       - -c
+#       - maintenance_work_mem=2GB
+#       - -c
+#       - max_connections=200
+#       - -c
+#       - max_worker_processes=12
+#       - -c
+#       - max_parallel_workers=8
+#       - -c
+#       - max_parallel_workers_per_gather=4
+#       - -c
+#       - random_page_cost=1.1
+#       - -c
+#       - effective_io_concurrency=200
+#       - -c
+#       - checkpoint_completion_target=0.9
+#       - -c
+#       - max_wal_size=8GB
+#       - -c
+#       - wal_buffers=64MB
+#       - -c
+#       - synchronous_commit=off
+#     environment:
+#       POSTGRES_USER: ${POSTGRES_USER}
+#       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+#       POSTGRES_DB: ${POSTGRES_DB}
+#     volumes:
+#       - ./.data/postgres:/var/lib/postgresql/data
+#     healthcheck:
+#       test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}']
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
 
   # PgBouncer (transaction pooling) — NÃO é para o Directus (que precisa de estado de
   # sessão: timezone/SET, que o modo transaction descarta). É para o CAMINHO DE ESCRITA
@@ -66,46 +67,44 @@ services:
   # abrir ligações ao Postgres afogam-no (cada backend = processo). O PgBouncer multiplexa
   # centenas de clientes em ~25-40 backends reais. Autocommit/upserts simples = seguros em
   # transaction mode. Exposto em 127.0.0.1:6432 (tailnet p/ a frota: pôr PGB_BIND=<ip-ts>).
-  pgbouncer:
-    image: edoburu/pgbouncer:latest
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      DB_HOST: postgres
-      DB_PORT: '5432'
-      DB_USER: ${POSTGRES_USER}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
-      DB_NAME: ${POSTGRES_DB}
-      AUTH_TYPE: scram-sha-256
-      POOL_MODE: transaction
-      MAX_CLIENT_CONN: '1000'
-      DEFAULT_POOL_SIZE: '25'
-      MIN_POOL_SIZE: '5'
-      RESERVE_POOL_SIZE: '5'
-      MAX_DB_CONNECTIONS: '40'
-      SERVER_RESET_QUERY: DISCARD ALL
-      # o driver pg envia estes na ligação; em transaction mode têm de ser ignorados
-      IGNORE_STARTUP_PARAMETERS: extra_float_digits,search_path,options,application_name
-      ADMIN_USERS: ${POSTGRES_USER}
-      STATS_USERS: ${POSTGRES_USER}
-    ulimits:
-      nofile: { soft: 65536, hard: 65536 }  # 1000 clientes → ~1062 fds; o default 1024 não chega
-    ports:
-      - '${PGB_BIND:-127.0.0.1}:6432:5432'
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} || exit 1']
-      interval: 15s
-      timeout: 5s
-      retries: 5
+  # --- MIGRADO p/ o CT np-db (PgBouncer :6432) — runbook passo 9. Rollback: git checkout. ---
+#   pgbouncer:
+#     image: edoburu/pgbouncer:latest
+#     restart: unless-stopped
+#     depends_on:
+#       postgres:
+#         condition: service_healthy
+#     environment:
+#       DB_HOST: postgres
+#       DB_PORT: '5432'
+#       DB_USER: ${POSTGRES_USER}
+#       DB_PASSWORD: ${POSTGRES_PASSWORD}
+#       DB_NAME: ${POSTGRES_DB}
+#       AUTH_TYPE: scram-sha-256
+#       POOL_MODE: transaction
+#       MAX_CLIENT_CONN: '1000'
+#       DEFAULT_POOL_SIZE: '25'
+#       MIN_POOL_SIZE: '5'
+#       RESERVE_POOL_SIZE: '5'
+#       MAX_DB_CONNECTIONS: '40'
+#       SERVER_RESET_QUERY: DISCARD ALL
+#       # o driver pg envia estes na ligação; em transaction mode têm de ser ignorados
+#       IGNORE_STARTUP_PARAMETERS: extra_float_digits,search_path,options,application_name
+#       ADMIN_USERS: ${POSTGRES_USER}
+#       STATS_USERS: ${POSTGRES_USER}
+#     ulimits:
+#       nofile: { soft: 65536, hard: 65536 }  # 1000 clientes → ~1062 fds; o default 1024 não chega
+#     ports:
+#       - '${PGB_BIND:-127.0.0.1}:6432:5432'
+#     healthcheck:
+#       test: ['CMD-SHELL', 'pg_isready -h 127.0.0.1 -p 5432 -U ${POSTGRES_USER} || exit 1']
+#       interval: 15s
+#       timeout: 5s
+#       retries: 5
 
   directus:
     image: directus/directus:11.3.5
     restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
     environment:
       KEY: ${DIRECTUS_KEY}
       SECRET: ${DIRECTUS_SECRET}
@@ -115,7 +114,7 @@ services:
       # É com este token que bootstrap-directus.js e enrich-sites.js autenticam.
       ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
       DB_CLIENT: pg
-      DB_HOST: postgres
+      DB_HOST: 100.77.60.44
       DB_PORT: '5432'
       DB_DATABASE: ${POSTGRES_DB}
       DB_USER: ${POSTGRES_USER}
@@ -238,8 +237,6 @@ services:
         condition: service_healthy
       nats:
         condition: service_started
-      pgbouncer:
-        condition: service_started
     environment:
       DIRECTUS_URL: http://directus:8055
       DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
@@ -295,8 +292,6 @@ services:
       directus:
         condition: service_healthy
       nats:
-        condition: service_started
-      pgbouncer:
         condition: service_started
     environment:
       DIRECTUS_URL: http://directus:8055
@@ -363,8 +358,6 @@ services:
     restart: unless-stopped
     init: true
     depends_on:
-      pgbouncer:
-        condition: service_started
       nats:
         condition: service_started
     environment:
@@ -488,4 +481,3 @@ services:
       interval: 15s
       timeout: 5s
       retries: 5
-

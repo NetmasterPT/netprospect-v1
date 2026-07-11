@@ -12,11 +12,16 @@ import { loadScoreConfig } from './lib/lead-score.js';
 import { loadEnv } from './lib/env.js';
 
 loadEnv();
-const PG = process.env.PG_CONTAINER || 'netprospect-postgres-1';
 const DB = process.env.POSTGRES_DB || 'netprospect';
 const USER = process.env.POSTGRES_USER || 'netprospect';
 const DRY = process.argv.includes('--dry-run');
-const psql = (sql) => execFileSync('docker', ['exec', '-i', PG, 'psql', '-U', USER, '-d', DB, '-tAc', sql], { encoding: 'utf8' }).trim();
+// Postgres migrado p/ o CT np-db → psql via `docker run` (o host não tem psql binário) contra
+// o CT :5432 direto (bulk SQL, não o pgbouncer). Config via env; imagem já puxada localmente.
+const HOST = process.env.PG_WRITE_HOST || '100.77.60.44';
+const PORT = process.env.PG_DIRECT_PORT || '5432';
+const PASS = process.env.POSTGRES_PASSWORD || '';
+const IMG = process.env.PG_CLIENT_IMAGE || 'postgis/postgis:16-3.4-alpine';
+const psql = (sql) => execFileSync('docker', ['run', '--rm', '-e', `PGPASSWORD=${PASS}`, IMG, 'psql', '-h', HOST, '-p', PORT, '-U', USER, '-d', DB, '-tAc', sql], { encoding: 'utf8' }).trim();
 
 function signalSql(sig, ids) {
   switch (sig) {

@@ -13,4 +13,6 @@ out/*.raw
 out/*.progress.json
 package-lock.json
 data/
-out/
+docker/docker-compose.yml.bak.premigrate
+docker/.env.bak.premigrate
+docker/docker-compose.repoint.yml

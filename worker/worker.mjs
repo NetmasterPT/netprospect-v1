@@ -35,6 +35,10 @@ const CONTACTS_CONC = Math.max(1, parseInt(process.env.CONTACTS_CONCURRENCY || '
 // DOMAIN_HEALTH_CONC=N quando o backfill tem de escorrer sem saturar o CPU (partilha
 // a máquina com os streams de enrich). Default preserva o comportamento normal.
 const DH_CONC = Math.max(1, parseInt(process.env.DOMAIN_HEALTH_CONC || '8', 10));
+// O fingerprint (re-fetch + parse da homepage com wappalyzer) é CPU-PESADO — concorrência
+// PRÓPRIA (não partilha o DH_CONC nem o antigo hardcode 8) para poder correr o backfill de
+// cms a ritmo baixo sem saturar o CPU: N_workers × FINGERPRINT_CONC parses concorrentes.
+const FINGERPRINT_CONC = Math.max(1, parseInt(process.env.FINGERPRINT_CONC || '4', 10));
 // Cada job ssl/whois/dnsprovider publica um `score` (recalcula qualify+lead-score →
 // leitura+escrita Directus + escrita ClickHouse). Num backfill grande essa cascata é
 // que satura o Directus. Baixar SCORE_CONC estrangula a amplificação.
@@ -360,7 +364,7 @@ async function writerLoop(js) {
 const HEAVY = new Set(['industry', 'lighthouse_mobile', 'lighthouse_desktop', 'nuclei', 'wpscan', 'gmb', 'audit_ondemand', 'audit_qualified', 'audit_rest']);
 const DRAIN = new Set(['audit_ondemand', 'audit_qualified', 'audit_rest']);
 // Concorrência por consumer (heavy = 1; leves = mais).
-const CONC = { enrich: ENRICH_CONC, contacts: CONTACTS_CONC, fetch: 8, dns: 12, geoip: 12, fingerprint: 8, social: 8, locality: 8, emailauth: 10, traffic: 20, score: SCORE_CONC, ssl: DH_CONC, whois: Math.max(1, Math.ceil(DH_CONC / 2)), dnsprovider: DH_CONC, subdomains: 2, verify: VERIFY_CONC, discover: 2, campaign_generate: 4, campaign_send: 6 };
+const CONC = { enrich: ENRICH_CONC, contacts: CONTACTS_CONC, fetch: 8, dns: 12, geoip: 12, fingerprint: FINGERPRINT_CONC, social: 8, locality: 8, emailauth: 10, traffic: 20, score: SCORE_CONC, ssl: DH_CONC, whois: Math.max(1, Math.ceil(DH_CONC / 2)), dnsprovider: DH_CONC, subdomains: 2, verify: VERIFY_CONC, discover: 2, campaign_generate: 4, campaign_send: 6 };
 
 // --- Arranque ---------------------------------------------------------------
 async function main() {

@@ -34,6 +34,21 @@ const PAGE = 500;
 const SUBJ = { ssl: SUBJECTS.ssl, dnsprovider: SUBJECTS.dnsprovider, whois: SUBJECTS.whois, cms: SUBJECTS.fingerprint };
 const RESUME_FIELD = { ssl: 'ssl_grade', dnsprovider: 'dns_provider', whois: 'whois_checked_at', cms: 'cms_version' };
 
+// Sharding por hash do domínio p/ dar uma fatia DISJUNTA a uma fila dedicada (ex.: DE1):
+//   --shard=i/N        → SÓ os domínios com hash%N==i        (o feeder do DE1)
+//   --shard-not=i/N    → SALTA esses                          (o enqueue principal salta o shard do DE1)
+//   --subject-prefix=X → publica em `X`+subject (ex.: "de1." → de1.jobs.fingerprint)
+// O hash é igual dos dois lados ⇒ shards complementares ⇒ zero duplicados.
+const SHARD = flag('shard', null);
+const SHARD_NOT = flag('shard-not', null);
+const SUBJ_PREFIX = flag('subject-prefix', '');
+const dhash = (s) => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0; return h; };
+const shardKeep = (domain) => {
+  if (SHARD) { const [i, n] = SHARD.split('/').map(Number); return dhash(domain) % n === i; }
+  if (SHARD_NOT) { const [i, n] = SHARD_NOT.split('/').map(Number); return dhash(domain) % n !== i; }
+  return true;
+};
+
 async function main() {
   const bad = ONLY.filter((o) => !SUBJ[o]);
   if (bad.length) { console.error(`--only inválido: ${bad.join(',')} (válidos: ${Object.keys(SUBJ).join(',')})`); process.exit(1); }
@@ -51,12 +66,15 @@ async function main() {
   let lastId = 0, sites = 0, jobs = 0;
   for (;;) {
     if (LIMIT && sites >= LIMIT) break;
-    const pageSize = LIMIT ? Math.min(PAGE, LIMIT - sites) : PAGE;
+    // Ao fazer shard lemos a página cheia (a maioria é saltada) — o LIMIT conta os MANTIDOS.
+    const pageSize = (SHARD || SHARD_NOT) ? PAGE : (LIMIT ? Math.min(PAGE, LIMIT - sites) : PAGE);
     const rows = await client.request(readItems('sites', { filter: { ...base, id: { _gt: lastId } }, fields: ['id', 'domain'], sort: ['id'], limit: pageSize }));
     if (!rows.length) break;
     lastId = rows[rows.length - 1].id;
     for (const s of rows) {
-      for (const o of ONLY) { await publishJob(js, SUBJ[o], { domain: s.domain, siteId: s.id, force: FORCE }, { msgId: `${o}:${s.domain}` }); jobs++; }
+      if (!shardKeep(s.domain)) continue;
+      if (LIMIT && sites >= LIMIT) break;
+      for (const o of ONLY) { await publishJob(js, SUBJ_PREFIX + SUBJ[o], { domain: s.domain, siteId: s.id, force: FORCE }, { msgId: `${o}:${s.domain}` }); jobs++; }
       sites++;
     }
     console.log(`  ${sites} sites / ${jobs} jobs enfileirados`);

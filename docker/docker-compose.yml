@@ -398,6 +398,10 @@ services:
   #   docker compose -f docker/docker-compose.yml --profile audit up -d ollama ollama-init
   ollama:
     image: ollama/ollama:latest
+    # O llama.cpp usa TODOS os cores por inferência: medido a 1427% CPU (14 de 18 cores),
+    # estrangulando as auditorias que o chamam. Limitar é obrigatório enquanto partilhar o
+    # host da app (o fix próprio é uma VM de IA dedicada — ver docs/stack-isolation.md).
+    cpus: '${OLLAMA_CPUS:-6}'
     profiles: ['audit']
     restart: unless-stopped
     volumes:

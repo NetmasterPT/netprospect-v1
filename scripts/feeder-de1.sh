@@ -9,12 +9,12 @@ TARGET=${DE1_QUEUE_TARGET:-1000}
 MAIN_MIN=${DE1_MAIN_MIN:-5000}
 SHARD=${DE1_SHARD:-0/5}
 while true; do
-  read -r MAIN DE1P <<< "$(timeout 20 node scripts/queue-depth.mjs fingerprint 2>/dev/null)"
+  read -r MAIN DE1P <<< "$(timeout 20 node scripts/queue-depth.mjs "${QUEUE_CONSUMER:-whois}" 2>/dev/null)"
   MAIN=${MAIN:-0}; DE1P=${DE1P:-999999}
   if [ "$MAIN" -gt "$MAIN_MIN" ] && [ "$DE1P" -lt "$TARGET" ]; then
     TOP=$((TARGET - DE1P))
     OUT=$(JOB_STREAM=NP_JOBS_DE1 JOB_SUBJECT_PREFIX=de1. timeout 300 node enqueue-domain-health.js \
-      --only=cms --shard="$SHARD" --subject-prefix=de1. --limit="$TOP" 2>&1)
+      --only="${JOB_TYPE:-whois}" --shard="$SHARD" --subject-prefix=de1. --limit="$TOP" 2>&1)
     echo "$(date -Is) main=$MAIN de1=$DE1P → topup=$TOP | $(echo "$OUT" | tail -1)"
   fi
   sleep 15

@@ -1,0 +1,13 @@
+[Unit]
+Description=NetProspect — enqueue do backfill WHOIS (nl/se/no/fi; .pt excluído)
+After=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/root/Github/netprospect-v1
+EnvironmentFile=-/root/Github/netprospect-v1/docker/.env
+Environment=NATS_URL=nats://localhost:4222
+Environment="WHOIS_TLDS=nl se no fi"
+ExecStart=/root/Github/netprospect-v1/scripts/backfill-whois.sh
+StandardOutput=append:/root/Github/netprospect-v1/out/backfill-whois.log
+StandardError=append:/root/Github/netprospect-v1/out/backfill-whois.log

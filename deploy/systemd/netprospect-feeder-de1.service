@@ -8,6 +8,8 @@ Type=simple
 WorkingDirectory=/root/Github/netprospect-v1
 EnvironmentFile=-/root/Github/netprospect-v1/docker/.env
 Environment=NATS_URL=nats://localhost:4222
+Environment=JOB_TYPE=whois
+Environment=QUEUE_CONSUMER=whois
 ExecStart=/root/Github/netprospect-v1/scripts/feeder-de1.sh
 Restart=always
 RestartSec=15

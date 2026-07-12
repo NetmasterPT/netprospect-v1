@@ -1,0 +1,18 @@
+[Unit]
+Description=NetProspect — feeder da fila dedicada do DE1 (NP_JOBS_DE1)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/root/Github/netprospect-v1
+EnvironmentFile=-/root/Github/netprospect-v1/docker/.env
+Environment=NATS_URL=nats://localhost:4222
+ExecStart=/root/Github/netprospect-v1/scripts/feeder-de1.sh
+Restart=always
+RestartSec=15
+StandardOutput=append:/root/Github/netprospect-v1/out/feeder-de1.log
+StandardError=append:/root/Github/netprospect-v1/out/feeder-de1.log
+
+[Install]
+WantedBy=default.target

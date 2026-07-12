@@ -32,7 +32,11 @@ const ONLY = flag('only', 'ssl,dnsprovider').split(',').map((s) => s.trim()).fil
 const PAGE = 500;
 
 const SUBJ = { ssl: SUBJECTS.ssl, dnsprovider: SUBJECTS.dnsprovider, whois: SUBJECTS.whois, cms: SUBJECTS.fingerprint };
-const RESUME_FIELD = { ssl: 'ssl_grade', dnsprovider: 'dns_provider', whois: 'whois_checked_at', cms: 'cms_version' };
+// NOTA: o resume do cms NÃO pode ser 'cms_version' — só ~5% dos sites expõem versão de CMS, logo
+// os restantes ficavam NULL e eram re-enfileirados para SEMPRE (loop infinito de re-fingerprint).
+// 'tech_detected' é o que o fingerprint escreve sempre que corre com sucesso. (O ideal seria uma
+// coluna cms_checked_at, como o whois_checked_at — ver follow-up.)
+const RESUME_FIELD = { ssl: 'ssl_grade', dnsprovider: 'dns_provider', whois: 'whois_checked_at', cms: 'tech_detected' };
 
 // Sharding por hash do domínio p/ dar uma fatia DISJUNTA a uma fila dedicada (ex.: DE1):
 //   --shard=i/N        → SÓ os domínios com hash%N==i        (o feeder do DE1)

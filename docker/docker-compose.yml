@@ -268,6 +268,11 @@ services:
       AUDIT_ENABLED: ${AUDIT_ENABLED:-false}
       # Auditorias em paralelo POR worker (cada uma ~1-2 cores: Chromium+Nuclei+Ollama).
       AUDIT_CONC: ${AUDIT_CONC:-1}
+      # Nuclei: agressividade do scan. Subir acelera mas puxa CPU/rede (medido: rate=100 c=30
+      # pôs a load do host a 18.5/18). Baixar se saturar.
+      NUCLEI_RATE: ${NUCLEI_RATE:-100}
+      NUCLEI_CONC: ${NUCLEI_CONC:-30}
+      NUCLEI_TIMEOUT_MS: ${NUCLEI_TIMEOUT_MS:-90000}
       GMB_ENABLED: ${GMB_ENABLED:-false}
       ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-10}
       CONTACTS_CONCURRENCY: ${CONTACTS_CONCURRENCY:-5}

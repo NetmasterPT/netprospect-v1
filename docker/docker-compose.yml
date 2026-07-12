@@ -265,6 +265,8 @@ services:
       EGRESS_PROXY: ${EGRESS_PROXY:-}
       WPSCAN_API_TOKEN: ${WPSCAN_API_TOKEN:-}
       AUDIT_ENABLED: ${AUDIT_ENABLED:-false}
+      # Auditorias em paralelo POR worker (cada uma ~1-2 cores: Chromium+Nuclei+Ollama).
+      AUDIT_CONC: ${AUDIT_CONC:-1}
       GMB_ENABLED: ${GMB_ENABLED:-false}
       ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-10}
       CONTACTS_CONCURRENCY: ${CONTACTS_CONCURRENCY:-5}

@@ -47,6 +47,9 @@ const SCORE_CONC = Math.max(1, parseInt(process.env.SCORE_CONC || '12', 10));
 // omissão porque cada job consome quota free (APIs limitadas). Subir só se houver
 // muitas chaves/IPs. VERIFY_CONCURRENCY.
 const VERIFY_CONC = Math.max(1, parseInt(process.env.VERIFY_CONCURRENCY || '4', 10));
+// Auditorias pesadas (Lighthouse/Chromium + Nuclei + Ollama) processadas em paralelo POR worker.
+// Default 1 = comportamento antigo (serial). Subir só se houver CPU — cada uma é ~1-2 cores.
+const AUDIT_CONC = Math.max(1, parseInt(process.env.AUDIT_CONC || '1', 10));
 const AUDIT_ENABLED = /^(1|true|yes)$/i.test(process.env.AUDIT_ENABLED || '');
 const GMB_ENABLED = /^(1|true|yes)$/i.test(process.env.GMB_ENABLED || '');
 const WID = process.env.HOSTNAME || String(process.pid);
@@ -314,13 +317,21 @@ async function consumeLoop(js, durable, concurrency, fn) {
 async function auditDrainLoop(js, run) {
   const cons = {};
   for (const t of ['ondemand', 'qualified', 'rest']) cons[t] = await js.consumers.get(STREAM, CONSUMERS['audit_' + t].durable);
-  log('audit drain a correr (prioridade ondemand > qualified > rest)');
+  // Antes fazia `await run(m)` → 1 auditoria DE CADA VEZ por worker (o maxAckPending nem chegava
+  // a ser o limite). AUDIT_CONC processa N em paralelo por worker; a prioridade dos tiers mantém-se.
+  const inflight = new Set();
+  log(`audit drain a correr (prioridade ondemand > qualified > rest, conc ${AUDIT_CONC})`);
   for (;;) {
+    if (inflight.size >= AUDIT_CONC) { await Promise.race(inflight); continue; }
     let did = false;
     for (const t of ['ondemand', 'qualified', 'rest']) {
       // nats.js exige expires>=1000ms. Tiers altos curtos p/ varrer depressa; rest longo.
       const msgs = await cons[t].fetch({ max_messages: 1, expires: t === 'rest' ? 4000 : 1000 });
-      for await (const m of msgs) { did = true; await run(m, t); }
+      for await (const m of msgs) {
+        did = true;
+        const p = Promise.resolve(run(m, t)).catch(() => {}).finally(() => inflight.delete(p));
+        inflight.add(p);
+      }
       if (did) break; // recomeça do topo (ondemand) após cada job
     }
     if (!did) await sleep(300);

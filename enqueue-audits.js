@@ -21,6 +21,9 @@ const DOMAIN = flag('domain', null);
 const LIMIT = flag('limit', null) ? parseInt(flag('limit'), 10) : null;
 const FORCE = argv.includes('--force');
 const REQUEUE_STALE = argv.includes('--requeue-stale');
+// --min-score=N → audita SÓ os leads com lead_score >= N. As auditorias são caras (render de
+// Chromium + Nuclei + Ollama): a 729k qualificados são semanas. Priorizar o topo é onde está o valor.
+const MIN_SCORE = flag('min-score', null) ? parseInt(flag('min-score'), 10) : null;
 const PAGE = 500;
 
 function subjectForTier(t) {
@@ -30,6 +33,7 @@ function subjectForTier(t) {
 async function enqueueTier(client, js, tier) {
   const base = tier === 'rest' ? { qualified: { _eq: false }, is_live: { _eq: true } } : { qualified: { _eq: true } };
   if (!FORCE) base.audit_checked_at = { _null: true };
+  if (MIN_SCORE != null) base.lead_score = { _gte: MIN_SCORE };
   const subject = subjectForTier(tier);
   let lastId = 0, n = 0;
   for (;;) {

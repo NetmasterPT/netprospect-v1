@@ -22,7 +22,7 @@ import {
 import { createEnrichContext, enrichOne, upsertSite } from '../enrich-sites.js';
 import { processSite } from '../extract-contacts.js';
 import { makeFineHandlers } from './handlers.mjs';
-import { getSnapshot, ensureBucket } from '../lib/artifacts.js';
+import { getSnapshot, ensureBucket, ensureReportsBucket, putReport } from '../lib/artifacts.js';
 import { initEgress, egressDispatcher } from '../lib/egress.js';
 import { makeClient } from '../lib/directus.js';
 import { startTelemetry, taskStart, taskEnd, logLine } from '../lib/worker-telemetry.js';
@@ -112,7 +112,10 @@ function makeHeavyFineHandlers(ctx, audit, js) {
     try {
       const r = await audit.lh.runLighthouse(url);
       await client.request(updateItem('sites', site.id, { seo_score: r.seo_score, mobile_score: r.mobile_score, mobile_friendly: r.mobile_friendly }));
-      await upsertReport(client, site.id, kind, { score: r.seo_score, summary: audit.lh.lighthouseSummary(r), report: audit.lh.trimLhr(r.lhr) });
+      // Postgres = resumo (rápido p/ o dashboard); MinIO = relatório INTEGRAL sem screenshots
+      // (71 KB gzip vs 396 KB com imagens) — é dele que sai o PDF/relatório do cliente.
+      const _full = await putReport(site.id, kind, audit.lh.leanLhr(r.lhr));
+      await upsertReport(client, site.id, kind, { score: r.seo_score, summary: audit.lh.lighthouseSummary(r), report: { ...audit.lh.trimLhr(r.lhr), _full } });
       await rescore({ domain: site.domain, siteId: site.id });
     } catch (e) { log(`lighthouse ${site.domain}: ${e.message}`); }
     return 'ack';
@@ -122,7 +125,7 @@ function makeHeavyFineHandlers(ctx, audit, js) {
     try {
       const r = await audit.nuclei.runNuclei(site.final_url || `https://${site.domain}/`);
       await client.request(updateItem('sites', site.id, { security_findings: r.findings, security_severity: r.severity }));
-      await upsertReport(client, site.id, 'nuclei', { score: r.findings, summary: { findings: r.findings, severity: r.severity, bySeverity: r.bySeverity }, report: { results: r.results } });
+      await upsertReport(client, site.id, 'nuclei', { score: r.findings, summary: { findings: r.findings, severity: r.severity, bySeverity: r.bySeverity }, report: { _full: await putReport(site.id, "nuclei", { results: r.results }) } });
       await rescore({ domain: site.domain, siteId: site.id });
     } catch (e) { log(`nuclei ${site.domain}: ${e.message}`); }
     return 'ack';
@@ -225,7 +228,8 @@ function makeHandlers(ctx, audit, js) {
         try {
           const r = await audit.lh.runLighthouse(url);
           patch.seo_score = r.seo_score; patch.mobile_score = r.mobile_score; patch.mobile_friendly = r.mobile_friendly;
-          await upsertReport(client, site.id, 'lighthouse_seo', { score: r.seo_score, summary: audit.lh.lighthouseSummary(r), report: audit.lh.trimLhr(r.lhr) });
+          const _full = await putReport(site.id, 'lighthouse_seo', audit.lh.leanLhr(r.lhr));
+          await upsertReport(client, site.id, 'lighthouse_seo', { score: r.seo_score, summary: audit.lh.lighthouseSummary(r), report: { ...audit.lh.trimLhr(r.lhr), _full } });
         } catch (e) { log(`lighthouse ${site.domain}: ${e.message}`); }
       }
 
@@ -235,7 +239,7 @@ function makeHandlers(ctx, audit, js) {
         try {
           const r = await audit.nuclei.runNuclei(url);
           patch.security_findings = r.findings; patch.security_severity = r.severity;
-          await upsertReport(client, site.id, 'nuclei', { score: r.findings, summary: { findings: r.findings, severity: r.severity, bySeverity: r.bySeverity }, report: { results: r.results } });
+          await upsertReport(client, site.id, 'nuclei', { score: r.findings, summary: { findings: r.findings, severity: r.severity, bySeverity: r.bySeverity }, report: { _full: await putReport(site.id, "nuclei", { results: r.results }) } });
         } catch (e) { log(`nuclei ${site.domain}: ${e.message}`); }
       }
 
@@ -401,7 +405,8 @@ async function main() {
   const needAudit = active.some((n) => HEAVY.has(n));
   const audit = needAudit ? await createAuditContext() : null;
   if (audit) ctx.audit = audit; // p/ o handler traffic dos fine handlers
-  try { await ensureBucket(); } catch (e) { log(`MinIO indisponível: ${e.message}`); }
+  // Buckets: snapshots (páginas) + reports (relatórios integrais de auditoria).
+  try { await ensureBucket(); await ensureReportsBucket(); } catch (e) { log(`MinIO indisponível: ${e.message}`); }
   const js = nc.jetstream();
 
   const coarse = makeHandlers(ctx, audit, js);

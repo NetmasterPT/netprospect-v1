@@ -252,6 +252,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-netprospect}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
       MINIO_BUCKET: ${MINIO_BUCKET:-snapshots}
+      MINIO_REPORTS_BUCKET: ${MINIO_REPORTS_BUCKET:-reports}
       # Analytics (Fase E) — vazio = no-op; definir p/ escrever observações/change events.
       CLICKHOUSE_URL: ${CLICKHOUSE_URL:+http://clickhouse:8123}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
@@ -309,6 +310,7 @@ services:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-netprospect}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
       MINIO_BUCKET: ${MINIO_BUCKET:-snapshots}
+      MINIO_REPORTS_BUCKET: ${MINIO_REPORTS_BUCKET:-reports}
       CLICKHOUSE_URL: ${CLICKHOUSE_URL:+http://clickhouse:8123}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}

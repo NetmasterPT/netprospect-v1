@@ -112,7 +112,7 @@ function makeHeavyFineHandlers(ctx, audit, js) {
     try {
       const r = await audit.lh.runLighthouse(url);
       await client.request(updateItem('sites', site.id, { seo_score: r.seo_score, mobile_score: r.mobile_score, mobile_friendly: r.mobile_friendly }));
-      await upsertReport(client, site.id, kind, { score: r.seo_score, summary: audit.lh.lighthouseSummary(r), report: r.lhr });
+      await upsertReport(client, site.id, kind, { score: r.seo_score, summary: audit.lh.lighthouseSummary(r), report: audit.lh.trimLhr(r.lhr) });
       await rescore({ domain: site.domain, siteId: site.id });
     } catch (e) { log(`lighthouse ${site.domain}: ${e.message}`); }
     return 'ack';
@@ -225,7 +225,7 @@ function makeHandlers(ctx, audit, js) {
         try {
           const r = await audit.lh.runLighthouse(url);
           patch.seo_score = r.seo_score; patch.mobile_score = r.mobile_score; patch.mobile_friendly = r.mobile_friendly;
-          await upsertReport(client, site.id, 'lighthouse_seo', { score: r.seo_score, summary: audit.lh.lighthouseSummary(r), report: r.lhr });
+          await upsertReport(client, site.id, 'lighthouse_seo', { score: r.seo_score, summary: audit.lh.lighthouseSummary(r), report: audit.lh.trimLhr(r.lhr) });
         } catch (e) { log(`lighthouse ${site.domain}: ${e.message}`); }
       }
 

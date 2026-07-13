@@ -10,16 +10,21 @@
 | *(HEL1 monolito)* | 100.108.94.126 | hel1 | App + browser + base + NATS/Redis/Directus/MinIO/ClickHouse | ambas | 4H+5B | ✅ a correr |
 | np-db | 100.77.60.44 | hel1 | Postgres + PgBouncer | — | — | ✅ a correr |
 | *(DE1 base)* | 100.120.214.45 | de1 | `base` (whois) + fila dedicada | worker-base | 4 | ✅ a correr |
-| *(DE1 heavy)* | 100.120.214.45 | de1 | `security` (nuclei/wpscan) | worker | 3 | ✅ a correr |
-| **de-minio** | *(a criar)* | de1 | MinIO — 500G storage-zfs / ext4 | minio | 1 | ❌ **Fase 2 — VM por criar (VMID 300)** |
+| *(DE1 heavy)* | 100.120.214.45 | de1 | `security` (nuclei/wpscan) + `ai` (industry heurístico) | worker | 3 | ✅ a correr |
+| **de-minio** | 100.124.43.117 | de1 | MinIO — 500G storage-zfs / ext4 (VMID 300) | minio | 1 | ⚠️ **disco+deploy prontos; bloqueado no CPU type (`host`)** |
+| **hel1-ollama** | *(no tailnet)* | hel1 | `ai` (Ollama, CPU/sem GPU) | worker | — | 🟡 VM criada; deploy pendente |
 
-*Ainda por criar:* de-clickhouse · hel1-ollama · np-server (decompor) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
+*Ainda por criar:* **np-server** (Directus+Dashboard+NATS+Redis) · **de-analytics** (ClickHouse+PostHog) ·
+Worker VMs (decompor HEL1) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
 
 > **Convenções de rede (Proxmox) — aplicar a TODA a VM nova:**
 > - **Bridge:** sempre **`vmbr1`** (HEL1 e DE1). A `vmbr0` está reservada para a VM da WHM (fora da stack, no HEL1).
 > - **IP LAN estático:** último octeto = o **VMID sem o dígito do meio** (dezenas) → `300`→`10.10.10.30`,
 >   `301`→`10.10.10.31`, `501`→`10.10.10.51`, `900`→`10.10.10.90`. Gateway `10.10.10.1`, /24. Nunca DHCP.
 > - Cross-datacenter só pela **tailnet** (as LANs 10.10.10.0/24 do HEL1 e do DE1 são separadas, não roteadas).
+> - **CPU type = `host`** (`qm create ... --cpu host`). O default `kvm64` é x86-64-**v1** e as imagens
+>   modernas (MinIO, ClickHouse, PostHog) exigem **x86-64-v2** → arrancam com `Fatal glibc error`. `host`
+>   expõe o CPU físico (Hetzner moderno) e é o mais rápido. Se já criaste a VM: `qm set <id> --cpu host` + cold-boot.
 
 ---
 
@@ -64,13 +69,17 @@ E cada VM extra traz o **seu IP** → quota própria de rate-limit (registries d
 | **directus** | REST sobre a DB (workers já contornam via A2) | **np-server** ¹ | 🟡 | separar |
 | **dashboard** | leve, user-facing | **np-server** | 🟢 | separar |
 | **minio** | **disco-pesado**, escreve-1×/lê-raro, latency-**tolerante** | **de-minio (HDD)** | 🔴 **ALTA** | runbook pronto ² |
-| **clickhouse** | disco-pesado, analítico | **de-clickhouse (HDD)** *ou desmantelar* | 🟠 | decidir ³ |
-| **ollama** | **CPU/GPU-bound** | **hel1-ollama** (idealmente GPU) | 🟠 | parado (CPU não chega) |
+| **clickhouse + posthog** | disco-pesado, analítico (a Fase E tem 10M observações) | **de-analytics** (DE1) | 🟠 | VM por criar ³ |
+| **ollama** | CPU-bound (**sem GPU** — decisão: fica em CPU, custo 0) | **hel1-ollama** (timeouts altos) | 🟠 | VM criada; deploy pendente ⁵ |
 
 <sub>¹ Directus pode ir para np-server (com NATS/Redis) OU co-localizar em np-db (poupa o round-trip à DB).
 Como os workers agora escrevem direto ao PG (A2), a chattiness dele importa menos → np-server serve. Se
 voltar a ser gargalo, mover para np-db. · ² [`docs/runbook-minio-de1.md`](docs/runbook-minio-de1.md) ·
-³ Se a Fase E (analytics) nunca arrancou a sério, o ClickHouse é 3 GB a não fazer nada → desmantelar.</sub>
+³ **MANTER** (10M observações na Fase E) → mover p/ **de-analytics** no DE1 (disco barato). PostHog usa
+ClickHouse como backend → vivem juntos. Runbook: [`docs/runbook-analytics-de.md`](docs/runbook-analytics-de.md). ·
+⁵ **Sem GPU (decisão de custo).** O Ollama fica em CPU no `hel1-ollama` (dedicado → não rouba CPU ao Lighthouse).
+Inferência lenta (~107 s/job) mas a custo 0; o batch usa o **classificador heurístico** (154× mais rápido) e o
+Ollama serve o on-demand / casos difíceis com timeouts altos. Runbook: [`docs/runbook-ollama-hel1.md`](docs/runbook-ollama-hel1.md).</sub>
 
 ---
 
@@ -83,12 +92,12 @@ voltar a ser gargalo, mover para np-db. · ² [`docs/runbook-minio-de1.md`](docs
 |--------|-----|-----|-----|------|--------|------|-------------------|----------|---------|
 | hel1 | **np-db** | 14 | 64 GB | NVMe | Unlimited | DB | Postgres + PgBouncer | ✅ | ✅ |
 | hel1 | **np-server** | 4 | 16 GB | NVMe | Unlimited | App | Directus, Redis, **NATS**, dashboard | 🟡 | ✅ |
-| hel1 | **hel1-ollama** | 6 | 8 GB | — | Unlimited | AI | `ai` (industry) — *só útil c/ GPU* | ❌ | ✅ |
+| hel1 | **hel1-ollama** | 6 | 8 GB | — | Unlimited | AI | `ai` (Ollama, CPU — on-demand; batch usa heurístico) | 🟡 | ✅ |
 | hel1 | **Worker H** | 6 | 16 GB | — | Unlimited | Heavy | `browser` (lighthouse) — imagem pesada | 🟡 | ✅ |
 | hel1 | **Worker B** | 2 | 8 GB | — | Unlimited | Base | `base` (pipeline) | 🟡 | ✅ |
 | hel1 | **Worker L** | 2 | 4 GB | — | Unlimited | Light | `security` (nuclei/wpscan) | ❌ | ❌ |
-| de1 | **de-minio** | 2 | 4 GB | **HDD grande** | Unlimited | Storage | MinIO (reports + snapshots) | ❌ | ❌ |
-| de1 | **de-clickhouse** | 2 | 8 GB | **HDD grande** | Unlimited | Analytics | ClickHouse *(ou desmantelar)* | ❌ | ❌ |
+| de1 | **de-minio** | 2 | 4 GB | 500G storage-zfs | Unlimited | Storage | MinIO (reports + snapshots) | ⚠️ CPU | ✅ |
+| de1 | **de-analytics** | 4 | 8 GB | ~200G storage-zfs | Unlimited | Analytics | **ClickHouse + PostHog** | ❌ | ❌ |
 | de1 | **Worker H** | 4 | 8 GB | — | Unlimited | Heavy | `browser` (lighthouse) | ❌ | ❌ |
 | de1 | **Worker B** | 2 | 4 GB | — | Unlimited | Base | `base` | ✅ | ✅ |
 | de1 | **Worker L** | 3 | 6 GB | — | Unlimited | Light | `security` (nuclei/wpscan) | ✅ | ✅ |

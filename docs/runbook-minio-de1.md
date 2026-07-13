@@ -36,7 +36,7 @@ cd /var/lib/vz/template/iso
 wget -nc https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2
 
 # 1.2 — Criar a VM 300 (disco de arranque importado a seguir)
-qm create 300 --name de-minio --memory 4096 --cores 2 \
+qm create 300 --name de-minio --memory 4096 --cores 2 --cpu host \
   --net0 virtio,bridge=vmbr1 --ostype l26 --scsihw virtio-scsi-single --agent 1
 
 # 1.3 — Importar a cloud image como disco de arranque, no storage-zfs

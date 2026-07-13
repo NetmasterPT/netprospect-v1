@@ -1118,6 +1118,7 @@ SELECT
   count(*) FILTER (WHERE dns_provider IS NOT NULL)::int AS dnsprovider,
   count(*) FILTER (WHERE whois_checked_at IS NOT NULL)::int AS whois,
   count(*) FILTER (WHERE contacts_checked_at IS NOT NULL)::int AS contacts,
+  count(*) FILTER (WHERE id IN (SELECT site FROM contacts WHERE email_status IS NOT NULL))::int AS verify,
   count(*) FILTER (WHERE lead_score IS NOT NULL)::int AS score,
   count(*) FILTER (WHERE audit_checked_at IS NOT NULL)::int AS audit,
   count(*) FILTER (WHERE industry IS NOT NULL)::int AS industry,

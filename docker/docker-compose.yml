@@ -164,9 +164,10 @@ services:
       # Agentes IA (B4) — Ollama on-prem (perfil `audit`). Fail-soft se em baixo.
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
+      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-240000}
       DIRECTUS_PUBLIC_URL: ${DIRECTUS_PUBLIC_URL:-http://localhost:8056}
       # Analytics (Fase E) — timeline por site + view de gatilhos. Vazio = desligado.
-      CLICKHOUSE_URL: ${CLICKHOUSE_URL:+http://clickhouse:8123}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-clickhouse}
@@ -250,15 +251,17 @@ services:
       DIRECTUS_ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
       NATS_URL: nats://nats:4222
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      OLLAMA_URL: http://ollama:11434
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
+      # Ollama em CPU (hel1-ollama, sem GPU) → ~60-110s/inferência. Os defaults (45s) rebentavam.
+      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-240000}
       MINIO_URL: ${MINIO_URL:-http://minio:9000}
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-netprospect}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
       MINIO_BUCKET: ${MINIO_BUCKET:-snapshots}
       MINIO_REPORTS_BUCKET: ${MINIO_REPORTS_BUCKET:-reports}
       # Analytics (Fase E) — vazio = no-op; definir p/ escrever observações/change events.
-      CLICKHOUSE_URL: ${CLICKHOUSE_URL:+http://clickhouse:8123}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-clickhouse}
@@ -323,7 +326,7 @@ services:
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
       MINIO_BUCKET: ${MINIO_BUCKET:-snapshots}
       MINIO_REPORTS_BUCKET: ${MINIO_REPORTS_BUCKET:-reports}
-      CLICKHOUSE_URL: ${CLICKHOUSE_URL:+http://clickhouse:8123}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-}
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-clickhouse}
@@ -331,8 +334,10 @@ services:
       POSTHOG_HOST: ${POSTHOG_HOST:-}
       POSTHOG_KEY: ${POSTHOG_KEY:-}
       # Campanhas (Fase F) — geração (Ollama-se-disponível/fallback) + envio (SMTP/dry-run).
-      OLLAMA_URL: http://ollama:11434
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
+      # Ollama em CPU (hel1-ollama, sem GPU) → ~60-110s/inferência. Os defaults (45s) rebentavam.
+      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-240000}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}

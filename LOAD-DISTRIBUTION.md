@@ -11,7 +11,7 @@
 | np-db | 100.77.60.44 | hel1 | Postgres + PgBouncer | — | — | ✅ a correr |
 | *(DE1 base)* | 100.120.214.45 | de1 | `base` (whois) + fila dedicada | worker-base | 4 | ✅ a correr |
 | *(DE1 heavy)* | 100.120.214.45 | de1 | `security` (nuclei/wpscan) | worker | 3 | ✅ a correr |
-| **de-minio** | *(a criar)* | de1 | MinIO (HDD) | minio | 1 | ❌ **Fase 2 — em curso** |
+| **de-minio** | *(a criar)* | de1 | MinIO — 500G storage-zfs / ext4 | minio | 1 | ❌ **Fase 2 — VM por criar (VMID 300)** |
 
 *Ainda por criar:* de-clickhouse · hel1-ollama · np-server (decompor) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
 

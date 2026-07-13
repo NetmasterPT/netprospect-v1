@@ -78,34 +78,21 @@ Isto instala o Docker + Tailscale, junta ao tailnet como `de-minio`, clona o rep
 
 ---
 
-## 3. Preparar o disco de dados
+## 3. Preparar o disco de dados — ext4 (decidido)
 
-O disco de dados (`/dev/sdb`, 500 GB) precisa de filesystem. **Decisão importante:**
+> **Porquê ext4 e não ZFS na VM:** o `storage-zfs` do Proxmox JÁ é ZFS — o disco da VM é um *zvol*
+> em cima de ZFS. Pôr ZFS outra vez dentro da VM (ZFS-on-ZFS) dobra o COW, os checksums e o consumo
+> de RAM (ARC no host + na VM), sem ganho: o Proxmox já dá checksums/compressão/snapshots ao nível do
+> host. Logo, ext4 simples na VM; a integridade/snapshots geram-se no Proxmox.
 
-> ⚠️ **ZFS-on-ZFS.** O `storage-zfs` do Proxmox JÁ é ZFS — o disco da VM é um *zvol* em cima de ZFS.
-> Pôr ZFS OUTRA VEZ dentro da VM = **ZFS-on-ZFS**: dobra o COW, os checksums e o consumo de RAM (ARC
-> no host + na VM). O Proxmox já dá checksums/compressão/snapshots a nível do host. Por isso:
-
-### Opção A — ext4 na VM (RECOMENDADA quando o storage é ZFS)
 ```bash
 lsblk                                          # confirmar o disco de dados (ex.: /dev/sdb, 500G)
 mkfs.ext4 -L minio /dev/sdb
 mkdir -p /srv/minio
 echo 'LABEL=minio /srv/minio ext4 defaults,noatime 0 2' >> /etc/fstab
-mount -a && df -h /srv/minio
+mount -a && df -h /srv/minio                   # deve mostrar ~500G montados em /srv/minio
 ```
-*(Snapshots/compressão/integridade → geridos no Proxmox: `zfs snapshot storage-zfs/vm-300-disk-1@…`,
-compressão do dataset, etc.)*
-
-### Opção B — ZFS dentro da VM (só se quiseres gerir snapshots/compressão a partir da VM)
-```bash
-apt-get update && apt-get install -y zfsutils-linux
-zpool create -o ashift=12 minio /dev/sdb
-# os relatórios JÁ vão gzipados → compressão extra não rende; recordsize grande p/ objetos:
-zfs set compression=off recordsize=1M atime=off mountpoint=/srv/minio minio
-df -h /srv/minio
-```
-*(Aceita o custo de RAM do ARC duplo — limita-o com `zfs_arc_max` se a VM só tiver 4 GB.)*
+*(Snapshot do lado do host, se quiseres: `zfs snapshot storage-zfs/vm-300-disk-1@$(date +%F)`.)*
 
 ---
 

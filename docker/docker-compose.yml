@@ -153,14 +153,14 @@ services:
       - redis
     environment:
       PORT: '3000'
-      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_URL: ${DIRECTUS_URL:-http://directus:8055}
       DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
       # Cache (fail-soft) das agregações pesadas (/api/stats ~18 queries, contagens
       # de segmentos). REDIS_URL vazio = desligado (tudo live). TTL curto p/ frescura.
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       CACHE_TTL: ${CACHE_TTL:-60}
       # Publica jobs de auditoria on-demand (POST /api/audit) — Fase 2b.
-      NATS_URL: nats://nats:4222
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
       # Agentes IA (B4) — Ollama on-prem (perfil `audit`). Fail-soft se em baixo.
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
@@ -246,10 +246,10 @@ services:
       nats:
         condition: service_started
     environment:
-      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_URL: ${DIRECTUS_URL:-http://directus:8055}
       DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
       DIRECTUS_ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
-      NATS_URL: nats://nats:4222
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
@@ -315,10 +315,10 @@ services:
       nats:
         condition: service_started
     environment:
-      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_URL: ${DIRECTUS_URL:-http://directus:8055}
       DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
       DIRECTUS_ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
-      NATS_URL: nats://nats:4222
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
       # Telemetria de workers (heartbeat + contadores + logs recentes) → dashboard /workers.
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       MINIO_URL: ${MINIO_URL:-http://minio:9000}
@@ -388,10 +388,10 @@ services:
       nats:
         condition: service_started
     environment:
-      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_URL: ${DIRECTUS_URL:-http://directus:8055}
       DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
       DIRECTUS_ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
-      NATS_URL: nats://nats:4222
+      NATS_URL: ${NATS_URL:-nats://nats:4222}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       WORKER_ROLES: writer
       DIRECT_PG_WRITE: 'true'

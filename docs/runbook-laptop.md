@@ -30,6 +30,7 @@ apanhava os jobs de GMB e deitava-os fora (`GMB_ENABLED=false`).
    npm install
    npm run geoip          # descarrega as GeoIP DBs para data/geoip
    ```
+
    *(O `data/tranco` também é preciso para o contexto `base`; para SÓ GMB não é usado, mas o volume é
    montado — se a pasta não existir, cria-a vazia: `mkdir data\tranco`.)*
 
@@ -49,14 +50,15 @@ docker compose -f deploy\laptop\docker-compose.yml logs -f worker
 ```
 
 ### `.env` — o que preencher
-| Chave | Valor |
-| --- | --- |
-| `NATS_URL` | `nats://100.108.94.126:4222` (hel1-docker; ou o `np-server` quando existir) |
-| `DIRECTUS_URL` | `http://100.108.94.126:8056` |
-| `DIRECTUS_TOKEN` | o `DIRECTUS_ADMIN_TOKEN` do `docker/.env` do HEL1 |
-| `MINIO_URL` | `http://100.124.43.117:9000` (de-minio) + `MINIO_ROOT_USER/PASSWORD` |
-| `REDIS_URL` | `redis://100.108.94.126:6379` (telemetria → aparece no dashboard) |
-| `WORKER_ROLES` | `residential` (defeito) — só GMB |
+
+| Chave              | Valor                                                                           |
+| ------------------ | ------------------------------------------------------------------------------- |
+| `NATS_URL`       | `nats://100.114.17.74:4222` (**np-server**) |
+| `DIRECTUS_URL`   | `http://100.114.17.74:8056` (np-server)                                                  |
+| `DIRECTUS_TOKEN` | o`DIRECTUS_ADMIN_TOKEN` do `docker/.env` do HEL1                            |
+| `MINIO_URL`      | `http://100.124.43.117:9000` (de-minio) + `MINIO_ROOT_USER/PASSWORD`        |
+| `REDIS_URL`      | `redis://100.114.17.74:6379` (np-server, telemetria)            |
+| `WORKER_ROLES`   | `residential` (defeito) — só GMB                                            |
 
 > O `docker-compose.yml` do portátil já força `GMB_ENABLED=true` e `AUDIT_ENABLED=true` (o GMB é um
 > consumer "pesado" → sem `AUDIT_ENABLED` nem sequer arrancava).
@@ -64,11 +66,13 @@ docker compose -f deploy\laptop\docker-compose.yml logs -f worker
 ## Dar-lhe mais carga (quando estiver online e livre, a pedido do Claude)
 
 No `.env`, alarga os roles e/ou réplicas, depois `up -d` outra vez:
+
 ```
 WORKER_ROLES=residential,security,base
 WORKER_REPLICAS=2
 GMB_CONC=2
 ```
+
 `security` (nuclei/wpscan) e `base` (whois/enrich) são network-bound → o portátil aguenta-os bem.
 **Não** ligar `browser` (lighthouse) a menos que queiras mesmo — é CPU-pesado e é o teu daily-driver.
 
@@ -77,6 +81,7 @@ GMB_CONC=2
 ```powershell
 docker compose -f deploy\laptop\docker-compose.yml down
 ```
+
 A frota nem dá por isso — o `residential`/GMB simplesmente fica à espera na fila até o portátil voltar
 (a workqueue retém os jobs). Nada se perde.
 
@@ -85,6 +90,7 @@ A frota nem dá por isso — o `residential`/GMB simplesmente fica à espera na 
 ```bash
 node enqueue-fine-audits.js --only=gmb --min-score=60      # só os leads bons; on-demand
 ```
+
 > O GMB é frágil e lento — enfileirar em lotes pequenos e só para leads que valham a pena.
 
 ## Verificação
@@ -94,6 +100,7 @@ node enqueue-fine-audits.js --only=gmb --min-score=60      # só os leads bons; 
 docker compose -f deploy\laptop\docker-compose.yml logs worker | Select-String "roles="
 # → deve dizer roles=residential
 ```
+
 No dashboard (`/api/workers`) aparece um worker novo com host `gpedro-laptop` e role `residential`.
 Um GMB bem-sucedido escreve `gmb_name`/`gmb_rating`/… no site (e **não** "Por que esse anúncio?", que
 era o sintoma do bloqueio Hetzner).

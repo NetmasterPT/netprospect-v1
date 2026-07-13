@@ -210,11 +210,18 @@ the corpus and moderate throughput. **Limit:** Postgres shares CPU + disk I/O wi
 ClickHouse — measured, **Postgres is ~70 % of the load (~8–9 of 12 cores)** while the workers are cheap
 and network-bound (~1.7 cores). So the DB becomes the ceiling as you add workers.
 
-**B — Dedicated DB host + distributed worker fleet** ⭐ *(recommended at scale)*
-- A **dedicated Proxmox LXC CT (or VM) for Postgres + PgBouncer + Tailscale** — the "fat DB host".
-  Runbook: [`docs/runbook-db-host.md`](docs/runbook-db-host.md).
-- The **app stack** (Directus, dashboard, NATS, Redis, MinIO, `worker-writer`) stays on the Docker host,
-  pointed at the DB host **over the Tailnet**.
+**B — Split by I/O profile + distributed worker fleet** ⭐ *(recommended at scale)*
+Each piece lives where its **I/O profile** fits — not where there happens to be room. The live fleet
+inventory + the placement rationale are in [`LOAD-DISTRIBUTION.md`](LOAD-DISTRIBUTION.md) and
+[`docs/stack-isolation.md`](docs/stack-isolation.md).
+- **`np-db`** — a dedicated Proxmox LXC CT for **Postgres + PgBouncer + Tailscale** (the "fat DB host";
+  Postgres is ~70 % of the load). Runbook: [`docs/runbook-db-host.md`](docs/runbook-db-host.md).
+- **`de-minio`** — a dedicated VM on the **cheap-disk** host for **MinIO**: object storage is
+  write-once/read-rarely and latency-tolerant, so it wastes NVMe. Runbook:
+  [`docs/runbook-minio-de1.md`](docs/runbook-minio-de1.md).
+- **`np-server`** — Directus, dashboard, **NATS**, Redis. These are latency-**critical** (workers pull in
+  a tight loop), so this VM stays on the **same Proxmox host** as the heavy workers — a separate VM for
+  guaranteed CPU, still ~0.1 ms away over the LAN. Runbook: [`docs/runbook-server-hel1.md`](docs/runbook-server-hel1.md).
 - **Worker VMs** (Docker + Tailscale) spread across a 2nd Proxmox host + free-tier clouds — 1 IP each,
   so each also carries its own email-verify / WHOIS-RDAP quota. Runbook: [`docs/runbook-worker-vms.md`](docs/runbook-worker-vms.md).
 
@@ -297,7 +304,9 @@ stack's analytics is **ClickHouse only**; PostHog is an optional product-analyti
 - **All container data is on host bind mounts** under `docker/.data/<service>/` (Postgres,
   Directus uploads, NATS, MinIO, Ollama, Tailscale) — no anonymous Docker volumes, so the
   dataset is visible and backupable on disk. (Postgres' dir is `700`/uid-70, so `du` as a
-  normal user shows `4K` — that's a permissions artifact, not missing data.)
+  normal user shows `4K` — that's a permissions artifact, not missing data.) In deployment **B**,
+  Postgres and MinIO have moved to their own hosts (`np-db`, `de-minio`); the local dirs stay
+  behind as rollback.
 
 Directus stores: `sites`, `companies`, `platforms` (seeded catalog), `contacts`,
 `segments` (saved filters), `site_reports` (heavy-audit outputs), and — for

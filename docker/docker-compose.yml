@@ -204,9 +204,13 @@ services:
       - '127.0.0.1:6379:6379'
       - '${TAILNET_IP}:6379:6379'   # telemetria da frota (tailnet)
 
-  # MinIO (S3) — snapshots de páginas partilhados entre jobs finos (Fase B) +
-  # histórico versionado p/ deteção de mudanças (Fase E). API 9000, consola 9001
-  # (ambas só em 127.0.0.1; workers alcançam via minio:9000 na rede interna).
+  # MinIO (S3) — snapshots de páginas (Fase B) + reports INTEGRAIS das auditorias.
+  #
+  # ⚠️ EM PRODUÇÃO ISTO JÁ NÃO É O MinIO EM USO. O storage foi migrado para uma VM
+  # dedicada no DE1 (`de-minio`, 500 GB de disco barato) — escreve-1×/lê-raro e
+  # latency-tolerante, logo desperdiçava o NVMe do HEL1. A frota toda aponta ao
+  # de-minio via MINIO_URL. Este serviço fica como ROLLBACK (dados em .data/minio)
+  # e para dev local. Ver docs/runbook-minio-de1.md.
   minio:
     image: minio/minio:latest
     restart: unless-stopped

@@ -17,7 +17,7 @@ das clouds** (Oracle/GCP/AWS, pequenas, 1 IP cada → workers `verify`/`whois`).
   │ DIRECT_PG_WRITE→CT  │             │ quota/IP      │ │ + whois RDAP  │
   └─────────┬───────────┘             └───────┬───────┘ └───────┬───────┘
             └──────────── Tailnet ────────────┴─────────────────┘
-                 NATS:4222 · PgBouncer:6432 · MinIO:9000 · Directus:8056 (do host central)
+                 NATS:4222 · Directus:8056 (central) · PgBouncer:6432 (np-db) · MinIO:9000 (de-minio)
 ```
 
 ---
@@ -29,7 +29,7 @@ das clouds** (Oracle/GCP/AWS, pequenas, 1 IP cada → workers `verify`/`whois`).
 | **Oracle free** (4 VM/conta: 2×Ampere A1, 2×AMD) | 1 OCPU / 1-6 GB | `verify` (Ampere: `verify,base`) | 1 IP = 1 quota free de verificação. Ampere (6 GB) aguenta `base` também. Servem de exit-nodes/proxies. |
 | **GCP e2-micro / AWS t2/t3.micro** | 1 vCPU / 1 GB | `verify` | só verificação + `whois` (RDAP/port-43 distribuído por IP). NÃO `base` (1 GB é pouco p/ o contexto de crawl). |
 
-**Segurança (crítico):** o NATS **não tem auth** → o host central expõe NATS/PgBouncer/MinIO/Redis
+**Segurança (crítico):** o NATS **não tem auth** → o host central expõe NATS/Redis (e o `np-db` o PgBouncer, a `de-minio` o MinIO)
 **APENAS na Tailnet** (`NATS_BIND=<ip-tailnet>` no `.env` central; PgBouncer `listen_addr` só tailnet +
 ACLs). Nunca `0.0.0.0` público. As ACLs do Tailscale restringem `tag:worker → tag:db/tag:app`.
 
@@ -75,7 +75,7 @@ Preencher conforme o papel:
 - **Todos:** `NATS_URL=nats://<host-central-tailnet>:4222`, `DIRECTUS_URL=http://<host-central-tailnet>:8056`,
   `DIRECTUS_TOKEN=<static token do .env central>`.
 - **base:** `WORKER_ROLES=base`, `DIRECT_PG_WRITE=true`, `PG_WRITE_HOST=<np-db-tailnet>` `PG_WRITE_PORT=6432`
-  `PG_WRITE_USER/PASSWORD/DB`, `MINIO_URL=http://<host-central-tailnet>:9000` (+creds), `ENRICH/CONTACTS_CONCURRENCY`.
+  `PG_WRITE_USER/PASSWORD/DB`, `MINIO_URL=http://<de-minio-tailnet>:9000` (+creds — o MinIO vive na VM `de-minio` do DE1, não no host central), `ENRICH/CONTACTS_CONCURRENCY`.
 - **verify:** `WORKER_ROLES=verify`, montar `config/verify-providers.json` (as keys free DESTE IP — gitignored,
   tem de existir antes do `up`). `DIRECT_PG_WRITE` fica `false` (verify escreve só `contacts.email_status`
   via Directus). Opcional `WHOISXML_API_KEYS` se este VM também fizer whois.

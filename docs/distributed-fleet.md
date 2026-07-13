@@ -18,7 +18,8 @@ chaves das APIs) fica em ficheiros **gitignored**, nunca na imagem.
 
 ```
         ┌─────────────── HOST CENTRAL (a tua máquina) ───────────────┐
-        │  Postgres · Directus(:8056) · NATS JetStream(:4222) · MinIO │
+        │  Directus(:8056) · NATS JetStream(:4222) · Redis            │
+        │  (Postgres → np-db · MinIO → de-minio, VMs próprias)        │
         │  enqueue-email-verification.js  ──publica──▶  jobs.verify   │
         └───────────────▲───────────────────────────▲────────────────┘
                         │ Tailnet (WireGuard)        │ Directus REST (token)
@@ -184,7 +185,7 @@ node extract-contacts.js --tld=pt --shard=0/30 --concurrency=4                  
 
 **(b) Fila** — `WORKER_ROLES=base` (ou `verify,base`) no `.env.worker`; no host central
 `node enqueue-enrich.js …` publica `jobs.enrich`; os workers base drenam. (Precisa de
-`MINIO_URL` no `.env.worker` — o enrich/contacts lêem snapshots.)
+`MINIO_URL` no `.env.worker`, a apontar à VM `de-minio` — o enrich/contacts lêem snapshots.)
 
 Uma VM Oracle A1 (2 OCPU/12 GB) aguenta `WORKER_ROLES=verify,base` (verifica **e** ajuda
 no crawling). VMs micro de 1 GB → só `verify`.

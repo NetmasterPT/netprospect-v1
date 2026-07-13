@@ -298,6 +298,7 @@ services:
     volumes:
       - ../data/geoip:/app/data/geoip:ro
       - ../data/tranco:/app/data/tranco:ro
+      - ../config:/app/config:ro   # verify-providers.json (role verify)
     deploy:
       replicas: ${WORKER_REPLICAS:-2}
 

@@ -24,6 +24,7 @@ import { connectJobs, ensureStream, publishJob, SUBJECTS } from './lib/jobs.js';
 const argv = process.argv.slice(2);
 const flag = (n, d) => { const f = argv.find((a) => a.startsWith(`--${n}=`)); return f ? f.split('=').slice(1).join('=') : d; };
 const LIMIT = flag('limit', null) ? parseInt(flag('limit'), 10) : 1000; // domínios por lote (default seguro)
+const MIN_SCORE = flag('min-score', null) ? parseInt(flag('min-score'), 10) : null; // só sites com lead_score >= N
 const TLD = flag('tld', null);
 const DRY = argv.includes('--dry-run');
 const PAGE = 500;
@@ -33,6 +34,7 @@ async function main() {
   // lead_score nnull → o sort -site.lead_score fica correto (Postgres põe NULLs primeiro
   // em DESC; os 571 sites sem score, ~0.1%, ficam p/ uma passagem final sem prioridade).
   const filter = { email_status: { _null: true }, company: { org_domain: { _nnull: true } }, site: { lead_score: { _nnull: true } } };
+  if (MIN_SCORE != null) filter.site.lead_score = { _gte: MIN_SCORE };
   if (TLD) filter.site.domain = { _ends_with: '.' + TLD.replace(/^\.+/, '').toLowerCase() };
 
   let js = null, nc = null;

@@ -28,6 +28,10 @@ const flag = (n, d) => { const f = argv.find((a) => a.startsWith(`--${n}=`)); re
 const LIMIT = flag('limit', null) ? parseInt(flag('limit'), 10) : null;
 const TLD = flag('tld', null);
 const FORCE = argv.includes('--force');
+// Por omissão só QUALIFICADOS (os leads que interessam). --all cobre TODOS os is_live (ssl/dns/whois
+// completos no dataset); --min-score=N cobre lead_score>=N. Sem estes, mantém o comportamento antigo.
+const ALL = argv.includes('--all');
+const MIN_SCORE = flag('min-score', null) ? parseInt(flag('min-score'), 10) : null;
 const ONLY = flag('only', 'ssl,dnsprovider').split(',').map((s) => s.trim()).filter(Boolean);
 const PAGE = 500;
 
@@ -61,7 +65,8 @@ async function main() {
   await ensureStream(nc);
   const js = nc.jetstream();
 
-  const base = { qualified: { _eq: true }, is_live: { _eq: true } };
+  const base = (ALL || MIN_SCORE != null) ? { is_live: { _eq: true } } : { qualified: { _eq: true }, is_live: { _eq: true } };
+  if (MIN_SCORE != null) base.lead_score = { _gte: MIN_SCORE };
   if (TLD) base.domain = { _ends_with: `.${TLD}` };
   const resumeField = RESUME_FIELD[ONLY[0]];
   if (!FORCE && resumeField) base[resumeField] = { _null: true };

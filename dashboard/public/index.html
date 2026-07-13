@@ -306,9 +306,11 @@ async function renderNav(active) {
     ${item('coverage', 'check', 'Cobertura')}
     ${item('logs', 'clock', 'Logs')}
     ${item('agents', 'sparkles', 'Agentes IA')}
+      ${item('chat', 'sparkles', 'Chat IA')}
     ${item('isps', 'globe', 'ISPs / alojamento')}
     ${item('triggers', 'activity', 'Gatilhos')}
     ${item('campaigns', 'send', 'Campanhas')}
+      ${item('outreach', 'send', 'Outreach')}
     ${item('segments', 'segments', 'Segmentos')}
     ${item('config', 'sliders', 'Configuração')}`;
 }
@@ -1240,6 +1242,14 @@ async function viewAgents() {
         <input id="ag_plan" class="np-input" style="width:100%" placeholder="opcional: ex. ‘foca-te em .pt’ ou ‘segurança’">
         <button class="np-btn np-btn--primary" style="margin-top:10px" onclick="runPlanner()">${ic('sparkles', 15)} Sugerir campanhas</button>
         <div id="ag_plan_out"></div></div></section>
+        <section class="np-card"><div class="np-card-h"><h2>${ic('send', 16)} Campaign Creator</h2><span class="muted" style="font-size:12px">copy + variáveis</span></div><div class="np-card-b">
+          <div class="np-sub" style="margin-bottom:8px">Gera o copy de um email de outreach (assuntos + corpo com variáveis personalizadas por site).</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+            <select id="ag_camp_angle" class="np-input" style="flex:1;min-width:120px">${['general', 'speed', 'seo', 'security', 'hosting', 'maintenance'].map((a) => `<option value="${a}">${a}</option>`).join('')}</select>
+            <input id="ag_camp_aud" class="np-input" style="flex:2;min-width:160px" placeholder="público (ex.: lojas WooCommerce lentas)"></div>
+          <textarea id="ag_camp_msg" class="np-input" style="width:100%;height:56px;padding:10px" placeholder="instruções extra (opcional)"></textarea>
+          <button class="np-btn np-btn--primary" style="margin-top:10px" onclick="runCampaignCopy()">${ic('sparkles', 15)} Gerar copy</button>
+          <div id="ag_camp_out"></div></div></section>
     </div>`;
 }
 function chatAppend(who, html) { const box = $('#ag_chat'); if (!box) return; const align = who === 'user' ? 'flex-end' : 'flex-start'; const bg = who === 'user' ? 'var(--np-brand-soft)' : 'var(--np-surface-2)'; box.insertAdjacentHTML('beforeend', `<div style="align-self:${align};max-width:88%;background:${bg};border-radius:12px;padding:10px 12px;font-size:13px">${html}</div>`); box.scrollTop = box.scrollHeight; }
@@ -1255,7 +1265,7 @@ window.chatSend = async (ev) => {
     chatAppend('bot', `<b>${esc(r.name)}</b> — <b>${fmt(r.count)}</b> sites<div class="muted" style="font-size:12px;margin:4px 0">${esc(r.explanation || '')}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${chips}</div><button class="np-btn np-btn--sm np-btn--primary" onclick="saveAudience()">Guardar segmento</button> <button class="np-btn np-btn--sm" onclick="location.hash='#/directory?'+new URLSearchParams(AGENT_RESULT.filters).toString()">Ver no diretório</button>`);
   } else if (r.kind === 'plan') {
     chatAppend('bot', (r.ideas || []).map((i) => `<div style="margin-bottom:8px"><b>${esc(i.title)}</b><div style="font-size:12px"><b>Público:</b> ${esc(i.audience)} · <b>Ângulo:</b> ${esc(i.angle)}</div>${i.why ? `<div class="muted" style="font-size:11.5px">${esc(i.why)}</div>` : ''}</div>`).join('') || 'Sem sugestões.');
-  } else { chatAppend('bot', esc(r.reply || '(sem resposta)')); }
+  } else if (r.kind === 'campaign') { chatAppend('bot', renderCampaignCopy(r)); } else { chatAppend('bot', esc(r.reply || '(sem resposta)')); }
   return false;
 };
 window.runAudience = async () => {
@@ -1289,6 +1299,78 @@ window.runPlanner = async () => {
   out.innerHTML = (r.ideas || []).length ? r.ideas.map(card).join('') : '<div class="muted" style="margin-top:12px">Sem sugestões (ou Ollama em baixo).</div>';
 };
 
+// Campaign Creator — render partilhado (card + chat).
+function renderCampaignCopy(r) {
+  if (r.error) return `<span class="np-badge warn" style="height:auto;padding:6px">${esc(r.error)}</span>`;
+  const subs = (r.subjects || []).map((x) => `<li>${esc(x)}</li>`).join('');
+  const vars = (r.variables || []).map((v) => `<span class="np-chip">${esc(v)}</span>`).join(' ');
+  const bid = 'cc_' + Math.random().toString(36).slice(2, 8);
+  return `<div style="margin-top:12px;padding:14px;background:var(--np-surface-2);border-radius:10px">
+    <div class="np-eyebrow">Assuntos</div><ul style="margin:4px 0 10px;padding-left:20px">${subs || '<li class="muted">—</li>'}</ul>
+    ${r.preview_text ? `<div class="muted" style="font-size:12px;margin-bottom:8px">Preview: ${esc(r.preview_text)}</div>` : ''}
+    <div class="np-eyebrow">Corpo</div><pre id="${bid}" style="white-space:pre-wrap;font-family:inherit;font-size:13px;background:var(--np-surface);border:1px solid var(--np-border);border-radius:8px;padding:10px;margin:4px 0 10px">${esc(r.body || '')}</pre>
+    ${vars ? `<div class="np-eyebrow">Variáveis</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${vars}</div>` : ''}
+    <button class="np-btn np-btn--sm" style="margin-top:10px" onclick="navigator.clipboard.writeText(document.getElementById('${bid}').innerText).then(()=>this.textContent='Copiado ✓')">Copiar corpo</button></div>`;
+}
+window.runCampaignCopy = async () => {
+  const angle = $('#ag_camp_angle')?.value || 'general';
+  const audience = ($('#ag_camp_aud')?.value || '').trim();
+  const message = ($('#ag_camp_msg')?.value || '').trim();
+  const out = $('#ag_camp_out'); out.innerHTML = `<div class="np-sub" style="margin-top:12px">A escrever… (Ollama on-prem, pode demorar)</div>`;
+  let r; try { r = await api('/api/agents/campaign-copy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ angle, audience, message }) }); }
+  catch (e) { out.innerHTML = `<div class="np-badge warn" style="height:auto;padding:8px;margin-top:12px">${esc(e.message)}</div>`; return; }
+  out.innerHTML = renderCampaignCopy(r);
+};
+
+// ========== CHAT (Orquestrador — página dedicada) ==========
+async function viewChat() {
+  if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
+  renderNav('chat');
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Assistente</div><h1 class="np-h1">Chat com o Orquestrador</h1><div class="np-sub">Linguagem natural (PT). Encaminha para os sub-agentes: Audience Creator · Planner · Campaign Creator. Ollama on-prem.</div></div></div>
+    <section class="np-card"><div class="np-card-b" style="display:flex;flex-direction:column;height:calc(100vh - 250px);min-height:400px">
+      <div id="ag_chat" style="flex:1;overflow:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
+      <form id="ag_chatform" style="display:flex;gap:8px" onsubmit="return chatSend(event)"><input id="ag_chatin" class="np-input" style="flex:1" placeholder="Ex.: “cria um público de lojas WooCommerce lentas”, “que campanhas devia fazer?”, “escreve um email sobre segurança”" autocomplete="off"><button class="np-btn np-btn--primary" type="submit">${ic('send', 15)}</button></form>
+    </div></section>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${['Que campanhas devia fazer?', 'Cria um público de lojas WooCommerce lentas em PT', 'Escreve um email de outreach sobre a velocidade do site'].map((q) => `<button class="np-btn np-btn--sm" onclick="document.getElementById('ag_chatin').value=this.textContent;chatSend({preventDefault(){}})">${esc(q)}</button>`).join('')}</div>`;
+  chatAppend('bot', 'Olá! Sou o <b>Orquestrador</b>. Posso criar <b>públicos-alvo</b>, sugerir <b>campanhas</b>, ou escrever o <b>copy</b> dos emails. O que precisas?');
+}
+
+// ========== OUTREACH (campanhas: funil + estatísticas + logs) ==========
+async function viewOutreach() {
+  if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
+  renderNav('outreach');
+  if (!REFRESHING) $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  let o; try { o = await api('/api/outreach'); } catch (e) { $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Outreach</div><h1 class="np-h1">Outreach</h1></div></div><div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
+  const f = o.funnel || {}, camps = o.campaigns || [], recent = o.recent || [];
+  const base = f.generated || f.total || 0;
+  const openRate = f.sent ? Math.round((f.opened / f.sent) * 100) : 0;
+  const clickRate = f.sent ? Math.round((f.clicked / f.sent) * 100) : 0;
+  const kpi = (l, v, sub) => `<div class="np-kpi"><div class="np-kpi-l">${l}</div><div class="np-kpi-v tnum">${v}</div>${sub ? `<div class="muted" style="font-size:11px;margin-top:2px">${sub}</div>` : ''}</div>`;
+  const steps = [['Gerados', 'generated'], ['Enviados', 'sent'], ['Abertos', 'opened'], ['Cliques', 'clicked']];
+  const funnel = steps.map(([lab, k]) => { const v = f[k] || 0; const pc = base ? Math.round((v / base) * 100) : 0; return `<div class="np-bar-row"><span class="np-bar-lab">${lab}</span><div class="np-bar-track"><div class="np-bar-fill" style="width:${pc}%;background:var(--np-brand)"></div></div><span class="np-bar-v tnum">${fmt(v)}</span><span class="np-bar-p tnum">${pc}%</span></div>`; }).join('');
+  const sBadge = (st) => { const m = { sent: 'ok', opened: 'ok', clicked: 'ok', ready: 'neutral', pending: 'neutral', generating: 'neutral', failed: 'warn', bounced: 'warn' }; return `<span class="np-badge ${m[st] || 'neutral'}" style="height:18px">${esc(st || '—')}</span>`; };
+  const campRow = (c) => `<tr><td style="font-weight:600">${esc(c.name || '—')}</td><td><span class="np-chip">${esc(c.angle || '—')}</span></td><td>${sBadge(c.status)}</td><td class="tnum" style="text-align:right">${fmt(c.generated || 0)}/${fmt(c.total || 0)}</td><td class="tnum" style="text-align:right">${fmt(c.sent || 0)}</td><td class="tnum" style="text-align:right">${fmt(c.opened || 0)}</td><td class="tnum" style="text-align:right">${fmt(c.clicked || 0)}</td></tr>`;
+  const logRow = (e) => `<tr><td class="muted">${e.created_at ? esc(String(e.created_at).slice(0, 16).replace('T', ' ')) : '—'}</td><td>${esc(e.to_email || '—')}</td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.subject || '—')}</td><td>${esc(e.campaign?.name || '—')}</td><td>${sBadge(e.status)}</td></tr>`;
+  const angleChips = Object.entries(o.byAngle || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="np-chip">${esc(k)} · ${fmt(v)}</span>`).join(' ');
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Outreach</div><h1 class="np-h1">Outreach</h1><div class="np-sub">Funil de campanhas de email + estatísticas + registo de envios.</div></div></div>
+    <div style="background:var(--np-surface-2);border:1px solid var(--np-border);border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:16px">ℹ️ As campanhas organizam-se por <b>ângulo</b> (${['general', 'speed', 'seo', 'security', 'hosting', 'maintenance'].join(', ')}). A escada de temperatura <b>Cold → Semi-Warm → Warm</b> ainda não é um campo do esquema — quando adicionarmos <code>campaigns.phase</code>, esta página separa por fase automaticamente.</div>
+    <div class="np-kpis">
+      ${kpi('Campanhas', fmt(camps.length))}
+      ${kpi('Emails gerados', fmt(f.generated || 0))}
+      ${kpi('Enviados', fmt(f.sent || 0))}
+      ${kpi('Taxa abertura', openRate + '%', `${fmt(f.opened || 0)} abertos`)}
+      ${kpi('Taxa cliques', clickRate + '%', `${fmt(f.clicked || 0)} cliques`)}
+    </div>
+    <div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr));margin-top:16px">
+      <section class="np-card"><div class="np-card-h"><h2>Funil</h2></div><div class="np-card-b">${base ? funnel : '<div class="muted">Sem dados de outreach ainda — o funil enche quando as campanhas arrancarem.</div>'}</div></section>
+      <section class="np-card"><div class="np-card-h"><h2>Por ângulo</h2></div><div class="np-card-b">${angleChips || '<div class="muted">Sem campanhas.</div>'}</div></section>
+    </div>
+    <section class="np-card" style="margin-top:16px"><div class="np-card-h"><h2>Campanhas</h2><span class="muted" style="font-size:12px">${fmt(camps.length)}</span></div><div class="np-card-b">
+      ${camps.length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Nome</th><th>Ângulo</th><th>Estado</th><th style="text-align:right">Gerados</th><th style="text-align:right">Enviados</th><th style="text-align:right">Abertos</th><th style="text-align:right">Cliques</th></tr></thead><tbody>${camps.map(campRow).join('')}</tbody></table></div>` : '<div class="muted">Ainda não há campanhas. Cria uma em <a href="#/campaigns">Campanhas</a> ou pede ao <a href="#/chat">Orquestrador</a>.</div>'}</div></section>
+    <section class="np-card" style="margin-top:16px"><div class="np-card-h"><h2>Registo de envios (logs)</h2><span class="muted" style="font-size:12px">${fmt(recent.length)} recentes</span></div><div class="np-card-b">
+      ${recent.length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Quando</th><th>Para</th><th>Assunto</th><th>Campanha</th><th>Estado</th></tr></thead><tbody>${recent.map(logRow).join('')}</tbody></table></div>` : '<div class="muted">Sem emails registados. Aparecem aqui à medida que as campanhas geram/enviam.</div>'}</div></section>`;
+}
+
 // ========== CONFIGURAÇÃO / SISTEMA (B5) ==========
 async function viewConfig() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
@@ -1296,6 +1378,11 @@ async function viewConfig() {
   if (!REFRESHING) $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
   let c; try { c = await api('/api/config'); } catch (e) { $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Configuração</h1></div></div><div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
   const st = c.status, cfg = c.config;
+  let wk = []; try { wk = await api('/api/workers'); } catch (e) {}
+  const wkArr = Array.isArray(wk) ? wk : (wk?.workers || []);
+  const ROLE_REF = [['base', 'whois · ssl · dns · fingerprint · cms · geoip', 'rede'], ['security', 'nuclei · wpscan', 'rede'], ['browser', 'lighthouse', 'CPU (Chromium)'], ['ai', 'industry (LLM)', 'CPU (Ollama)'], ['residential', 'gmb', 'IP residencial'], ['verify', 'verify (email)', 'APIs externas'], ['writer', 'result_site (write-behind)', 'Postgres']];
+  const liveFor = (role) => wkArr.filter((w) => { const r = String(w.role || 'all'); return r === 'all' || r.split(',').map((x) => x.trim()).includes(role); }).length;
+  const wkRow = ([role, jobs, prof]) => { const n = liveFor(role); return `<tr><td style="font-weight:600">${role}</td><td style="text-align:right"><span class="np-badge ${n ? 'ok' : 'neutral'}" style="height:18px">${n}</span></td><td class="muted">${jobs}</td><td>${prof}</td></tr>`; };
   const svc = (name, ok, detail) => `<div class="np-kpi"><div class="np-kpi-l"><span class="np-dot" style="background:${ok ? 'var(--np-ok-mark)' : 'var(--np-neutral-mark)'}"></span>${name}</div><div style="font-size:14px;font-weight:800;margin-top:6px;color:${ok ? 'var(--np-ok)' : 'var(--np-text-3)'}">${ok ? 'ligado' : 'desligado'}</div><div class="muted" style="font-size:11px;margin-top:2px;word-break:break-all">${detail || ''}</div></div>`;
   const provRow = (p) => `<tr><td style="font-weight:600">${esc(p.provider)}</td><td class="tnum" style="text-align:right">${p.keys}</td><td class="tnum" style="text-align:right">${p.dailyLimit ? fmt(p.dailyLimit) + '/dia' : '—'}</td></tr>`;
   const sendRow = (s) => `<tr><td style="font-weight:600">${esc(s.label || s.from_email || '—')}</td><td class="muted">${esc(s.from_email || '')}</td><td>${esc(String(s.warmup_stage ?? '—'))}</td><td class="tnum" style="text-align:right">${fmt(s.sent_today || 0)}/${fmt(s.daily_cap || 0)}</td><td>${s.active ? '<span class="np-badge ok" style="height:18px">ativa</span>' : '<span class="np-badge neutral" style="height:18px">inativa</span>'}</td></tr>`;
@@ -1314,9 +1401,13 @@ async function viewConfig() {
       <section class="np-card"><div class="np-card-h"><h2>Contas de envio (outreach)</h2></div><div class="np-card-b">
         ${(cfg.sending || []).length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Conta</th><th>De</th><th>Warm-up</th><th style="text-align:right">Hoje</th><th></th></tr></thead><tbody>${cfg.sending.map(sendRow).join('')}</tbody></table></div>` : '<div class="muted">Sem contas de envio (outreach pausado — aguarda as VMs de IP limpo).</div>'}</div></section>
     </div>
+    <section class="np-card" style="margin-top:16px"><div class="np-card-h"><h2>Workers (frota)</h2><span class="muted" style="font-size:12px">${wkArr.length} a correr</span></div><div class="np-card-b">
+      <div class="np-tablewrap"><table class="np-table"><thead><tr><th>Role</th><th style="text-align:right">A correr</th><th>Jobs</th><th>Perfil I/O</th></tr></thead><tbody>${ROLE_REF.map(wkRow).join('')}</tbody></table></div>
+      <div class="muted" style="font-size:12px;margin-top:8px">A concorrência por worker define-se por env em cada host (DH_CONC, LIGHTHOUSE_CONC, WPSCAN_CONC, GMB_CONC…). Layout completo em <code>docs/LOAD-DISTRIBUTION.md</code>; detalhe por VM em <a href="#/vms">VMs</a>.</div>
+    </div></section>
     <section class="np-card" style="margin-top:16px"><div class="np-card-h"><h2>Ângulos de campanha</h2>${cfg.sender_org ? `<span class="muted" style="font-size:12px">${esc(cfg.sender_org)}</span>` : ''}</div><div class="np-card-b">
       ${cfg.angles.length ? `<div style="display:flex;gap:6px;flex-wrap:wrap">${cfg.angles.map((a) => `<span class="np-chip">${esc(a)}</span>`).join('')}</div>` : '<div class="muted">config/campaign-angles.json ausente.</div>'}
-      <div class="muted" style="font-size:12px;margin-top:10px">Editar chaves/proxies/contas faz-se nos ficheiros gitignored do servidor (nunca pelo browser) — ver <code>docs/</code>. Páginas públicas + dashboards de outreach chegam com a retoma do outreach.</div>
+      <div class="muted" style="font-size:12px;margin-top:10px">Editar chaves/proxies/contas faz-se nos ficheiros gitignored do servidor (nunca pelo browser) — ver <code>docs/</code>. Páginas de <a href="#/outreach">Outreach</a> e relatório público (<code>/r/&lt;token&gt;</code>) já ativos; envio real aguarda contas + VMs de IP limpo.</div>
     </div></section>`;
 }
 
@@ -1349,7 +1440,7 @@ async function route() {
 // Auto-refresh global (10s) das páginas de dados. NÃO refresca ferramentas (import/agents/
 // settings), nem enquanto se edita um campo, nem com um drawer aberto; preserva o scroll.
 let REFRESHING = false;
-  const NO_AUTOREFRESH = new Set(['import', 'agents', 'settings', 'coverage', 'logs']);
+  const NO_AUTOREFRESH = new Set(['import', 'agents', 'chat', 'settings', 'coverage', 'logs']);
 window.addEventListener('hashchange', route);
 route();
 setInterval(() => {

@@ -1033,15 +1033,34 @@ app.post('/api/agents/audience', async (req, res) => {
 app.post('/api/agents/plan', async (req, res) => {
   try { const out = await agentPlan((req.body?.prompt || '').trim()); if (out.error) return res.status(502).json(out); res.json(out); } catch (e) { res.status(502).json({ error: e.message }); }
 });
+// Sub-agente Campaign Creator: brief → copy de email (assuntos + corpo c/ variáveis).
+const CAMPAIGN_VARS = ['{{name}}', '{{domain}}', '{{seo_score}}', '{{mobile_score}}', '{{security_findings}}', '{{ssl_grade}}', '{{ssl_days_left}}', '{{gmb_name}}', '{{gmb_rating}}', '{{industry}}', '{{report_url}}'];
+async function agentCampaign({ angle, audience, message } = {}) {
+  const prompt = `És o "Campaign Creator" do NetProspect (Netmaster — agência web PT: manutenção de sites + alojamento gerido).
+Escreve UM email de outreach frio para prospetos B2B. Regras: PT de Portugal, tom humano e direto (não corporativo), CURTO (máx ~90 palavras), UM call-to-action (marcar chamada ou ver relatório). Personaliza com as variáveis disponíveis (serão substituídas por dados reais de cada site):
+${CAMPAIGN_VARS.join(' ')}
+Usa {{report_url}} para o link do relatório e {{name}}/{{domain}} para personalizar. Não prometas o que não sabes nem inventes números.
+Ângulo de venda: ${angle || 'geral'}. ${audience ? 'Público: ' + audience + '.' : ''} ${message ? 'Instruções extra: ' + message : ''}
+Responde só em JSON: { "subjects":["<2-3 assuntos curtos, menos de 60 chars>"], "preview_text":"<pré-visualização 1 linha>", "body":"<corpo do email com as variáveis>", "variables":["<variáveis efetivamente usadas>"] }`;
+  const format = { type: 'object', properties: { subjects: { type: 'array', items: { type: 'string' } }, preview_text: { type: 'string' }, body: { type: 'string' }, variables: { type: 'array', items: { type: 'string' } } }, required: ['subjects', 'body'] };
+  const r = await ollamaJson(prompt, format, { timeoutMs: 90000, options: { temperature: 0.6 } });
+  if (!r.ok) return { error: r.error };
+  if (!r.json) return { error: 'A IA devolveu uma resposta inválida.' };
+  return { subjects: (r.json.subjects || []).slice(0, 3), preview_text: r.json.preview_text || '', body: r.json.body || '', variables: (r.json.variables || []).slice(0, 12), angle: angle || 'geral' };
+}
+app.post('/api/agents/campaign-copy', async (req, res) => {
+  try { const out = await agentCampaign(req.body || {}); if (out.error) return res.status(502).json(out); res.json(out); } catch (e) { res.status(502).json({ error: e.message }); }
+});
 // Orquestrador — chat que classifica a intenção e delega no sub-agente certo.
 app.post('/api/agents/chat', async (req, res) => {
   try {
     const msg = (req.body?.message || '').trim();
     if (!msg) return res.status(400).json({ error: 'mensagem em falta' });
-    const routeFmt = { type: 'object', properties: { intent: { type: 'string', enum: ['audience', 'plan', 'general'] }, reply: { type: 'string' } }, required: ['intent'] };
+    const routeFmt = { type: 'object', properties: { intent: { type: 'string', enum: ['audience', 'plan', 'campaign', 'general'] }, reply: { type: 'string' } }, required: ['intent'] };
     const routePrompt = `És o Orquestrador de IA do NetProspect (prospeção B2B, agência web Netmaster). Classifica a mensagem do utilizador:
 - "audience": quer construir/definir um público-alvo ou segmento (por filtros).
 - "plan": quer sugestões de campanhas / estratégia a partir dos dados.
+  - "campaign": quer ESCREVER/criar o texto (copy) de um email de campanha.
 - "general": pergunta geral → responde tu próprio no campo "reply" (PT de Portugal, curto e útil).
 Mensagem: "${msg}"
 Responde só em JSON {intent, reply}.`;
@@ -1050,7 +1069,7 @@ Responde só em JSON {intent, reply}.`;
     const intent = r.json?.intent || 'general';
     if (intent === 'audience') { const a = await agentAudience(msg); if (a.error) return res.status(502).json(a); return res.json({ kind: 'audience', intent, ...a }); }
     if (intent === 'plan') { const p = await agentPlan(msg); if (p.error) return res.status(502).json(p); return res.json({ kind: 'plan', intent, ...p }); }
-    return res.json({ kind: 'text', intent: 'general', reply: r.json?.reply || 'Posso criar públicos-alvo ou sugerir campanhas de outreach — o que precisas?' });
+    return res.json({ kind: 'text', intent: 'general', reply: r.json?.reply || 'Posso criar públicos-alvo, sugerir campanhas ou escrever o copy dos emails — o que precisas?' });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 
@@ -1171,6 +1190,83 @@ app.get('/api/logs', async (req, res) => {
     all.sort((a, b) => b.line.slice(0, 8).localeCompare(a.line.slice(0, 8)));
     res.json({ logs: all.slice(0, 400), telemetry: true, workers: ids.length });
   } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// --- Outreach: funil de campanhas + emails recentes (antes do catch-all) ---
+app.get('/api/outreach', async (req, res) => {
+  try {
+    const camps = await d('/items/campaigns?fields=id,name,status,angle,total,generated,sent,opened,clicked,created_at&sort=-created_at&limit=200').catch(() => []);
+    const f = { total: 0, generated: 0, sent: 0, opened: 0, clicked: 0 };
+    const byAngle = {}, byStatus = {};
+    for (const c of camps) { for (const k of Object.keys(f)) f[k] += (c[k] || 0); byAngle[c.angle || '—'] = (byAngle[c.angle || '—'] || 0) + 1; byStatus[c.status || '—'] = (byStatus[c.status || '—'] || 0) + 1; }
+    let recent = [];
+    try { recent = await d('/items/emails?fields=id,to_email,subject,status,created_at,sent_at,opened_at,clicked_at,bounce_type,campaign.name&sort=-created_at&limit=60'); } catch { /* vazio */ }
+    res.json({ ok: true, campaigns: camps, funnel: f, byAngle, byStatus, recent });
+  } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
+
+// --- Relatório PÚBLICO (link nos emails: /r/<token>). Serve HTML standalone; marca opened_at. ---
+// NOTA: para ser público, o Authentik/NPMPlus tem de EXCLUIR /r/* da autenticação.
+const escH = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function renderReport(em, full) {
+  const s = em.site || {};
+  const perf = s.seo_score != null ? Math.round(s.seo_score) : null;
+  const mob = s.mobile_score != null ? Math.round(s.mobile_score) : null;
+  const sev = s.security_severity || (s.security_findings ? 'medium' : null);
+  const tech = Array.isArray(s.tech_detected) ? s.tech_detected : (s.tech_detected && typeof s.tech_detected === 'object' ? Object.keys(s.tech_detected) : []);
+  const token = em.token || em.id;
+  const sender = em.campaign?.from_email || 'ola@netmaster.pt';
+  const scoreCol = (v) => v == null ? '#6b7280' : (v >= 90 ? '#16a34a' : v >= 50 ? '#d97706' : '#dc2626');
+  const sevCol = { critical: '#dc2626', high: '#dc2626', medium: '#d97706', low: '#16a34a' }[sev] || '#16a34a';
+  const card = (t, v, note, col) => `<div style="flex:1;min-width:150px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">${t}</div><div style="font-size:26px;font-weight:800;margin:4px 0;color:${col || '#111827'}">${v}</div><div style="font-size:12px;color:#6b7280">${note || ''}</div></div>`;
+  const recs = [];
+  if (perf != null && perf < 90) recs.push('Otimizar a velocidade de carregamento (imagens, cache, JS) — impacta SEO e conversão.');
+  if (mob != null && mob < 90) recs.push('Melhorar a experiência mobile — a maioria do tráfego é telemóvel.');
+  if (sev && sev !== 'low') recs.push('Corrigir os problemas de segurança detetados antes que sejam explorados.');
+  if (s.ssl_days_left != null && s.ssl_days_left < 30) recs.push('Renovar o certificado SSL (expira em breve).');
+  if (s.cms_outdated) recs.push('Atualizar o CMS/WordPress e plugins — versões antigas são o principal vetor de ataque.');
+  if (s.wp_vuln_count) recs.push(`Rever ${s.wp_vuln_count} potenciais vulnerabilidades de WordPress.`);
+  if (!s.gmb_name) recs.push('Criar/otimizar o perfil Google Business — presença local grátis que traz clientes.');
+  const fullSections = full ? `
+    <div class="sec"><b>Performance detalhada</b>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px">
+        ${card('SEO / Desktop', perf != null ? perf + '/100' : '—', '', scoreCol(perf))}
+        ${card('Mobile', mob != null ? mob + '/100' : '—', '', scoreCol(mob))}
+      </div></div>
+    ${tech.length ? `<div class="sec"><b>Stack tecnológica (${tech.length})</b><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${tech.map((t) => `<span style="background:#f3f4f6;border-radius:20px;padding:4px 10px;font-size:12px">${escH(t)}</span>`).join('')}</div></div>` : ''}
+    ${recs.length ? `<div class="sec"><b>Recomendações da Netmaster</b><ul style="margin:10px 0 0;padding-left:20px;line-height:1.8">${recs.map((r) => `<li>${escH(r)}</li>`).join('')}</ul></div>` : ''}
+  ` : `
+    ${recs.length ? `<div class="sec"><b>O que encontrámos para melhorar</b><ul style="margin:10px 0 0;padding-left:20px;line-height:1.7">${recs.slice(0, 3).map((r) => `<li>${escH(r)}</li>`).join('')}${recs.length > 3 ? `<li class="muted">…e mais ${recs.length - 3} no relatório completo.</li>` : ''}</ul></div>` : ''}`;
+  return `<!doctype html><html lang="pt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${full ? 'Relatório completo' : 'Análise'} — ${escH(s.domain)}</title>
+<style>body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#f9fafb;color:#111827;line-height:1.5}.wrap{max-width:820px;margin:0 auto;padding:32px 20px}h1{font-size:26px;margin:0 0 4px}.muted{color:#6b7280}.sec{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:20px;margin:16px 0}.cta{background:#111827;color:#fff;border-radius:14px;padding:24px;text-align:center;margin-top:20px}.btn{display:inline-block;background:#e11d48;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:700;margin:6px}ul{color:#374151}</style></head>
+<body><div class="wrap">
+  <div class="muted" style="font-size:12px">Netmaster · Análise técnica do seu site</div>
+  <h1>${escH(s.domain)}</h1>
+  <p class="muted">Olá${em.contact?.name ? ' ' + escH(em.contact.name) : ''}, fizemos uma análise automática ao seu site. ${full ? 'Aqui está o relatório completo.' : 'Aqui está o resumo.'}</p>
+  <div style="display:flex;gap:12px;flex-wrap:wrap">
+    ${card('Performance', perf != null ? perf + '/100' : '—', perf != null ? (perf >= 90 ? 'excelente' : perf >= 50 ? 'a melhorar' : 'crítico') : 'não medido', scoreCol(perf))}
+    ${card('Segurança', s.security_findings != null ? s.security_findings + ' achados' : '—', sev || 'sem dados', sevCol)}
+    ${card('SSL', s.ssl_grade || '—', s.ssl_days_left != null ? s.ssl_days_left + ' dias' : '', s.ssl_grade && /^A/.test(s.ssl_grade) ? '#16a34a' : '#d97706')}
+    ${s.gmb_name ? card('Google Business', s.gmb_rating ? s.gmb_rating + '★' : '✓', (s.gmb_reviews || 0) + ' reviews') : ''}
+  </div>
+  ${s.wp_vuln_count || s.cms_outdated ? `<div class="sec"><b>⚠️ WordPress</b><p class="muted" style="margin:6px 0 0">${s.cms_outdated ? 'CMS desatualizado. ' : ''}${s.wp_vuln_count ? s.wp_vuln_count + ' potenciais vulnerabilidades detetadas.' : ''} Recomendamos uma revisão de segurança.</p></div>` : ''}
+  ${fullSections}
+  <div class="cta"><div style="font-size:20px;font-weight:800">${full ? 'Quer que tratemos disto por si?' : 'Quer o relatório completo + plano de melhoria?'}</div>
+    <p style="color:#d1d5db;margin:8px 0 14px">Marque uma chamada gratuita de 15 min com a Netmaster.</p>
+    <a class="btn" href="mailto:${escH(sender)}?subject=${encodeURIComponent('Chamada sobre ' + (s.domain || 'o meu site'))}">Marcar chamada</a>${full ? '' : `<a class="btn" style="background:#374151" href="/r/${escH(token)}?full=1">Ver relatório completo</a>`}</div>
+  <p class="muted" style="font-size:11px;text-align:center;margin-top:24px">Netmaster · análise gerada automaticamente · responder ao email remove-o da lista.</p>
+</div></body></html>`;
+}
+app.get('/r/:token', async (req, res) => {
+  try {
+    const rows = await d(`/items/emails?filter[token][_eq]=${encodeURIComponent(req.params.token)}&fields=id,token,opened_at,site.domain,site.seo_score,site.mobile_score,site.security_findings,site.security_severity,site.ssl_grade,site.ssl_days_left,site.tech_detected,site.gmb_name,site.gmb_rating,site.gmb_reviews,site.industry,site.cms_outdated,site.wp_vuln_count,contact.name,campaign.angle,campaign.from_email&limit=1`).catch(() => []);
+    const em = rows[0];
+    if (!em || !em.site) return res.status(404).type('html').send('<h1 style="font-family:sans-serif;text-align:center;margin-top:60px">Relatório não encontrado</h1>');
+    if (!em.opened_at) fetch(`${DIRECTUS_URL}/items/emails/${em.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ opened_at: new Date().toISOString() }) }).catch(() => {});
+    res.type('html').send(renderReport(em, req.query.full === '1'));
+  } catch (e) {
+    res.status(500).type('html').send('<h1>Erro a gerar o relatório</h1>');
+  }
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

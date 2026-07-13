@@ -270,6 +270,7 @@ services:
       POSTHOG_KEY: ${POSTHOG_KEY:-}
       # Heavy image: só faz os roles pesados (browser/security/ai) quando AUDIT_ENABLED.
       WORKER_ROLES: ${WORKER_ROLES:-browser,security,ai}
+      FLEET_HOST: ${FLEET_HOST:-hel1-docker}
       EGRESS_PROXY: ${EGRESS_PROXY:-}
       WPSCAN_API_TOKEN: ${WPSCAN_API_TOKEN:-}
       AUDIT_ENABLED: ${AUDIT_ENABLED:-false}
@@ -346,6 +347,7 @@ services:
       CAMPAIGN_TRACK_BASE: ${CAMPAIGN_TRACK_BASE:-}
       CAMPAIGN_UNSUB_EMAIL: ${CAMPAIGN_UNSUB_EMAIL:-}
       WORKER_ROLES: base
+      FLEET_HOST: ${FLEET_HOST:-hel1-docker}
       EGRESS_PROXY: ${EGRESS_PROXY:-}
       ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-10}
       CONTACTS_CONCURRENCY: ${CONTACTS_CONCURRENCY:-5}
@@ -394,6 +396,7 @@ services:
       NATS_URL: ${NATS_URL:-nats://nats:4222}
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       WORKER_ROLES: writer
+      FLEET_HOST: ${FLEET_HOST:-hel1-docker}
       DIRECT_PG_WRITE: 'true'
       WRITE_BEHIND: ${WRITE_BEHIND:-}
       PG_WRITE_HOST: ${PG_WRITE_HOST:-pgbouncer}

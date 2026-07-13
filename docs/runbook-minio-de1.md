@@ -66,6 +66,9 @@ qm start 300
 > **Nota (memory/CPU a quente):** mudanças de CPU/RAM em VMs Proxmox só pegam com **cold-boot do
 > qemu** (`qm stop` + `qm start`), NÃO com um `reboot` de dentro da VM. (Aprendido à força nesta frota.)
 
+> **qemu-guest-agent (toda a VM, não os CTs):** o `--agent 1` só abre o canal; o pacote instala-se
+> DENTRO da VM: `apt update && apt install -y qemu-guest-agent`. O `bootstrap-vm.sh` (§2) já o faz.
+
 ---
 
 ## 2. Bootstrap da VM (Docker + Tailscale + repo)

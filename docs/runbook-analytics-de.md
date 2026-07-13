@@ -57,6 +57,9 @@ qm start 301
 > **`--cpu host` obrigatório** — o ClickHouse e o PostHog exigem **x86-64-v2**; o default `kvm64`
 > (v1) → `Fatal glibc error: CPU does not support x86-64-v2`. (Foi exatamente o que travou o `de-minio`.)
 
+> **qemu-guest-agent (toda a VM, não os CTs):** o `--agent 1` só abre o canal; o pacote instala-se
+> DENTRO da VM: `apt update && apt install -y qemu-guest-agent`. O `bootstrap-vm.sh` (§2) já o faz.
+
 ## 2. Bootstrap (Docker + Tailscale + repo) — **TU fazes**
 
 ```bash

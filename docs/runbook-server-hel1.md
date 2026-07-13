@@ -17,16 +17,16 @@
 
 ## Parâmetros
 
-|                             |                                      |
-| --------------------------- | ------------------------------------ |
+|                                   |                                                   |
+| --------------------------------- | ------------------------------------------------- |
 | **VMID**                    | **200** (confirma livre: `qm status 200`) |
-| **Nome / hostname tailnet** | `np-server`                          |
-| **Host Proxmox**            | HEL1 (Finlândia)                     |
-| **IP LAN**                  | `10.10.10.20/24` (gw `10.10.10.1`)   |
-| **Storage**                 | `storage-zfs` (ZFS)                  |
-| **Disco**                   | 40 GB (só SO + uploads Directus + `.data/nats`) |
-| **CPU / RAM**               | 4 vCPU / 8 GB (`--cpu host`)         |
-| **SO**                      | Debian 12 (cloud image + cloud-init) |
+| **Nome / hostname tailnet** | `np-server`                                     |
+| **Host Proxmox**            | HEL1 (Finlândia)                                 |
+| **IP LAN**                  | `10.10.10.20/24` (gw `10.10.10.1`)            |
+| **Storage**                 | `storage-zfs` (ZFS)                             |
+| **Disco**                   | 40 GB (só SO + uploads Directus +`.data/nats`) |
+| **CPU / RAM**               | 4 vCPU / 8 GB (`--cpu host`)                    |
+| **SO**                      | Debian 12 (cloud image + cloud-init)              |
 
 ---
 
@@ -36,19 +36,19 @@
 cd /var/lib/vz/template/iso
 wget -nc https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2
 
-qm create 200 --name np-server --memory 8192 --cores 4 --cpu host \
+qm create 801 --name np-server --memory 8192 --cores 4 --cpu host \
   --net0 virtio,bridge=vmbr1 --ostype l26 --scsihw virtio-scsi-single --agent 1
 
-qm importdisk 200 debian-12-genericcloud-amd64.qcow2 storage-zfs
-qm set 200 --scsi0 storage-zfs:vm-200-disk-0        # confirma o nome: qm config 200
-qm resize 200 scsi0 40G
+qm importdisk 801 debian-12-genericcloud-amd64.qcow2 local-zfs
+qm set 801 --scsi0 local-zfs:vm-801-disk-0        # confirma o nome: qm config 200
+qm resize 801 scsi0 40G
 
-qm set 200 --ide2 storage-zfs:cloudinit
-qm set 200 --boot order=scsi0 --serial0 socket --vga serial0
-qm set 200 --ciuser root --cipassword '<define-uma-password>' \
+qm set 801 --ide2 local-zfs:cloudinit
+qm set 801 --boot order=scsi0 --serial0 socket --vga serial0
+qm set 801 --ciuser root --cipassword '<define-uma-password>' \
   --sshkeys ~/.ssh/authorized_keys
-qm set 200 --ipconfig0 ip=10.10.10.20/24,gw=10.10.10.1
-qm start 200
+qm set 801 --ipconfig0 ip=10.10.10.81/24,gw=10.10.10.1
+qm start 801
 ```
 
 > **`--cpu host` é obrigatório** — o default `kvm64` é x86-64-v1; imagens modernas falham com
@@ -58,7 +58,7 @@ qm start 200
 ## 2. Bootstrap (Docker + Tailscale + repo) — **TU fazes**
 
 ```bash
-ssh root@10.10.10.20
+ssh root@10.10.10.81
 curl -fsSL https://raw.githubusercontent.com/NetmasterPT/netprospect-v1/main/deploy/bootstrap-vm.sh \
   | bash -s -- <TAILSCALE_AUTHKEY> np-server tag:control
 ```
@@ -105,10 +105,10 @@ ssh root@np-server 'docker exec <nats-cid> nats stream ls'   # confirma NP_JOBS 
 
 Cada host que fala com NATS/Redis/Directus troca os URLs internos pelos da `np-server`:
 
-| Host | NATS_URL / REDIS_URL / DIRECTUS_URL | Interface |
-| --- | --- | --- |
-| Workers **HEL1** (mesma LAN) | `nats://10.10.10.20:4222` · `redis://10.10.10.20:6379` · `http://10.10.10.20:8056` | **LAN** (rápido) |
-| Workers **DE1** + free VMs | `nats://<NPSRV_IP>:4222` · `redis://<NPSRV_IP>:6379` · `http://<NPSRV_IP>:8056` | tailnet |
+| Host                              | NATS_URL / REDIS_URL / DIRECTUS_URL                                                        | Interface               |
+| --------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------- |
+| Workers**HEL1** (mesma LAN) | `nats://10.10.10.20:4222` · `redis://10.10.10.20:6379` · `http://10.10.10.20:8056` | **LAN** (rápido) |
+| Workers**DE1** + free VMs   | `nats://<NPSRV_IP>:4222` · `redis://<NPSRV_IP>:6379` · `http://<NPSRV_IP>:8056`    | tailnet                 |
 
 ```bash
 # monólito HEL1 — os workers que lá ficam passam a apontar p/ a np-server (LAN)

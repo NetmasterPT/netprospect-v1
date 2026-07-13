@@ -22,6 +22,25 @@ REPO_DIR="${REPO_DIR:-/root/netprospect-v1}"
 
 log() { echo -e "\033[1;36m[bootstrap]\033[0m $*"; }
 
+# 0) SALVAGUARDA: isto corre DENTRO de uma VM convidada, NUNCA no host Proxmox.
+#    Correr no host instala o Docker, que põe a chain FORWARD a DROP e parte o
+#    encaminhamento das VMs convidadas → TODAS perdem internet/tailnet de uma vez.
+#    (Aprendido à força: o host de-analytics do DE1 apanhou exatamente isto.)
+if [ -d /etc/pve ] || command -v pveversion >/dev/null 2>&1; then
+  echo "ERRO: isto parece um HOST Proxmox (/etc/pve presente)." >&2
+  echo "      Este script é para correr DENTRO de uma VM. Cria a VM primeiro" >&2
+  echo "      (docs/runbook-*.md) e corre-o lá dentro, não no host." >&2
+  exit 1
+fi
+
+# 0b) qemu-guest-agent — toda a VM Proxmox precisa dele (host vê IP/estado + shutdown
+#     limpo). O --agent 1 no 'qm create' só abre o canal; o pacote instala-se cá dentro.
+if ! systemctl is-active --quiet qemu-guest-agent 2>/dev/null; then
+  log "a instalar o qemu-guest-agent..."
+  apt-get update -qq && apt-get install -y -qq qemu-guest-agent
+  systemctl enable --now qemu-guest-agent >/dev/null 2>&1 || true
+fi
+
 # 1) Docker (idempotente — o get.docker.com salta se já estiver)
 if ! command -v docker >/dev/null 2>&1; then
   log "a instalar o Docker..."

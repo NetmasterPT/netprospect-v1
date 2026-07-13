@@ -45,7 +45,7 @@ const JOBS = {
   nuclei: { subject: SUBJECTS.nuclei, role: 'security', resume: 'security_findings' },
   industry: { subject: SUBJECTS.industry, role: 'ai', resume: 'industry' },
   wpscan: { subject: SUBJECTS.wpscan, role: 'security', resume: 'wp_vuln_count' },
-  gmb: { subject: SUBJECTS.gmb, role: 'residential', resume: 'gmb_place_id' },
+  gmb: { subject: SUBJECTS.gmb, role: 'residential', resume: 'gmb_name' },
 };
 
 async function main() {

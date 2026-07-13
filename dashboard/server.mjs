@@ -1114,7 +1114,7 @@ SELECT
   count(*) FILTER (WHERE seo_score IS NOT NULL)::int AS lighthouse,
   count(*) FILTER (WHERE security_findings IS NOT NULL)::int AS nuclei,
   count(*) FILTER (WHERE wp_vuln_count IS NOT NULL)::int AS wpscan,
-  count(*) FILTER (WHERE gmb_place_id IS NOT NULL)::int AS gmb
+  count(*) FILTER (WHERE gmb_name IS NOT NULL)::int AS gmb
 FROM sites GROUP BY bucket`;
 app.get('/api/coverage', async (req, res) => {
   try {
@@ -1126,7 +1126,7 @@ app.get('/api/coverage', async (req, res) => {
         p.query("SELECT count(*) FILTER (WHERE email_status IS NOT NULL)::int verified, count(*) FILTER (WHERE email IS NOT NULL)::int with_email FROM contacts"),
       ]);
       return { ok: true, buckets: sites.rows, verify: ver.rows[0], ts: Date.now() };
-    }, 1800);
+    }, 600);
     res.json(data);
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });

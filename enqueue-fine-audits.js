@@ -32,6 +32,10 @@ const flag = (n, d) => { const f = argv.find((a) => a.startsWith(`--${n}=`)); re
 const LIMIT = flag('limit', null) ? parseInt(flag('limit'), 10) : null;
 const MIN_SCORE = flag('min-score', null) ? parseInt(flag('min-score'), 10) : null;
 const FORCE = argv.includes('--force');
+// --no-dedup: publica SEM Nats-Msg-Id → salta a janela de dedup de 24h. Necessário para
+// RE-enfileirar um job cujos msgIds ainda estão na janela (ex.: trocar o classificador de
+// industry e re-processar hoje). Seguro num enqueue de uma passagem (cada domínio 1×).
+const NO_DEDUP = argv.includes('--no-dedup');
 const ONLY = flag('only', 'lighthouse,nuclei,industry').split(',').map((s) => s.trim()).filter(Boolean);
 const PAGE = 500;
 
@@ -75,7 +79,7 @@ async function main() {
     lastId = rows[rows.length - 1].id;
     for (const s of rows) {
       for (const o of ONLY) {
-        await publishJob(js, JOBS[o].subject, { domain: s.domain, siteId: s.id }, { msgId: `${o}:${s.domain}` });
+        await publishJob(js, JOBS[o].subject, { domain: s.domain, siteId: s.id }, NO_DEDUP ? {} : { msgId: `${o}:${s.domain}` });
         jobs++;
       }
       sites++;

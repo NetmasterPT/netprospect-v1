@@ -6,13 +6,13 @@
 - [x] Dashboard data does not seem to be correct (verify proper filters of metrics and search queries) — KPIs verificados vs np-db (batem exatamente); caveat: aggregate do Directus não filtra relações profundas → Coverage usa PG direto
 - [x] Corrigir role da fila do industry (ai -> heuristic)
 - [x] Dashboard mobile responsiveness
-- [ ] Adicionar páginas de configuração para
-  - [ ] Proxies Configuration
-  - [ ] Mail Servers Configuration
-  - [ ] Workers Configuration
-  - [ ] Cold Outreach Emails Configuration
-  - [ ] Semi Warm Outreach Emails Configuration
-  - [ ] Warm Outreach Emails Configuration
+- [x] Adicionar páginas de configuração para (página Configuração: serviços + verificação + envio + Workers/frota + ângulos)
+  - [x] Proxies Configuration (contagem + estado; segredos lidos server-side, nunca servidos)
+  - [x] Mail Servers Configuration (contas de envio + modo SMTP/dry-run + warm-up)
+  - [x] Workers Configuration (roles da frota ao vivo + jobs por role + perfil I/O)
+  - [~] Cold Outreach Emails Configuration — consolidado nos "Ângulos de campanha"; separar por fase quando existir campaigns.phase
+  - [~] Semi Warm Outreach Emails Configuration — idem (ângulos)
+  - [~] Warm Outreach Emails Configuration — idem (ângulos)
 - [ ] Adicionar páginas de Dashboard para
   - [x] Clientes (já convertidos)
   - [x] ISPs (descobertos pela plataforma)
@@ -31,15 +31,10 @@
   - [x] Workers
   - [x] Workers Logs
   - [x] Workers Statistics (cabeçalho agregado na página Workers)
-  - [ ] Cold Outreach
-  - [ ] Cold Outreach Logs
-  - [ ] Cold Outreach Statistics
-  - [ ] Semi-Warm Outreach
-  - [ ] Semi-Warm Outreach Logs
-  - [ ] Semi-Warm Outreach Statistics
-  - [ ] Warm Outreach
-  - [ ] Warm Outreach Logs
-  - [ ] Warm Outreach Statistics
+  - [x] Outreach (página #/outreach: funil generated→sent→opened→clicked + campanhas por ângulo/estado)
+  - [x] Outreach Logs (registo de envios — coleção emails: quando/para/assunto/campanha/estado)
+  - [x] Outreach Statistics (KPIs: campanhas, gerados, enviados + taxas de abertura e clique)
+  - [~] Separar por fase Cold / Semi-Warm / Warm — aguarda campo campaigns.phase no esquema (a página separa por fase automaticamente quando existir)
   - [ ] Import em CSV de:
     - [x] Contactos
     - [x] Empresas
@@ -49,18 +44,16 @@
     - [x] Segmentos
     - [~] ISPs — N/A: derivados de sites.isp (groupBy), não é coleção → não importável por CSV
     - [~] Triggers — N/A: derivados do ClickHouse change_events, não é coleção → não importável por CSV
-- [ ] Adicionar páginas públicas para
-  - [ ] Company report summary (Emails têm um botão para este summary report que converte prospectos e dá-lhes accesso ao report completo numa página diferente se eles se tornarem clientes ou agendarem uma chamada paga de consultoria - different page)
-  - [ ] Company full report
-  - [ ] Book Call
-  - [ ] Buy Service/Product/Subscription
+- [/] Adicionar páginas públicas para
+  - [x] Company report summary — rota pública `/r/<token>` servida pelo dashboard a partir da auditoria do site (performance/segurança/SSL/GMB + recomendações), CTA "marcar chamada" (mailto) e link para o completo; marca opened_at na 1.ª abertura. **Requer excluir `/r/*` do Authentik no NPMPlus para ficar público.**
+  - [x] Company full report — `/r/<token>?full=1` (mesma rota, secções extra: performance detalhada, stack tecnológica completa, lista de recomendações)
+  - [ ] Book Call (por agora é um mailto na CTA; falta agenda/scheduling real)
+  - [ ] Buy Service/Product/Subscription (falta integração de pagamento)
 - [ ] Agentes
-  - [/] "Orquestrador": fala com o utilizador e pode lançar os outros agentes da plataforma
-    - [ ] Falta
-      - [ ] Página de Chat
-  - [/] "Campaign Creator": que cria os copies e escolhe/compila as variáveis a usar nos emails para que estes emails sejam o mais personalizados possível para cada prospecto ou cliente
-    - [ ] Falta
-      - [ ] Estar na página dos agentes e o orquestrador comunicar com ele
+  - [x] "Orquestrador": fala com o utilizador e pode lançar os outros agentes da plataforma
+    - [x] Página de Chat (#/chat — chat dedicado full-height + sugestões; encaminha para Audience/Planner/Campaign Creator)
+  - [x] "Campaign Creator": que cria os copies e escolhe/compila as variáveis a usar nos emails para que estes emails sejam o mais personalizados possível para cada prospecto ou cliente
+    - [x] Card na página dos Agentes (angle + público + instruções → assuntos + corpo com {{variáveis}}) e o orquestrador comunica com ele (intent 'campaign' → /api/agents/campaign-copy)
   - [x] "Planificador": que planifica campanhas de email e ajuda a definir que produtos/serviços anunciar e que audiencias devemos criar
   - [x] "Audience Creator": que pesquisa e analisa a nossa DB para criar audiencias com base no target pedido do utilizador
 - [ ] Adicionar ao Data Mining

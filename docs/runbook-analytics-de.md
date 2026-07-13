@@ -1,5 +1,10 @@
 # Runbook — `de-analytics`: ClickHouse + PostHog numa VM dedicada (DE1)
 
+> ✅ **FEITO (2026-07):** ClickHouse migrado — 10.236.938 observations + 43.106 change_events
+> (contagem exata), escrita+leitura remotas validadas, CH local do HEL1 desmantelado. O disco de dados
+> ficou no **`/dev/sda` (200G)** — o root da VM é o `sdb`. **NOTA:** o `bootstrap-vm.sh` não tinha
+> `rsync`; a cópia foi por `rsync` num container Alpine (o HEL1 não é root p/ `apt`). PostHog: pendente.
+
 > **Porquê.** O ClickHouse guarda a Fase E — a série temporal de observações por site (**~10 M linhas**
 > hoje, cresce sem parar). É disco-pesado, colunar, analítico: o perfil que MENOS precisa de estar ao
 > pé dos workers e o que MAIS cresce → como o MinIO, pertence ao **disco barato do DE1**, não ao NVMe

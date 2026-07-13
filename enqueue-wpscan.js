@@ -37,7 +37,8 @@ async function main() {
   const js = nc.jetstream();
 
   // Só WordPress + vivo. (NÃO exige `qualified`: o utilizador quer TODOS os sites WordPress.)
-  const base = { is_live: { _eq: true }, primary_platform: { slug: { _eq: 'wordpress' } } };
+  // WooCommerce é WordPress (plugin do WP) → inclui-se. São ~475k wordpress + ~280k woocommerce.
+  const base = { is_live: { _eq: true }, primary_platform: { slug: { _in: ['wordpress', 'woocommerce'] } } };
   if (MIN_SCORE != null) base.lead_score = { _gte: MIN_SCORE };
   if (!FORCE) base.wp_vuln_count = { _null: true };
 

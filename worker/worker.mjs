@@ -156,7 +156,8 @@ function makeHeavyFineHandlers(ctx, audit, js) {
   }
   async function wpscan(job) {
     const site = await load(job, ['primary_platform.slug']); if (!site) return 'ack';
-    if ((site.primary_platform?.slug || '') !== 'wordpress') return 'ack';
+    // WooCommerce É WordPress (plugin do WP) → o wpscan aplica-se aos dois.
+    if (!['wordpress', 'woocommerce'].includes(site.primary_platform?.slug || '')) return 'ack';
     try {
       // Batch keyless (job.keyless) → SEM --api-token: enumera (plugins/temas/versão/users) mas
       // não traz o vuln-DB do WPScan (poupa a quota de 25/dia/key, que fica só p/ on-demand).

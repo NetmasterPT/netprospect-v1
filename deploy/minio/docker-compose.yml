@@ -8,11 +8,17 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      # Consola atrás do NPMPlus/Authentik em https://netprospect.minio.netmaster.pt.
+      # Sem isto, o MinIO redireciona para o host:porta interno e o login parte. Vazio = desligado.
+      MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-}
     volumes:
       - /srv/minio:/data            # o HDD
     ports:
-      - "${TAILNET_IP}:9000:9000"    # API — só tailnet
-      - "127.0.0.1:9001:9001"        # consola — só por túnel SSH
+      - "${TAILNET_IP}:9000:9000"    # API — tailnet (S3 + reverse-proxy)
+      # Consola: no tailnet para o NPMPlus (noutro host) lhe chegar. Estava só em 127.0.0.1,
+      # e era ESSE o motivo de não abrir em netprospect.minio.netmaster.pt (não a firewall do DE1).
+      - "${TAILNET_IP}:9001:9001"    # consola — tailnet (para o reverse-proxy)
+      - "127.0.0.1:9001:9001"        # consola — local (túnel SSH)
     healthcheck:
       test: ["CMD", "mc", "ready", "local"]
       interval: 30s

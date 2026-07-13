@@ -64,6 +64,7 @@ const LIGHTHOUSE_CONC = Math.max(1, parseInt(process.env.LIGHTHOUSE_CONC || '2',
 const INDUSTRY_CONC = Math.max(1, parseInt(process.env.INDUSTRY_CONC || '1', 10));
 // GMB corre no portátil (IP residencial); conc baixa por defeito p/ não afogar o daily-driver.
 const GMB_CONC = Math.max(1, parseInt(process.env.GMB_CONC || '2', 10));
+const WPSCAN_CONC = Math.max(1, parseInt(process.env.WPSCAN_CONC || '2', 10));
 const AUDIT_ENABLED = /^(1|true|yes)$/i.test(process.env.AUDIT_ENABLED || '');
 const GMB_ENABLED = /^(1|true|yes)$/i.test(process.env.GMB_ENABLED || '');
 // industry: heurístico por default (instantâneo, sem GPU). INDUSTRY_LLM=true volta ao Ollama.
@@ -157,7 +158,11 @@ function makeHeavyFineHandlers(ctx, audit, js) {
     const site = await load(job, ['primary_platform.slug']); if (!site) return 'ack';
     if ((site.primary_platform?.slug || '') !== 'wordpress') return 'ack';
     try {
-      const r = await audit.wpscan.runWpscan(site.final_url || `https://${site.domain}/`);
+      // Batch keyless (job.keyless) → SEM --api-token: enumera (plugins/temas/versão/users) mas
+      // não traz o vuln-DB do WPScan (poupa a quota de 25/dia/key, que fica só p/ on-demand).
+      // On-demand keyed → usa a WPSCAN_API_TOKEN do host (uma key por host).
+      const token = job.keyless ? null : process.env.WPSCAN_API_TOKEN;
+      const r = await audit.wpscan.runWpscan(site.final_url || `https://${site.domain}/`, { token });
       await client.request(updateItem('sites', site.id, { wp_vuln_count: r.vulnCount }));
       await upsertReport(client, site.id, 'wpscan', { score: r.vulnCount, summary: { vulnCount: r.vulnCount }, report: r.report });
     } catch (e) { log(`wpscan ${site.domain}: ${e.message}`); }
@@ -404,7 +409,7 @@ const DRAIN = new Set(['audit_ondemand', 'audit_qualified', 'audit_rest']);
 // Concorrência por consumer (heavy = 1; leves = mais).
 const CONC = { enrich: ENRICH_CONC, contacts: CONTACTS_CONC, fetch: 8, dns: 12, geoip: 12, fingerprint: FINGERPRINT_CONC, social: 8, locality: 8, emailauth: 10, traffic: 20, score: SCORE_CONC, ssl: DH_CONC, whois: Math.max(1, Math.ceil(DH_CONC / 2)), dnsprovider: DH_CONC, subdomains: 2, verify: VERIFY_CONC, discover: 2, campaign_generate: 4, campaign_send: 6,
   // finos pesados (ver comentário no topo): nuclei é network-bound, industry é Ollama-bound.
-  nuclei: NUCLEI_JOB_CONC, wpscan: 2, lighthouse_mobile: LIGHTHOUSE_CONC, lighthouse_desktop: LIGHTHOUSE_CONC,
+  nuclei: NUCLEI_JOB_CONC, wpscan: WPSCAN_CONC, lighthouse_mobile: LIGHTHOUSE_CONC, lighthouse_desktop: LIGHTHOUSE_CONC,
   industry: INDUSTRY_CONC, gmb: GMB_CONC };
 
 // --- Arranque ---------------------------------------------------------------

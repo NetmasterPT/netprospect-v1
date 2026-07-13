@@ -884,9 +884,13 @@ const durMs = (ms) => (ms == null ? '—' : (ms < 1000 ? ms + 'ms' : (ms / 1000)
 let COV_THRESH = 'all';
 const COV_BUCKETS = { gt70: ['gt70'], gt60: ['gt70', 'b60'], gt50: ['gt70', 'b60', 'b50'], gt40: ['gt70', 'b60', 'b50', 'b40'], lt40: ['lt40'], all: ['gt70', 'b60', 'b50', 'b40', 'lt40'] };
 const COV_JOBS = [
-  ['live', 'Live', 'base'], ['score', 'Score', 'base'], ['fingerprint', 'Fingerprint / CMS', 'base'],
-  ['ssl', 'SSL', 'base'], ['dns', 'DNS provider', 'base'], ['whois', 'WHOIS', 'base'], ['contacts', 'Contactos (email)', 'base'],
-  ['industry', 'Indústria', 'audit'], ['lighthouse', 'Lighthouse', 'audit'], ['nuclei', 'Nuclei', 'audit'], ['wpscan', 'WPScan', 'audit'], ['gmb', 'GMB', 'audit'],
+  ['enrich', 'Enrich', 'base'], ['fetch', 'Fetch (homepage)', 'base'], ['live', 'Live', 'base'],
+  ['dns', 'DNS → IP', 'base'], ['geoip', 'GeoIP', 'base'], ['fingerprint', 'Fingerprint / CMS', 'base'],
+  ['social', 'Redes sociais', 'base'], ['locality', 'Localidade', 'base'], ['emailauth', 'Email auth (SPF)', 'base'],
+  ['traffic', 'Tráfego (Tranco)', 'base'], ['subdomains', 'Subdomínios', 'base'], ['ssl', 'SSL', 'base'],
+  ['dnsprovider', 'DNS provider', 'base'], ['whois', 'WHOIS', 'base'], ['contacts', 'Contactos', 'base'], ['score', 'Score', 'base'],
+  ['audit', 'Auditoria (coarse)', 'audit'], ['industry', 'Indústria', 'audit'], ['lighthouse', 'Lighthouse', 'audit'],
+  ['nuclei', 'Nuclei', 'audit'], ['wpscan', 'WPScan', 'audit'], ['gmb', 'GMB', 'audit'],
 ];
 function covSum(cov, thresh) {
   const keys = COV_BUCKETS[thresh] || COV_BUCKETS.all;
@@ -921,8 +925,9 @@ async function viewCoverage() {
       <span class="muted" style="margin-left:auto;font-size:11.5px">${fmt(s.total)} sites neste filtro</span></div>
     <table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="text-align:left;color:var(--np-text-2);font-size:11px"><th style="padding:6px 10px">Job</th><th style="text-align:right;padding:6px 10px">Coberto</th><th style="text-align:right;padding:6px 10px">Total</th><th style="padding:6px 10px">Progresso</th><th style="text-align:right;padding:6px 10px">%</th></tr></thead>
-      <tbody>${COV_JOBS.map(row).join('')}</tbody></table>
-    <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email): ${fmt(v.verified || 0)} verificados de ${fmt(v.with_email || 0)} com email — nível-contacto, não filtrado por score · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}</div>
+      <tbody>${(() => { let g = null; return COV_JOBS.map((j) => { const hdr = j[2] !== g ? (g = j[2], `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${j[2] === 'audit' ? 'Auditoria' : 'Pipeline base'}</td></tr>`) : ''; return hdr + row(j); }).join(''); })()}</tbody></table>
+    <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email): ${fmt(v.verified || 0)} verificados de ${fmt(v.with_email || 0)} com email — nível-contacto, não filtrado por score · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
+    <br>Filas sem métrica de cobertura (dispatchers/internas, não medem dados por site): <code>discover</code> (cria sites), <code>audit_ondemand/qualified/rest</code> (despacham as finas → contam em "Auditoria coarse"), <code>result_site</code> (writer PG), <code>campaign_generate/send</code> (tabela de campanhas).</div>
   </div></div>`;
 }
 async function viewWorkers() {

@@ -15,6 +15,9 @@
 
 *Ainda por criar:* de-clickhouse · hel1-ollama · np-server (decompor) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
 
+> **Convenção de rede (Proxmox):** as VMs desta stack usam **SEMPRE a bridge `vmbr1`** — tanto no HEL1
+> como no DE1. A `vmbr0` está **reservada** para a VM da WHM (não faz parte desta stack, mas vive no HEL1).
+
 ---
 
 

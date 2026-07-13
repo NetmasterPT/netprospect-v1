@@ -1095,9 +1095,9 @@ app.get('/api/contacts.csv', async (req, res) => {
 });
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 // --- Cobertura de jobs por bucket de lead_score (np-db direto; cache 30min) ---
+// TEM de ficar ANTES do catch-all `app.get('*')`, senão a SPA engole /api/coverage.
 const COVERAGE_SQL = `
 SELECT
   CASE WHEN lead_score>70 THEN 'gt70' WHEN lead_score>60 THEN 'b60' WHEN lead_score>50 THEN 'b50'
@@ -1130,5 +1130,7 @@ app.get('/api/coverage', async (req, res) => {
     res.json(data);
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
+
+app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`));

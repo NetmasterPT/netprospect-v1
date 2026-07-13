@@ -77,7 +77,19 @@ async function main() {
     if (LIMIT && sites >= LIMIT) break;
     // Ao fazer shard lemos a página cheia (a maioria é saltada) — o LIMIT conta os MANTIDOS.
     const pageSize = (SHARD || SHARD_NOT) ? PAGE : (LIMIT ? Math.min(PAGE, LIMIT - sites) : PAGE);
-    const rows = await client.request(readItems('sites', { filter: { ...base, id: { _gt: lastId } }, fields: ['id', 'domain'], sort: ['id'], limit: pageSize }));
+    // Retry-on-pressure: num backlog grande os workers martelam o Directus e ele devolve
+    // 503 "Under pressure". Em vez de abortar o enqueue todo, espera e repete a MESMA página.
+    let rows;
+    for (let attempt = 1; ; attempt++) {
+      try { rows = await client.request(readItems('sites', { filter: { ...base, id: { _gt: lastId } }, fields: ['id', 'domain'], sort: ['id'], limit: pageSize })); break; }
+      catch (e) {
+        const pressure = /under pressure|SERVICE_UNAVAILABLE|503|fetch failed/i.test(e.errors ? JSON.stringify(e.errors) : e.message);
+        if (!pressure || attempt >= 8) throw e;
+        const wait = Math.min(30000, 2000 * attempt);
+        console.log(`  Directus sob pressão — espera ${wait / 1000}s e repete a página (tentativa ${attempt})`);
+        await new Promise((r) => setTimeout(r, wait));
+      }
+    }
     if (!rows.length) break;
     lastId = rows[rows.length - 1].id;
     for (const s of rows) {

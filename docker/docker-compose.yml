@@ -248,7 +248,7 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
       OLLAMA_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
-      MINIO_URL: http://minio:9000
+      MINIO_URL: ${MINIO_URL:-http://minio:9000}
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-netprospect}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
       MINIO_BUCKET: ${MINIO_BUCKET:-snapshots}
@@ -314,7 +314,7 @@ services:
       NATS_URL: nats://nats:4222
       # Telemetria de workers (heartbeat + contadores + logs recentes) → dashboard /workers.
       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      MINIO_URL: http://minio:9000
+      MINIO_URL: ${MINIO_URL:-http://minio:9000}
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-netprospect}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
       MINIO_BUCKET: ${MINIO_BUCKET:-snapshots}

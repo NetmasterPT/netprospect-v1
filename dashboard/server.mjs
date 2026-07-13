@@ -927,7 +927,7 @@ app.post('/api/import', upload.single('file'), async (req, res) => {
 // --- Agentes IA (B4) — Ollama on-prem via /api/agents/* ---------------------
 const OLLAMA_URL = (process.env.OLLAMA_URL || '').replace(/\/$/, '');
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma3:4b';
-async function ollamaJson(prompt, format, { timeoutMs = 60000, options = {} } = {}) {
+async function ollamaJson(prompt, format, { timeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS) || 60000, options = {} } = {}) {
   if (!OLLAMA_URL) return { ok: false, error: 'Ollama desligado. Corre `docker compose --profile audit up -d ollama ollama-init` (e define OLLAMA_URL no .env).' };
   const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), timeoutMs);
   try {

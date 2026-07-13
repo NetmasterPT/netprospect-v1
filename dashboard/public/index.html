@@ -283,6 +283,7 @@ async function renderNav(active) {
     <div class="np-nav-eyebrow">Sistema</div>
     ${item('workers', 'server', 'Workers')}
     ${item('queues', 'activity', 'Filas')}
+    ${item('coverage', 'check', 'Cobertura')}
     ${item('agents', 'sparkles', 'Agentes IA')}
     ${item('isps', 'globe', 'ISPs / alojamento')}
     ${item('triggers', 'activity', 'Gatilhos')}
@@ -879,6 +880,51 @@ function fmtBytes(n) { if (!n) return '0 B'; const u = ['B', 'KB', 'MB', 'GB', '
 const durMs = (ms) => (ms == null ? '—' : (ms < 1000 ? ms + 'ms' : (ms / 1000).toFixed(1) + 's'));
 
 // --- /workers: instâncias A CORRER (telemetria Redis), click → drawer c/ logs+métricas ---
+// ---------- Cobertura ----------
+let COV_THRESH = 'all';
+const COV_BUCKETS = { gt70: ['gt70'], gt60: ['gt70', 'b60'], gt50: ['gt70', 'b60', 'b50'], gt40: ['gt70', 'b60', 'b50', 'b40'], lt40: ['lt40'], all: ['gt70', 'b60', 'b50', 'b40', 'lt40'] };
+const COV_JOBS = [
+  ['live', 'Live', 'base'], ['score', 'Score', 'base'], ['fingerprint', 'Fingerprint / CMS', 'base'],
+  ['ssl', 'SSL', 'base'], ['dns', 'DNS provider', 'base'], ['whois', 'WHOIS', 'base'], ['contacts', 'Contactos (email)', 'base'],
+  ['industry', 'Indústria', 'audit'], ['lighthouse', 'Lighthouse', 'audit'], ['nuclei', 'Nuclei', 'audit'], ['wpscan', 'WPScan', 'audit'], ['gmb', 'GMB', 'audit'],
+];
+function covSum(cov, thresh) {
+  const keys = COV_BUCKETS[thresh] || COV_BUCKETS.all;
+  const rows = (cov.buckets || []).filter((b) => keys.includes(b.bucket));
+  const sum = (f) => rows.reduce((a, b) => a + (+b[f] || 0), 0);
+  const out = { total: sum('total') };
+  for (const [k] of COV_JOBS) out[k] = sum(k);
+  return out;
+}
+window.covSet = (t) => { COV_THRESH = t; viewCoverage(); };
+async function viewCoverage() {
+  renderNav('coverage');
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Cobertura de jobs</h1><div class="np-sub">Que fração dos sites tem cada job corrido · filtra por lead score · via np-db · cache 30 min</div></div></div>`;
+  let cov; try { cov = await api('/api/coverage'); } catch (e) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
+  if (!cov.ok) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Indisponível:</b> ${esc(cov.error || '—')} <span class="muted">(a página Cobertura precisa do PG_HOST/creds no dashboard).</span></div></div>`; return; }
+  const THS = [['gt70', '&gt;70'], ['gt60', '&gt;60'], ['gt50', '&gt;50'], ['gt40', '&gt;40'], ['lt40', '&lt;40'], ['all', 'Todos']];
+  const seg = THS.map(([k, l]) => `<button class="np-btn np-btn--sm ${COV_THRESH === k ? 'np-btn--primary' : ''}" onclick="window.covSet('${k}')">${l}</button>`).join(' ');
+  const s = covSum(cov, COV_THRESH); const total = s.total || 1;
+  const bar = (pct, col) => `<div style="height:8px;background:var(--np-border,#e5e7eb);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.min(100, pct)}%;background:${col}"></div></div>`;
+  const row = ([k, label, kind]) => {
+    const n = s[k] || 0; const pct = Math.round(1000 * n / total) / 10;
+    const col = pct >= 90 ? 'var(--np-ok-mark,#16a34a)' : pct >= 40 ? 'var(--np-warn,#d97706)' : 'var(--np-brand,#e11d48)';
+    return `<tr><td style="padding:8px 10px"><b>${esc(label)}</b> <span class="np-badge ${kind === 'audit' ? 'info' : ''}" style="height:16px;font-size:9px">${kind}</span></td>
+      <td class="tnum" style="text-align:right;padding:8px 10px">${fmt(n)}</td>
+      <td class="tnum" style="text-align:right;padding:8px 10px;color:var(--np-text-2)">${fmt(total)}</td>
+      <td style="padding:8px 10px;min-width:160px">${bar(pct, col)}</td>
+      <td class="tnum" style="text-align:right;padding:8px 10px;font-weight:800">${pct}%</td></tr>`;
+  };
+  const v = cov.verify || {};
+  $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center"><span class="muted" style="font-size:12px">Lead score:</span> ${seg}
+      <span class="muted" style="margin-left:auto;font-size:11.5px">${fmt(s.total)} sites neste filtro</span></div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:var(--np-text-2);font-size:11px"><th style="padding:6px 10px">Job</th><th style="text-align:right;padding:6px 10px">Coberto</th><th style="text-align:right;padding:6px 10px">Total</th><th style="padding:6px 10px">Progresso</th><th style="text-align:right;padding:6px 10px">%</th></tr></thead>
+      <tbody>${COV_JOBS.map(row).join('')}</tbody></table>
+    <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email): ${fmt(v.verified || 0)} verificados de ${fmt(v.with_email || 0)} com email — nível-contacto, não filtrado por score · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}</div>
+  </div></div>`;
+}
 async function viewWorkers() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
   renderNav('workers');
@@ -1192,6 +1238,7 @@ async function route() {
     else if (h === 'import') await viewImport();
     else if (h === 'workers') await viewWorkers();
     else if (h === 'queues') await viewQueues();
+    else if (h === 'coverage') await viewCoverage();
     else if (h === 'config') await viewConfig();
     else if (h === 'settings') await viewSettings();
     else await viewOverview();
@@ -1200,7 +1247,7 @@ async function route() {
 }
 // Auto-refresh global (10s) das páginas de dados. NÃO refresca ferramentas (import/agents/
 // settings), nem enquanto se edita um campo, nem com um drawer aberto; preserva o scroll.
-const NO_AUTOREFRESH = new Set(['import', 'agents', 'settings']);
+const NO_AUTOREFRESH = new Set(['import', 'agents', 'settings', 'coverage']);
 window.addEventListener('hashchange', route);
 route();
 setInterval(() => {

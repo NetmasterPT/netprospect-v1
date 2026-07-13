@@ -75,6 +75,12 @@ services:
       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+      # np-db direto (só p/ a página Cobertura — agregações pesadas sobre 1,5M sites)
+      PG_HOST: ${PG_HOST:-100.77.60.44}
+      PG_PORT: '5432'
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       SMTP_HOST: ${SMTP_HOST:-}
     ports:
       - '${LAN_IP}:3001:3000'

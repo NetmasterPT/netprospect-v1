@@ -115,6 +115,26 @@ async function cached(key, fn, ttl = CACHE_TTL) {
   if (r && _redisUp) { try { await r.set(key, JSON.stringify(val), { EX: ttl }); } catch { /* ignora */ } }
   return val;
 }
+// --- Postgres (np-db) — SÓ para a página Cobertura (agregações pesadas sobre 1,5M sites que o
+// Directus/aggregate não faz bem). Lazy + fail-soft: sem PG_HOST, /api/coverage devolve desligado. ---
+const PG_HOST = process.env.PG_HOST || '';
+let _pg = null;
+async function pgPool() {
+  if (!PG_HOST) return null;
+  if (_pg) return _pg;
+  try {
+    const { default: pg } = await import('pg');
+    _pg = new pg.Pool({
+      host: PG_HOST, port: +(process.env.PG_PORT || 5432),
+      database: process.env.POSTGRES_DB || 'netprospect',
+      user: process.env.POSTGRES_USER, password: process.env.POSTGRES_PASSWORD,
+      max: 2, idleTimeoutMillis: 30000, statement_timeout: 120000,
+    });
+    _pg.on('error', () => {});
+  } catch { _pg = null; }
+  return _pg;
+}
+
 // Invalida chaves por prefixo (poucas chaves de cache → KEYS é barato). Ex.: após escrever segmento.
 async function cacheDrop(prefix) {
   const r = await redisClient(); if (!r || !_redisUp) return;
@@ -1076,5 +1096,39 @@ app.get('/api/contacts.csv', async (req, res) => {
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+// --- Cobertura de jobs por bucket de lead_score (np-db direto; cache 30min) ---
+const COVERAGE_SQL = `
+SELECT
+  CASE WHEN lead_score>70 THEN 'gt70' WHEN lead_score>60 THEN 'b60' WHEN lead_score>50 THEN 'b50'
+       WHEN lead_score>40 THEN 'b40' ELSE 'lt40' END AS bucket,
+  count(*)::int AS total,
+  count(*) FILTER (WHERE is_live)::int AS live,
+  count(*) FILTER (WHERE lead_score IS NOT NULL)::int AS score,
+  count(*) FILTER (WHERE tech_detected IS NOT NULL)::int AS fingerprint,
+  count(*) FILTER (WHERE ssl_grade IS NOT NULL)::int AS ssl,
+  count(*) FILTER (WHERE dns_provider IS NOT NULL)::int AS dns,
+  count(*) FILTER (WHERE whois_checked_at IS NOT NULL)::int AS whois,
+  count(*) FILTER (WHERE has_email)::int AS contacts,
+  count(*) FILTER (WHERE industry IS NOT NULL)::int AS industry,
+  count(*) FILTER (WHERE seo_score IS NOT NULL)::int AS lighthouse,
+  count(*) FILTER (WHERE security_findings IS NOT NULL)::int AS nuclei,
+  count(*) FILTER (WHERE wp_vuln_count IS NOT NULL)::int AS wpscan,
+  count(*) FILTER (WHERE gmb_place_id IS NOT NULL)::int AS gmb
+FROM sites GROUP BY bucket`;
+app.get('/api/coverage', async (req, res) => {
+  try {
+    const data = await cached('np:coverage:v1', async () => {
+      const p = await pgPool();
+      if (!p) return { ok: false, error: 'PG desligado (falta PG_HOST/creds)' };
+      const [sites, ver] = await Promise.all([
+        p.query(COVERAGE_SQL),
+        p.query("SELECT count(*) FILTER (WHERE email_status IS NOT NULL)::int verified, count(*) FILTER (WHERE email IS NOT NULL)::int with_email FROM contacts"),
+      ]);
+      return { ok: true, buckets: sites.rows, verify: ver.rows[0], ts: Date.now() };
+    }, 1800);
+    res.json(data);
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
 
 app.listen(PORT, () => console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`));

@@ -1,0 +1,40 @@
+# gpedro-laptop — o daily-driver do Gonçalo (Windows + Docker Desktop), IP RESIDENCIAL.
+#
+# PROPÓSITO (ver LOAD-DISTRIBUTION.md §0): é o único host da frota com IP residencial → serve
+# o que os IPs de datacenter NÃO conseguem (hoje: GMB, que o Google bloqueia em Hetzner). Fora
+# isso, é capacidade EXTRA e OPCIONAL — só entra quando o Claude disser que há trabalho a mais
+# para a frota, porque é o portátil de trabalho e nem sempre está online.
+#
+# Por isso, por defeito, corre APENAS o role `residential` (o GMB). Os roles pesados
+# (browser/security/base) são opt-in via WORKER_ROLES quando quisermos dar-lhe mais carga.
+#
+# Windows: correr a partir de "Docker Desktop" (WSL2). O compose usa a imagem `worker` já
+# construída (2,46 GB — traz o Chromium, preciso para o GMB). Build local:
+#   docker compose -f deploy/laptop/docker-compose.yml build
+#
+# NOTA: caminhos relativos a partir de deploy/laptop/ → ../.. é a raiz do repo.
+
+services:
+  worker:
+    build:
+      context: ../..
+      dockerfile: worker/Dockerfile
+    image: netprospect-worker:latest
+    restart: unless-stopped
+    init: true                 # tini reap dos zombies do Chromium (o GMB usa browser)
+    env_file: [.env]
+    environment:
+      # SÓ o GMB por defeito. Para dar mais carga ao portátil quando estiver online e livre:
+      #   WORKER_ROLES=residential,security,base   (no .env)
+      WORKER_ROLES: ${WORKER_ROLES:-residential}
+      # O GMB está gated por trás disto — TEM de ser true aqui (é o host que o corre).
+      GMB_ENABLED: 'true'
+      AUDIT_ENABLED: 'true'     # os roles pesados (incl. residential/gmb) só ligam com isto
+      # Concorrência conservadora: é um daily-driver, não afogar o portátil.
+      GMB_CONC: ${GMB_CONC:-1}
+    volumes:
+      - ../../data/geoip:/app/data/geoip:ro
+      - ../../data/tranco:/app/data/tranco:ro
+      - ../../config:/app/config:ro
+    deploy:
+      replicas: ${WORKER_REPLICAS:-1}

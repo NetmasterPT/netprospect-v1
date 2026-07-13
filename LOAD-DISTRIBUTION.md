@@ -14,6 +14,7 @@
 | **de-minio** | 100.124.43.117 | de1 | MinIO — 500G storage-zfs / ext4 (VMID 300) | minio | 1 | ✅ **MIGRADO — toda a frota escreve aqui** |
 | **hel1-ollama** | 100.126.196.112 (LAN `10.10.10.53`) | hel1 | Ollama (CPU, sem GPU) | — | — | ⏸️ **VM existe, mas SEM ACESSO** — falta o bootstrap ⁷ |
 | **de1-pve** | 100.87.226.117 | de1 | *host Proxmox* (não é da stack — exit node, `tag:proxmox`) | — | — | ✅ |
+| **gpedro-laptop** | *(no tailnet)* | laptop | `residential` (**GMB** — IP residencial) + overflow opcional | worker | 1 | 🟡 daily-driver; **intermitente**, entra a pedido ⁸ |
 
 *Ainda por criar:* **np-server** (VMID 801) · **de-analytics** (VMID 301) · Worker VMs (decompor o
 HEL1) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
@@ -60,6 +61,7 @@ HEL1) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
 | **L — Light/Security** | `security` | nuclei, wpscan | **Network-bound puro (~0 CPU)** | **DE1 a 1.092 nuclei/h com load 0,30** | **VMs FRACAS/free** ⭐ |
 | **H — Heavy/Browser** | `browser` | lighthouse, gmb | **CPU-BOUND (Chromium ~1,5 core/job)** | HEL1 864 lighthouse/h; a load passa 15 se a conc subir | **VMs com cores a sério** |
 | **AI** | `ai` | industry | **CPU-BOUND** (sem GPU) | Ollama em CPU: **107 s/job** (26 dias p/ o batch) → o **batch usa o heurístico** (6.640/h, 154×) | `hel1-ollama` — só on-demand |
+| **R — Residential** | `residential` | gmb | **precisa de IP residencial** (o Google bloqueia datacenter) | GMB em Hetzner → página `/sorry/` (envenenava a DB) | **só o `gpedro-laptop`** |
 
 **A chave:** **B e L são network-bound → cabem nas free clouds.** Só **H** precisa de cores a sério.
 E cada VM extra traz o **seu IP** → quota própria de rate-limit (registries do whois, APIs de verify).
@@ -119,16 +121,17 @@ Runbook: <a href="docs/runbook-ollama-hel1.md">docs/runbook-ollama-hel1.md</a>.
 | Server | VM | VMID | CPU | RAM | Disk | Type | Jobs / Containers | Deployed | Created |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | hel1 | **np-db** | 900 | 14 | 64 GB | NVMe | DB | Postgres + PgBouncer | ✅ | ✅ |
-| hel1 | **np-server** | 801 | 4 | 8 GB | 40G local-zfs | App | Directus, Dashboard, **NATS**, Redis | 🟡 | ❌ |
+| hel1 | **np-server** | 801 | 4 | 8 GB | 40G local-zfs | App | Directus, Dashboard, **NATS**, Redis | 🟡 | ✅ |
 | hel1 | **hel1-ollama** | 503 | 6 | 8 GB | — | AI | Ollama CPU — on-demand (o batch usa o heurístico) | ⏸️ | ✅ |
 | hel1 | **Worker H** | — | 6 | 16 GB | — | Heavy | `browser` (lighthouse) — imagem pesada | 🟡 | ✅ |
 | hel1 | **Worker B** | — | 2 | 8 GB | — | Base | `base` (pipeline) | 🟡 | ✅ |
 | hel1 | **Worker L** | — | 2 | 4 GB | — | Light | `security` (nuclei/wpscan) | ❌ | ❌ |
 | de1 | **de-minio** | 300 | 2 | 4 GB | 500G storage-zfs | Storage | MinIO (reports + snapshots) | ✅ | ✅ |
-| de1 | **de-analytics** | 301 | 6 | 16 GB ⁵ | ~200G storage-zfs | Analytics | **ClickHouse + PostHog** | ❌ | ❌ |
+| de1 | **de-analytics** | 301 | 6 | 16 GB ⁵ | ~200G storage-zfs | Analytics | **ClickHouse + PostHog** | ❌ | ✅ |
 | de1 | **Worker H** | — | 4 | 8 GB | — | Heavy | `browser` (lighthouse) | ❌ | ❌ |
 | de1 | **Worker B** | — | 2 | 4 GB | — | Base | `base` | ✅ | ✅ |
 | de1 | **Worker L** | — | 3 | 6 GB | — | Light | `security` (nuclei/wpscan) | ✅ | ✅ |
+| laptop | **gpedro-laptop** | — | 22 | 16 GB | 30 GB | **Residential** | `residential` (GMB) + overflow opcional | 🟡 | ✅ |
 | oracle | **A1-1** | — | 1 (ARM) | 6 GB | 48 GB | Light+Base | `security` + `base` *(imagem arm64)* | ❌ | ❌ |
 | oracle | **A1-2** | — | 1 (ARM) | 6 GB | 48 GB | Light+Base | `security` + `base` | ❌ | ❌ |
 | oracle | **AMD-1** | — | 1/8 | 1 GB | 48 GB | Light | whois / verify (baixa conc) | ❌ | ❌ |
@@ -141,6 +144,12 @@ ClickHouse+Kafka+Postgres) → 16 GB se forem os dois.
 <br>
 ⁶ O egress de 1 GB/mês do GCP proíbe jobs que descarregam páginas (lighthouse ~1-3 MB/site). O whois
 (~3 KB) e o verify (bytes) cabem à vontade. O nuclei dispara muitos pedidos → só nas Oracle (10 TB).
+<br>
+⁸ **`gpedro-laptop`** (Windows + Docker Desktop) é o daily-driver do Gonçalo → <strong>IP residencial</strong>,
+algo que nenhuma outra máquina tem. Corre por defeito SÓ o role <code>residential</code> (o <strong>GMB</strong>, que o
+Google bloqueia em IPs de datacenter). É <strong>intermitente</strong> (ele precisa dele para trabalhar) → nada crítico
+depende dele; a workqueue segura os jobs quando está offline. Pode receber <code>security</code>/<code>base</code> como
+overflow quando estiver livre e o Claude pedir. Runbook: <a href="docs/runbook-laptop.md">docs/runbook-laptop.md</a>.
 </sub>
 
 ---

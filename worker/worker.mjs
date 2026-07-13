@@ -62,6 +62,8 @@ const AUDIT_CONC = Math.max(1, parseInt(process.env.AUDIT_CONC || '1', 10));
 const NUCLEI_JOB_CONC = Math.max(1, parseInt(process.env.NUCLEI_JOB_CONC || '6', 10));
 const LIGHTHOUSE_CONC = Math.max(1, parseInt(process.env.LIGHTHOUSE_CONC || '2', 10));
 const INDUSTRY_CONC = Math.max(1, parseInt(process.env.INDUSTRY_CONC || '1', 10));
+// GMB corre no portátil (IP residencial); conc baixa por defeito p/ não afogar o daily-driver.
+const GMB_CONC = Math.max(1, parseInt(process.env.GMB_CONC || '2', 10));
 const AUDIT_ENABLED = /^(1|true|yes)$/i.test(process.env.AUDIT_ENABLED || '');
 const GMB_ENABLED = /^(1|true|yes)$/i.test(process.env.GMB_ENABLED || '');
 // industry: heurístico por default (instantâneo, sem GPU). INDUSTRY_LLM=true volta ao Ollama.
@@ -403,7 +405,7 @@ const DRAIN = new Set(['audit_ondemand', 'audit_qualified', 'audit_rest']);
 const CONC = { enrich: ENRICH_CONC, contacts: CONTACTS_CONC, fetch: 8, dns: 12, geoip: 12, fingerprint: FINGERPRINT_CONC, social: 8, locality: 8, emailauth: 10, traffic: 20, score: SCORE_CONC, ssl: DH_CONC, whois: Math.max(1, Math.ceil(DH_CONC / 2)), dnsprovider: DH_CONC, subdomains: 2, verify: VERIFY_CONC, discover: 2, campaign_generate: 4, campaign_send: 6,
   // finos pesados (ver comentário no topo): nuclei é network-bound, industry é Ollama-bound.
   nuclei: NUCLEI_JOB_CONC, wpscan: 2, lighthouse_mobile: LIGHTHOUSE_CONC, lighthouse_desktop: LIGHTHOUSE_CONC,
-  industry: INDUSTRY_CONC, gmb: 2 };
+  industry: INDUSTRY_CONC, gmb: GMB_CONC };
 
 // --- Arranque ---------------------------------------------------------------
 async function main() {

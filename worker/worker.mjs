@@ -50,6 +50,17 @@ const VERIFY_CONC = Math.max(1, parseInt(process.env.VERIFY_CONCURRENCY || '4', 
 // Auditorias pesadas (Lighthouse/Chromium + Nuclei + Ollama) processadas em paralelo POR worker.
 // Default 1 = comportamento antigo (serial). Subir só se houver CPU — cada uma é ~1-2 cores.
 const AUDIT_CONC = Math.max(1, parseInt(process.env.AUDIT_CONC || '1', 10));
+// Concorrência dos jobs FINOS pesados. Sem isto caíam no default do mapa CONC (=1) e cada
+// worker fazia UM de cada vez — o que estrangulava a pipeline repartida. Cada um tem um
+// perfil MUITO diferente (medido):
+//   nuclei     → NETWORK-bound (espera em HTTP; o DE1 ficava a 0.02 de load!) → pode ir alto
+//   lighthouse → CPU-bound (Chromium) → moderado
+//   industry   → OLLAMA-bound: o llama.cpp é capado (OLLAMA_CPUS); pôr N classificações a
+//                competir pelos mesmos cores fazia cada uma passar do ackWait de 180s →
+//                timeout → redelivery infinita. TEM de ficar baixo.
+const NUCLEI_JOB_CONC = Math.max(1, parseInt(process.env.NUCLEI_JOB_CONC || '6', 10));
+const LIGHTHOUSE_CONC = Math.max(1, parseInt(process.env.LIGHTHOUSE_CONC || '2', 10));
+const INDUSTRY_CONC = Math.max(1, parseInt(process.env.INDUSTRY_CONC || '1', 10));
 const AUDIT_ENABLED = /^(1|true|yes)$/i.test(process.env.AUDIT_ENABLED || '');
 const GMB_ENABLED = /^(1|true|yes)$/i.test(process.env.GMB_ENABLED || '');
 const WID = process.env.HOSTNAME || String(process.pid);
@@ -379,7 +390,10 @@ async function writerLoop(js) {
 const HEAVY = new Set(['industry', 'lighthouse_mobile', 'lighthouse_desktop', 'nuclei', 'wpscan', 'gmb', 'audit_ondemand', 'audit_qualified', 'audit_rest']);
 const DRAIN = new Set(['audit_ondemand', 'audit_qualified', 'audit_rest']);
 // Concorrência por consumer (heavy = 1; leves = mais).
-const CONC = { enrich: ENRICH_CONC, contacts: CONTACTS_CONC, fetch: 8, dns: 12, geoip: 12, fingerprint: FINGERPRINT_CONC, social: 8, locality: 8, emailauth: 10, traffic: 20, score: SCORE_CONC, ssl: DH_CONC, whois: Math.max(1, Math.ceil(DH_CONC / 2)), dnsprovider: DH_CONC, subdomains: 2, verify: VERIFY_CONC, discover: 2, campaign_generate: 4, campaign_send: 6 };
+const CONC = { enrich: ENRICH_CONC, contacts: CONTACTS_CONC, fetch: 8, dns: 12, geoip: 12, fingerprint: FINGERPRINT_CONC, social: 8, locality: 8, emailauth: 10, traffic: 20, score: SCORE_CONC, ssl: DH_CONC, whois: Math.max(1, Math.ceil(DH_CONC / 2)), dnsprovider: DH_CONC, subdomains: 2, verify: VERIFY_CONC, discover: 2, campaign_generate: 4, campaign_send: 6,
+  // finos pesados (ver comentário no topo): nuclei é network-bound, industry é Ollama-bound.
+  nuclei: NUCLEI_JOB_CONC, wpscan: 2, lighthouse_mobile: LIGHTHOUSE_CONC, lighthouse_desktop: LIGHTHOUSE_CONC,
+  industry: INDUSTRY_CONC, gmb: 2 };
 
 // --- Arranque ---------------------------------------------------------------
 async function main() {

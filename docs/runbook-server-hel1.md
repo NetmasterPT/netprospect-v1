@@ -76,7 +76,7 @@ Redis ligam ao **IP LAN** (`10.10.10.20`, para os workers HEL1) **e** ao **tailn
 2. Ajustar binds: `TAILNET_IP=<NPSRV_IP>` e (novo) `LAN_IP=10.10.10.20` para o NATS/Redis exporem as duas interfaces.
 3. `docker compose -f deploy/server/docker-compose.yml up -d directus dashboard redis` (NATS ainda **não** — migra-se em §4).
 
-*(A criar: `deploy/server/docker-compose.yml` — extrai `directus`/`dashboard`/`nats`/`redis` do `docker/docker-compose.yml`, com o NATS/Redis a bindar `10.10.10.20` + `${TAILNET_IP}`.)*
+*(O `deploy/server/docker-compose.yml` já existe no repo — Directus + Dashboard + NATS + Redis, com o NATS/Redis/Directus a bindar `${LAN_IP}` (workers HEL1, rápido) **e** `${TAILNET_IP}` (workers remotos). Preencher o `.env` a partir de `deploy/server/.env.example`.)*
 
 ---
 

@@ -12,11 +12,20 @@
 | **np-wk-de1** | 100.120.214.45 | de1 | `base` (whois) + fila dedicada — projeto `/root/np-worker` (`.env.worker`) | worker-base | 4 | ✅ a correr |
 | **np-wk-de1** | 100.120.214.45 | de1 | `security` (nuclei/wpscan) + `ai` — projeto `/root/np-worker-heavy` (`.env.heavy`) | worker | 3 | ✅ a correr |
 | **de-minio** | 100.124.43.117 | de1 | MinIO — 500G storage-zfs / ext4 (VMID 300) | minio | 1 | ✅ **MIGRADO — toda a frota escreve aqui** |
-| **hel1-ollama** | *(no tailnet)* | hel1 | `ai` (Ollama, CPU/sem GPU) | worker | — | 🟡 VM criada; deploy pendente |
+| **hel1-ollama** | 100.126.196.112 (LAN `10.10.10.53`) | hel1 | Ollama (CPU, sem GPU) | — | — | ⏸️ **VM existe, mas SEM ACESSO** — falta o bootstrap ⁷ |
 | **de1-pve** | 100.87.226.117 | de1 | *host Proxmox* (não é da stack — exit node, `tag:proxmox`) | — | — | ✅ |
 
-*Ainda por criar:* **np-server** (Directus+Dashboard+NATS+Redis) · **de-analytics** (ClickHouse+PostHog) ·
-Worker VMs (decompor o HEL1) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
+*Ainda por criar:* **np-server** (VMID 801) · **de-analytics** (VMID 301) · Worker VMs (decompor o
+HEL1) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
+
+> **O que está a bloquear os 3 deploys pendentes** (o compose+env de cada um **já existe** em
+> `deploy/{server,analytics,ollama}/` → o deploy é 1 comando assim que houver acesso):
+>
+> | VM | Bloqueio | Quem desbloqueia |
+> | --- | --- | --- |
+> | `np-server` | VM não existe | **tu** — [runbook](docs/runbook-server-hel1.md) §1-2 (criar + bootstrap) |
+> | `de-analytics` | VM não existe | **tu** — [runbook](docs/runbook-analytics-de.md) §1-2 |
+> | `hel1-ollama` | ⁷ VM existe, mas o Claude **não entra**: o `tailscale ssh` é barrado pela ACL (o nó é do user `gpedro.work@`, não `tagged-devices`) e o SSH direto por `10.10.10.53` rejeita a chave. **Nunca lhe correste o `bootstrap-vm.sh`** → também não tem Docker nem repo. | **tu** — [runbook](docs/runbook-ollama-hel1.md) §1 (correr o bootstrap lá dentro) |
 
 > ### ⚠️ Convenções de provisionamento — aplicar a TODA a VM nova
 >
@@ -76,7 +85,7 @@ E cada VM extra traz o **seu IP** → quota própria de rate-limit (registries d
 | **directus** | REST sobre a DB (os workers já a contornam via A2) | **np-server** | 🟡 | separar ¹ |
 | **dashboard** | leve, user-facing | **np-server** | 🟢 | separar ¹ |
 | **clickhouse + posthog** | disco-pesado, analítico (a Fase E tem **10M observações**) | **de-analytics** (DE1) | 🟠 | VM por criar ³ |
-| **ollama** | CPU-bound — **sem GPU** (decisão de custo: fica em CPU) | **hel1-ollama** | 🟠 | VM criada; deploy pendente ⁴ |
+| **ollama** | CPU-bound — **sem GPU** (decisão de custo: fica em CPU) | **hel1-ollama** | 🟠 | ⏸️ VM existe; **sem acesso** ⁴ |
 
 <sub>
 ¹ **np-server** (nova VM no HEL1, VMID 801 → `10.10.10.81`) leva Directus + Dashboard + NATS + Redis.
@@ -97,6 +106,7 @@ Runbook: <a href="docs/runbook-analytics-de.md">docs/runbook-analytics-de.md</a>
 Lighthouse). Inferência lenta (~107 s/job) mas a custo 0 → o **batch** de `industry` usa o
 <strong>classificador heurístico</strong> (<code>lib/audit/industry-heuristic.js</code>, 154× mais rápido) e o
 Ollama serve o <em>on-demand</em> / casos difíceis, com <code>OLLAMA_TIMEOUT_MS</code> alto.
+Runbook: <a href="docs/runbook-ollama-hel1.md">docs/runbook-ollama-hel1.md</a>.
 </sub>
 
 ---
@@ -110,7 +120,7 @@ Ollama serve o <em>on-demand</em> / casos difíceis, com <code>OLLAMA_TIMEOUT_MS
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | hel1 | **np-db** | 900 | 14 | 64 GB | NVMe | DB | Postgres + PgBouncer | ✅ | ✅ |
 | hel1 | **np-server** | 801 | 4 | 8 GB | 40G local-zfs | App | Directus, Dashboard, **NATS**, Redis | 🟡 | ❌ |
-| hel1 | **hel1-ollama** | — | 6 | 8 GB | — | AI | `ai` (Ollama CPU — on-demand; o batch usa heurístico) | 🟡 | ✅ |
+| hel1 | **hel1-ollama** | 503 | 6 | 8 GB | — | AI | Ollama CPU — on-demand (o batch usa o heurístico) | ⏸️ | ✅ |
 | hel1 | **Worker H** | — | 6 | 16 GB | — | Heavy | `browser` (lighthouse) — imagem pesada | 🟡 | ✅ |
 | hel1 | **Worker B** | — | 2 | 8 GB | — | Base | `base` (pipeline) | 🟡 | ✅ |
 | hel1 | **Worker L** | — | 2 | 4 GB | — | Light | `security` (nuclei/wpscan) | ❌ | ❌ |
@@ -165,10 +175,12 @@ host remoto uma fatia de um job que os locais **também** consomem.
 - Ganho: o nuclei escala para lá do DE1 + o whois drena muito mais depressa (mais IPs).
 - Padrão **já provado** com o DE1 hoje. Sem tocar no HEL1.
 
-**Fase 3 — Analytics + IA para fora do HEL1** · *risco baixo (ambos fail-soft)*
+**Fase 3 — Analytics + IA para fora do HEL1** · *risco baixo (ambos fail-soft)* · **o compose já está pronto**
 
-- `de-analytics` (ClickHouse + PostHog) → [`docs/runbook-analytics-de.md`](docs/runbook-analytics-de.md).
-- `hel1-ollama` (Ollama CPU, timeouts altos) — a VM já existe, falta o deploy.
+- `hel1-ollama` → [`docs/runbook-ollama-hel1.md`](docs/runbook-ollama-hel1.md). A VM existe; **falta correr-lhe
+  o `bootstrap-vm.sh`** (o Claude não tem acesso SSH). É o deploy mais barato e o que mais CPU liberta
+  no HEL1 (o Ollama chegou a comer 14 de 18 cores).
+- `de-analytics` (ClickHouse + PostHog) → [`docs/runbook-analytics-de.md`](docs/runbook-analytics-de.md). VM por criar.
 
 **Fase 4 — Decompor o HEL1 monolítico** · *risco médio (mexe no que corre) → fazer com os backfills drenados*
 

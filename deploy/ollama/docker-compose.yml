@@ -1,0 +1,47 @@
+# hel1-ollama — Ollama numa VM dedicada (CPU, SEM GPU).
+#
+# PORQUÊ VM PRÓPRIA: o llama.cpp usa TODOS os cores por inferência (medido: 1427% CPU,
+# 14 de 18 cores no HEL1) → estrangulava o Chromium das auditorias. Numa VM só dele,
+# pode comer os cores dela à vontade sem roubar nada a ninguém.
+#
+# SEM GPU (decisão de custo): a inferência fica lenta (~107 s/job) mas a custo 0. Por isso:
+#   - o BATCH de `industry` NÃO usa isto — usa lib/audit/industry-heuristic.js (154× mais rápido);
+#   - o Ollama serve o ON-DEMAND (agentes IA do dashboard) e os casos difíceis;
+#   - quem o chama tem de levar OLLAMA_TIMEOUT_MS alto (lib/ollama.js e o dashboard já o leem).
+#
+# KEEP_ALIVE longo é ESSENCIAL em CPU: o cold-load do modelo é lento, e mantê-lo residente
+# evita pagar esse custo a cada chamada (a VM tem RAM de sobra para o gemma3:4b).
+#
+# Deploy: preencher .env (TAILNET_IP), `docker compose up -d`. Sem auth → SÓ tailnet.
+
+services:
+  ollama:
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    environment:
+      # Mantém o modelo em RAM (sem isto, cada chamada paga o load a frio — brutal em CPU).
+      OLLAMA_KEEP_ALIVE: ${OLLAMA_KEEP_ALIVE:-24h}
+      # 1 inferência de cada vez: em CPU, paralelizar só faz thrashing de cores.
+      OLLAMA_NUM_PARALLEL: ${OLLAMA_NUM_PARALLEL:-1}
+      OLLAMA_MAX_LOADED_MODELS: '1'
+    volumes:
+      - ./.data/ollama:/root/.ollama
+    ports:
+      - '${TAILNET_IP}:11434:11434'   # frota + dashboard (tailnet) — Ollama NÃO tem auth
+      - '127.0.0.1:11434:11434'       # local (debug)
+    healthcheck:
+      test: ['CMD-SHELL', 'ollama list >/dev/null 2>&1 || exit 1']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # One-shot: puxa o modelo para o volume e sai.
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      - ollama
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
+    entrypoint: ['/bin/sh', '-c', 'sleep 4; ollama pull "$${OLLAMA_MODEL}"']
+    restart: 'no'

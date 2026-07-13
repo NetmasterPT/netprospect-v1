@@ -1,0 +1,35 @@
+# de-analytics — ClickHouse (a Fase E: séries temporais de observações por site).
+#
+# PORQUÊ VM PRÓPRIA NO DE1: mesmo perfil do MinIO — armazém colunar, disco-pesado,
+# latency-TOLERANTE (as queries analíticas correm fora do hot-path: a timeline de um site
+# ao abrir o relatório). Os ~35 ms de WAN FI↔DE são irrelevantes. Logo, disco barato.
+#
+# O PostHog vive no docker/posthog.compose.yml (opt-in PESADO: traz Postgres+Redis+Kafka+
+# ClickHouse PRÓPRIOS, +4-6 GB). Corre-se nesta mesma VM, mas só se ela tiver os 16 GB.
+#
+# Deploy: preencher .env, montar o disco em /srv/analytics, `docker compose up -d`.
+# Sem auth forte → SÓ tailnet.
+
+services:
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.3-alpine   # MESMA versão do HEL1 (o data-dir migra por rsync)
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD}
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: '1'
+    ulimits:
+      nofile: { soft: 262144, hard: 262144 }
+    volumes:
+      - /srv/analytics/clickhouse:/var/lib/clickhouse                                    # o disco barato
+      - ../../db/clickhouse-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro      # só corre em DB vazia
+      - ../../docker/clickhouse-config/listen-ipv4.xml:/etc/clickhouse-server/config.d/listen-ipv4.xml:ro
+    ports:
+      - '${TAILNET_IP}:8123:8123'   # HTTP — dashboard/workers pela tailnet
+      - '127.0.0.1:8123:8123'       # local (debug)
+    healthcheck:
+      test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:8123/ping']
+      interval: 30s
+      timeout: 10s
+      retries: 5

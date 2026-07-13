@@ -93,9 +93,7 @@ cp .env.example .env      # CLICKHOUSE_USER/PASSWORD/DB (iguais ao HEL1) + TAILN
 docker compose up -d clickhouse
 ```
 
-*(A criar: `deploy/analytics/docker-compose.yml` — extrai o serviço `clickhouse` do
-`docker/docker-compose.yml`, com `./data → /srv/analytics/clickhouse`, o `db/clickhouse-schema.sql`
-como init, e a porta `8123` a bindar `127.0.0.1` + `${TAILNET_IP}`.)*
+*(O `deploy/analytics/docker-compose.yml` já existe no repo — ClickHouse 24.3-alpine (a MESMA versão do HEL1, para o data-dir migrar por rsync), dados em `/srv/analytics/clickhouse`, schema e `listen-ipv4.xml` montados do repo, porta 8123 só em tailnet + localhost.)*
 
 ## 5. Migrar as ~10 M observações (HEL1 → de-analytics) — **Claude faz**
 

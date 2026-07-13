@@ -1,0 +1,107 @@
+# np-server — o CONTROL-PLANE numa VM própria: Directus + Dashboard + NATS + Redis.
+#
+# PORQUÊ: hoje estes 4 partilham a VM com os workers pesados. Quando o Chromium satura os
+# cores, o event loop do Directus dá 503 "under pressure" e os pulls do NATS atrasam-se.
+# Numa VM própria ganham CPU GARANTIDO.
+#
+# PORQUÊ NO MESMO PROXMOX (HEL1) E NÃO NO DE1: ao contrário do MinIO/ClickHouse, estes estão
+# no HOT-PATH de cada job — os workers fazem pull do NATS em ciclo apertado. Mandá-los para
+# longe estrangula a frota (foi por causa da latência WAN que o DE1 ficava ocioso). Aqui ficam
+# a ~0,1 ms dos workers de Helsínquia, pela LAN.
+#
+# BINDS: NATS/Redis/Directus expõem-se em DUAS interfaces —
+#   ${LAN_IP}     → workers do HEL1 (mesma LAN, rápido)
+#   ${TAILNET_IP} → workers remotos (DE1, free VMs)
+# NUNCA 0.0.0.0: o NATS e o Redis NÃO têm auth.
+
+services:
+  directus:
+    image: directus/directus:11.3.5
+    restart: unless-stopped
+    environment:
+      KEY: ${DIRECTUS_KEY}
+      SECRET: ${DIRECTUS_SECRET}
+      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+      ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+      DB_CLIENT: pg
+      DB_HOST: ${PG_HOST:-100.77.60.44}       # np-db (tailnet)
+      DB_PORT: '5432'
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_POOL_MIN: '4'
+      DB_POOL_MAX: '40'
+      CACHE_ENABLED: 'false'
+      TELEMETRY: 'false'
+      # Várias pipelines em paralelo bloqueiam o event loop com queries grandes; o default
+      # de 500ms devolvia 503 "Under pressure". Numa VM só dele isto deve deixar de acontecer,
+      # mas mantemos a folga.
+      PRESSURE_LIMITER_MAX_EVENT_LOOP_DELAY: '1500'
+      PRESSURE_LIMITER_MAX_EVENT_LOOP_UTILIZATION: '0.99'
+      PUBLIC_URL: ${DIRECTUS_PUBLIC_URL:-http://localhost:8056}
+      CORS_ENABLED: 'true'
+      CORS_ORIGIN: 'true'
+    volumes:
+      - ./.data/directus:/directus/uploads
+    ports:
+      - '${LAN_IP}:8056:8055'
+      - '${TAILNET_IP}:8056:8055'
+      - '127.0.0.1:8056:8055'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8055/server/health']
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  dashboard:
+    build: ../../dashboard
+    restart: unless-stopped
+    depends_on: [directus, redis]
+    environment:
+      PORT: '3000'
+      DIRECTUS_URL: http://directus:8055
+      DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+      REDIS_URL: redis://redis:6379
+      CACHE_TTL: ${CACHE_TTL:-60}
+      NATS_URL: nats://nats:4222
+      # Ollama vive no hel1-ollama (CPU) → timeout ALTO (a inferência sem GPU leva ~100s+).
+      OLLAMA_URL: ${OLLAMA_URL:-}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
+      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-150000}
+      DIRECTUS_PUBLIC_URL: ${DIRECTUS_PUBLIC_URL:-http://localhost:8056}
+      # ClickHouse vive no de-analytics (DE1) → URL completo, não o nome de rede.
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-}
+      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
+      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}
+      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+    ports:
+      - '${LAN_IP}:3001:3000'
+      - '${TAILNET_IP}:3001:3000'
+      - '127.0.0.1:3001:3000'
+    volumes:
+      - ../../config:/app/config:ro
+
+  # A workqueue. O /data é o ÚNICO estado a migrar do monólito (rsync com o NATS parado
+  # dos dois lados — preserva streams, consumers e o backlog). Ver docs/runbook-server-hel1.md §4.
+  nats:
+    image: nats:2.10-alpine
+    restart: unless-stopped
+    command: ['-js', '-sd', '/data']
+    volumes:
+      - ./.data/nats:/data
+    ports:
+      - '${LAN_IP}:4222:4222'       # workers HEL1 (LAN)
+      - '${TAILNET_IP}:4222:4222'   # workers remotos (tailnet)
+      - '127.0.0.1:4222:4222'
+
+  # SÓ cache + telemetria: sem persistência, LRU quando cheio. Arranca vazio (auto-heal).
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '128mb', '--maxmemory-policy', 'allkeys-lru']
+    ports:
+      - '${LAN_IP}:6379:6379'
+      - '${TAILNET_IP}:6379:6379'
+      - '127.0.0.1:6379:6379'

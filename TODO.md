@@ -2,52 +2,71 @@
 
 - [x] Repo Clean Up (deprecated files to be deleted)
 - [x] Adicionar Redis para Cache do Frontend e DB queries (está a começar a ficar lento)
+- [x] Dashboard auto-update in the background (without page content refresh - "A carregar...")
+- [x] Dashboard data does not seem to be correct (verify proper filters of metrics and search queries) — KPIs verificados vs np-db (batem exatamente); caveat: aggregate do Directus não filtra relações profundas → Coverage usa PG direto
+- [x] Corrigir role da fila do industry (ai -> heuristic)
+- [x] Dashboard mobile responsiveness
 - [ ] Adicionar páginas de configuração para
-    - [ ] Proxies Configuration
-    - [ ] Mail Servers Configuration
-    - [ ] Workers Configuration
-    - [ ] Cold Outreach Emails Configuration
-    - [ ] Semi Warm Outreach Emails Configuration
-    - [ ] Warm Outreach Emails Configuration
+  - [ ] Proxies Configuration
+  - [ ] Mail Servers Configuration
+  - [ ] Workers Configuration
+  - [ ] Cold Outreach Emails Configuration
+  - [ ] Semi Warm Outreach Emails Configuration
+  - [ ] Warm Outreach Emails Configuration
 - [ ] Adicionar páginas de Dashboard para
-    - [x] Clientes (já convertidos)
-    - [x] ISPs (descobertos pela plataforma)
-    - [x] AI Agent Chat + Sub-Agents
-    - [x] Workers Queue
-    - [ ] Workers Queue Logs
-    - [ ] Workers Queue Statistics
-    - [x] Workers
-    - [ ] Workers Logs
-    - [ ] Workers Statistics
-    - [ ] Cold Outreach
-    - [ ] Cold Outreach Logs
-    - [ ] Cold Outreach Statistics
-    - [ ] Semi-Warm Outreach
-    - [ ] Semi-Warm Outreach Logs
-    - [ ] Semi-Warm Outreach Statistics
-    - [ ] Warm Outreach
-    - [ ] Warm Outreach Logs
-    - [ ] Warm Outreach Statistics
-    - [ ] Import em CSV de:
-        - [x] Contactos
-        - [x] Empresas
-        - [x] Clientes
-        - [x] Sites
-        - [x] Campanhas
-        - [x] Segmentos
-        - [ ] ISPs
-        - [ ] Triggers
+  - [x] Clientes (já convertidos)
+  - [x] ISPs (descobertos pela plataforma)
+  - [x] AI Agent Chat + Sub-Agents
+  - [x] Data Coverage (with metrics of the jobs that are still missing and coverage of each one)
+  - [x] Servers
+    - [x] Load
+    - [x] VMs running
+  - [x] VMs
+    - [x] Load
+    - [x] Workers running
+    - [x] Logs (via drawer do worker)
+  - [x] Workers Queue
+  - [x] Workers Queue Logs (página Logs — merge dos logs de todos os workers)
+  - [x] Workers Queue Statistics (rate/h + ETA + throughput na página Filas)
+  - [x] Workers
+  - [x] Workers Logs
+  - [x] Workers Statistics (cabeçalho agregado na página Workers)
+  - [ ] Cold Outreach
+  - [ ] Cold Outreach Logs
+  - [ ] Cold Outreach Statistics
+  - [ ] Semi-Warm Outreach
+  - [ ] Semi-Warm Outreach Logs
+  - [ ] Semi-Warm Outreach Statistics
+  - [ ] Warm Outreach
+  - [ ] Warm Outreach Logs
+  - [ ] Warm Outreach Statistics
+  - [ ] Import em CSV de:
+    - [x] Contactos
+    - [x] Empresas
+    - [x] Clientes
+    - [x] Sites
+    - [x] Campanhas
+    - [x] Segmentos
+    - [~] ISPs — N/A: derivados de sites.isp (groupBy), não é coleção → não importável por CSV
+    - [~] Triggers — N/A: derivados do ClickHouse change_events, não é coleção → não importável por CSV
 - [ ] Adicionar páginas públicas para
-    - [ ] Company report summary (Emails têm um botão para este summary report que converte prospectos e dá-lhes accesso ao report completo numa página diferente se eles se tornarem clientes ou agendarem uma chamada paga de consultoria - different page)
-    - [ ] Company full report
-    - [ ] Book Call
-    - [ ] Buy Service/Product/Subscription
+  - [ ] Company report summary (Emails têm um botão para este summary report que converte prospectos e dá-lhes accesso ao report completo numa página diferente se eles se tornarem clientes ou agendarem uma chamada paga de consultoria - different page)
+  - [ ] Company full report
+  - [ ] Book Call
+  - [ ] Buy Service/Product/Subscription
 - [ ] Agentes
-    - [/] "Orquestrador": fala com o utilizador e pode lançar os outros agentes da plataforma
-        - [ ] Falta
-            - [ ] Página de Chat
-    - [/] "Campaign Creator": que cria os copies e escolhe/compila as variáveis a usar nos emails para que estes emails sejam o mais personalizados possível para cada prospecto ou cliente
-        - [ ] Falta
-            - [ ] Estar na página dos agentes e o orquestrador comunicar com ele
-    - [x] "Planificador": que planifica campanhas de email e ajuda a definir que produtos/serviços anunciar e que audiencias devemos criar
-    - [x] "Audience Creator": que pesquisa e analisa a nossa DB para criar audiencias com base no target pedido do utilizador
+  - [/] "Orquestrador": fala com o utilizador e pode lançar os outros agentes da plataforma
+    - [ ] Falta
+      - [ ] Página de Chat
+  - [/] "Campaign Creator": que cria os copies e escolhe/compila as variáveis a usar nos emails para que estes emails sejam o mais personalizados possível para cada prospecto ou cliente
+    - [ ] Falta
+      - [ ] Estar na página dos agentes e o orquestrador comunicar com ele
+  - [x] "Planificador": que planifica campanhas de email e ajuda a definir que produtos/serviços anunciar e que audiencias devemos criar
+  - [x] "Audience Creator": que pesquisa e analisa a nossa DB para criar audiencias com base no target pedido do utilizador
+- [ ] Adicionar ao Data Mining
+  - [ ] Racius company info scraping (PT companies)
+  - [ ] Company info (Other countries companies alternatives to Racius - can be free APIs or scraping)
+  - [ ] Finantial information (where available for free - scraping or APIs)
+  - [ ] Companies scale (worldwide, continental, national, regional, local)
+  - [ ] Companies Competition taking into account their scale
+  - [ ] Better way of knowing the sites monthly views for free (better coverage, now the coverage of this data point is too low)

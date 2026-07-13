@@ -650,10 +650,23 @@ app.get('/api/queues', async (req, res) => {
       const name = ci.name;
       consumers.push({
         name, role: CONSUMER_ROLES[name] || '?', subject: ci.config?.filter_subject || '',
-        pending: ci.num_pending || 0, ackPending: ci.num_ack_pending || 0, redelivered: ci.num_redelivered || 0, waiting: ci.num_waiting || 0,
+        pending: ci.num_pending || 0, ackPending: ci.num_ack_pending || 0, redelivered: ci.num_redelivered || 0, waiting: ci.num_waiting || 0, delivered: ci.delivered?.consumer_seq || 0, acked: ci.ack_floor?.consumer_seq || 0,
       });
     }
-    consumers.sort((a, b) => (b.pending + b.ackPending) - (a.pending + a.ackPending) || a.name.localeCompare(b.name));
+    // Rate (jobs/h) por consumer: delta do delivered vs snapshot no Redis (janela >=20s).
+      try {
+        const rr = await redisClient();
+        if (rr && _redisUp) {
+          const now = Date.now();
+          const prev = JSON.parse((await rr.get('np:qstats:prev').catch(() => null)) || 'null');
+          if (prev && prev.ts && now - prev.ts > 3000) {
+            const dt = (now - prev.ts) / 1000;
+            for (const c of consumers) { const pv = prev.byName?.[c.name]; if (pv != null) { c.rate = Math.max(0, Math.round((c.delivered - pv) / dt * 3600)); c.eta = c.rate > 0 ? +(c.pending / c.rate).toFixed(1) : null; } }
+          }
+          if (!prev || now - prev.ts >= 20000) { const byName = {}; for (const c of consumers) byName[c.name] = c.delivered; await rr.set('np:qstats:prev', JSON.stringify({ ts: now, byName }), { EX: 300 }).catch(() => {}); }
+        }
+      } catch { /* rate opcional */ }
+      consumers.sort((a, b) => (b.pending + b.ackPending) - (a.pending + a.ackPending) || a.name.localeCompare(b.name));
     const byRole = {};
     for (const c of consumers) {
       const r = (byRole[c.role] ||= { role: c.role, consumers: 0, pending: 0, ackPending: 0, redelivered: 0, waiting: 0 });
@@ -1141,6 +1154,23 @@ app.get('/api/coverage', async (req, res) => {
     }, 600);
     res.json(data);
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Logs agregados da frota (merge dos np:wk:<id>:log de todos os workers vivos). Antes do catch-all.
+app.get('/api/logs', async (req, res) => {
+  try {
+    const r = await redisClient();
+    if (!r || !_redisUp) return res.json({ logs: [], telemetry: false });
+    const ids = await r.zRangeByScore('np:wk:index', Date.now() - 90000, '+inf').catch(() => []);
+    const all = [];
+    for (const id of ids) {
+      const h = await r.hGetAll(`np:wk:${id}`).catch(() => ({}));
+      const lines = await r.lRange(`np:wk:${id}:log`, 0, 40).catch(() => []);
+      for (const ln of lines) all.push({ host: h.host || id, role: h.role || '?', wid: id, line: String(ln) });
+    }
+    all.sort((a, b) => b.line.slice(0, 8).localeCompare(a.line.slice(0, 8)));
+    res.json({ logs: all.slice(0, 400), telemetry: true, workers: ids.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

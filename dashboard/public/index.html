@@ -154,6 +154,24 @@
   .np-contact { display: flex; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--np-divider); }
   .np-mono { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12px; }
   .np-empty { text-align: center; padding: 48px 20px; color: var(--np-text-3); }
+
+  /* ---- Mobile responsiveness ---- */
+  @media (max-width: 860px) {
+    .np-nav { flex-basis: var(--np-nav-w-collapsed); width: var(--np-nav-w-collapsed); padding-left: 6px; padding-right: 6px; }
+    .np-nav-row { justify-content: center; padding: 0; }
+    .np-nav-row span, .np-nav-eyebrow, .np-nav .np-word, .np-nav-count { display: none; }
+    .np-main { padding: 16px 12px; min-width: 0; }
+    .np-grid { grid-template-columns: 1fr !important; }
+    .np-kpis { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
+    .np-h1 { font-size: 20px; }
+    .np-drawer { width: 100%; max-width: 100%; }
+    .np-topbar { padding: 0 10px; gap: 8px; }
+  }
+  @media (max-width: 520px) {
+    .np-topbar .np-search, .np-topbar .np-word { display: none; }
+    .np-main { padding: 12px 8px; }
+    .np-card-b { padding: 12px; }
+  }
 </style>
 </head>
 <body>
@@ -281,9 +299,12 @@ async function renderNav(active) {
     ${item('contacts', 'contacts', 'Contactos', t.contacts)}
     ${item('clients', 'briefcase', 'Clientes')}
     <div class="np-nav-eyebrow">Sistema</div>
-    ${item('workers', 'server', 'Workers')}
+    ${item('servers', 'globe', 'Servidores')}
+    ${item('vms', 'server', 'VMs')}
+    ${item('workers', 'sparkles', 'Workers')}
     ${item('queues', 'activity', 'Filas')}
     ${item('coverage', 'check', 'Cobertura')}
+    ${item('logs', 'clock', 'Logs')}
     ${item('agents', 'sparkles', 'Agentes IA')}
     ${item('isps', 'globe', 'ISPs / alojamento')}
     ${item('triggers', 'activity', 'Gatilhos')}
@@ -306,7 +327,7 @@ function barRows(items, colorFn, showPct = true) {
 
 // ========== OVERVIEW ==========
 async function viewOverview() {
-  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  if (!REFRESHING) $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
   const s = await api('/api/stats'); STATS = s; renderNav('overview');
   const t = s.totals;
   const kpi = (icon, label, v, href) => `<a class="np-kpi" href="${href}" style="display:block"><div class="np-kpi-l"><span class="np-kpi-ic">${ic(icon, 15)}</span>${label}</div><div class="np-kpi-v tnum">${fmt(v)}</div></a>`;
@@ -444,7 +465,7 @@ async function paintDirectory() {
   if (DState.platform) chips.push(['platform', DState.platform]);
   if (DState.country) chips.push(['country', 'País: ' + DState.country]);
   chips.push(...auditChips(DState));
-  $('#view').innerHTML = `
+  if (!REFRESHING || !$('#dbody')) $('#view').innerHTML = `
     <div class="np-head"><div><div class="np-eyebrow">Prospeção</div><h1 class="np-h1">Negócios</h1><div class="np-sub" id="dcount">A carregar…</div></div>
       <div style="display:flex;gap:8px"><button class="np-btn" onclick="saveSegment()">${ic('segments', 15)}Guardar segmento</button><button class="np-btn" onclick="dirAuditAll()" id="auditallbtn">${ic('shield', 15)}Auditar audiência</button><button class="np-btn" onclick="dirExportCsv()">${ic('download', 15)}Exportar CSV</button></div></div>
     <section class="np-card" style="margin-bottom:14px">
@@ -636,7 +657,7 @@ async function paintContacts() {
   const chips = auditChips(CState);
   if (CState.roles) CState.roles.split(',').forEach((r) => chips.unshift(['roles:' + r, 'Cargo: ' + r]));
   if (CState.rolecat) CState.rolecat.split(',').forEach((c) => chips.unshift(['rolecat:' + c, (ROLECATS.find((x) => x[0] === c)?.[1] || c)]));
-  $('#view').innerHTML = `
+  if (!REFRESHING || !$('#cbody')) $('#view').innerHTML = `
     <div class="np-head"><div><div class="np-eyebrow">Decisores</div><h1 class="np-h1">Contactos</h1><div class="np-sub"><b>${fmt(STATS?.totals?.contacts)}</b> pessoas · <b style="color:var(--np-ok)">${fmt(STATS?.totals?.verifiedEmails)}</b> com e-mail verificado</div></div>
       <button class="np-btn" onclick="conExportCsv()">${ic('download', 15)}Exportar CSV</button></div>
     <section class="np-card" style="margin-bottom:14px"><div class="np-filterbar">
@@ -693,7 +714,7 @@ function segFilterChips(f) {
 function segQuery(f) { const p = new URLSearchParams(); for (const [k, v] of Object.entries(f || {})) if (v) p.set(k, v); return p.toString(); }
 async function viewSegments() {
   if (!STATS) STATS = await api('/api/stats'); renderNav('segments');
-  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  if (!REFRESHING) $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
   const { segments } = await api('/api/segments');
   const card = (s) => `<section class="np-card" style="overflow:hidden"><div style="height:4px;background:${s.accent || 'var(--np-brand)'}"></div><div class="np-card-b">
     <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="font-weight:800;font-size:15px">${esc(s.name)}</div>${s.shared ? '<span class="np-badge info" style="height:20px">Equipa</span>' : ''}</div>
@@ -721,7 +742,7 @@ function timeAgo(sec) { const d = Math.max(0, Math.floor(Date.now() / 1000 - sec
 const TState = { severity: '', since: '30' };
 async function viewTriggers() {
   if (!STATS) STATS = await api('/api/stats'); renderNav('triggers');
-  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  if (!REFRESHING) $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
   const p = new URLSearchParams({ limit: '200', since: TState.since }); if (TState.severity) p.set('severity', TState.severity);
   const r = await api('/api/triggers?' + p);
   if (!r.enabled) {
@@ -756,7 +777,7 @@ async function viewCampaigns() {
   if (!STATS) STATS = await api('/api/stats'); renderNav('campaigns');
   const qp = parseHashQuery();
   if (qp.id) return viewCampaign(qp.id);
-  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  if (!REFRESHING) $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
   const [{ campaigns, mailer }, { segments }] = await Promise.all([api('/api/campaigns'), api('/api/segments')]);
   const dryNote = mailer?.mode !== 'smtp' ? `<span class="np-badge warn" style="height:22px" title="Sem SMTP configurado: os envios ficam em modo de teste (dry-run)">${ic('mail', 12)} Modo de teste (dry-run)</span>` : `<span class="np-badge ok" style="height:22px">SMTP ativo</span>`;
   const angleOpts = Object.entries(ANGLE_LABEL).map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
@@ -803,7 +824,7 @@ window.createCampaign = async () => {
 };
 async function viewCampaign(id) {
   renderNav('campaigns');
-  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  if (!REFRESHING) $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
   const { campaign: c, emails, mailerMode } = await api('/api/campaigns/' + encodeURIComponent(id));
   const k = c.counts || {};
   const generated = (k.ready || 0) + (k.delivered || 0);
@@ -880,6 +901,77 @@ function fmtBytes(n) { if (!n) return '0 B'; const u = ['B', 'KB', 'MB', 'GB', '
 const durMs = (ms) => (ms == null ? '—' : (ms < 1000 ? ms + 'ms' : (ms / 1000).toFixed(1) + 's'));
 
 // --- /workers: instâncias A CORRER (telemetria Redis), click → drawer c/ logs+métricas ---
+// ---------- Servidores & VMs ----------
+const DC_OF = (host) => /^hel1|^np-(server|db)/.test(host || '') ? 'HEL1' : /^de|np-wk-de/.test(host || '') ? 'DE1' : /laptop/.test(host || '') ? 'Laptop' : /oracle/.test(host || '') ? 'Oracle' : /gcp/.test(host || '') ? 'GCP' : 'Outro';
+function groupByHost(ws) {
+  const m = {};
+  for (const w of ws) { const h = w.host || w.id; (m[h] = m[h] || []).push(w); }
+  return Object.entries(m).map(([host, list]) => ({
+    host, dc: DC_OF(host), workers: list,
+    load: (list.find((w) => w.load != null) || {}).load ?? null,
+    cores: (list.find((w) => w.cores) || {}).cores ?? null,
+    roles: [...new Set(list.map((w) => w.role))],
+    done1h: list.reduce((a, w) => a + (w.done1h || 0), 0),
+    done24h: list.reduce((a, w) => a + (w.done24h || 0), 0),
+    fail24h: list.reduce((a, w) => a + (w.fail24h || 0), 0),
+  }));
+}
+const loadBar = (load, cores) => {
+  if (load == null || !cores) return '<span class="muted" style="font-size:11px">load —</span>';
+  const pct = Math.round(100 * load / cores);
+  const col = pct >= 100 ? 'var(--np-brand,#e11d48)' : pct >= 70 ? 'var(--np-warn,#d97706)' : 'var(--np-ok-mark,#16a34a)';
+  return `<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:var(--np-border,#e5e7eb);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.min(100, pct)}%;background:${col}"></div></div><span class="tnum" style="font-size:11px;color:${col};white-space:nowrap">${load} / ${cores}c</span></div>`;
+};
+const errCard = (e) => `<div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`;
+async function viewVms() {
+  renderNav('vms');
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">VMs</h1><div class="np-sub">Máquinas com workers a correr · load do host · click num worker → logs · atualiza 10 s</div></div></div>`;
+  let d; try { d = await api('/api/workers'); } catch (e) { $('#view').innerHTML = head + errCard(e); return; }
+  if (!d.telemetry || !(d.workers || []).length) { $('#view').innerHTML = head + `<div class="np-empty">Nenhum worker a reportar.</div>`; return; }
+  const vms = groupByHost(d.workers).sort((a, b) => a.host.localeCompare(b.host));
+  const card = (v) => `<section class="np-card"><div class="np-card-b">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div><div style="font-weight:800;font-size:14px">${esc(v.host)}</div><div class="muted" style="font-size:11px">${esc(v.dc)} · ${v.workers.length} workers · ${esc(v.roles.join(', '))}</div></div>
+      <span class="np-badge ${v.fail24h ? 'warn' : 'ok'}" style="height:20px">${fmt(v.done1h)}/h</span></div>
+    <div style="margin-top:10px">${loadBar(v.load, v.cores)}</div>
+    <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap">
+      <div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(v.done24h)}</div><div class="muted" style="font-size:10px">feitas 24h</div></div>
+      <div><div class="tnum" style="font-size:16px;font-weight:800;color:${v.fail24h ? 'var(--np-warn)' : ''}">${fmt(v.fail24h)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div></div>
+    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px">${v.workers.map((w) => `<button class="np-btn np-btn--sm" onclick="openWorker('${esc(w.id)}')" title="${esc(w.role)}${w.cur ? ' · ' + esc(w.cur) : ''}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('')}</div>
+  </div></section>`;
+  $('#view').innerHTML = head + `<div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">${vms.map(card).join('')}</div>`;
+}
+async function viewServers() {
+  renderNav('servers');
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Servidores</h1><div class="np-sub">Datacenters → VMs a correr workers · load agregado · atualiza 10 s</div></div></div>`;
+  let d; try { d = await api('/api/workers'); } catch (e) { $('#view').innerHTML = head + errCard(e); return; }
+  const vms = groupByHost(d.workers || []);
+  const dcs = {};
+  for (const v of vms) (dcs[v.dc] = dcs[v.dc] || []).push(v);
+  const card = ([dc, list]) => {
+    const workers = list.reduce((a, v) => a + v.workers.length, 0), done1h = list.reduce((a, v) => a + v.done1h, 0), fail24h = list.reduce((a, v) => a + v.fail24h, 0);
+    const totLoad = list.reduce((a, v) => a + (v.load || 0), 0), totCores = list.reduce((a, v) => a + (v.cores || 0), 0);
+    return `<section class="np-card"><div class="np-card-b">
+      <div style="font-weight:800;font-size:15px">${esc(dc)}</div><div class="muted" style="font-size:11px">${list.length} VMs · ${workers} workers</div>
+      <div style="margin-top:10px">${loadBar(+totLoad.toFixed(2), totCores)}</div>
+      <div style="display:flex;gap:16px;margin-top:10px"><div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(done1h)}/h</div><div class="muted" style="font-size:10px">throughput</div></div><div><div class="tnum" style="font-size:16px;font-weight:800;color:${fail24h ? 'var(--np-warn)' : ''}">${fmt(fail24h)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div></div>
+      <div style="margin-top:10px">${list.sort((a, b) => a.host.localeCompare(b.host)).map((v) => `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-top:1px solid var(--np-border)"><span onclick="location.hash='#/vms'" style="cursor:pointer">${esc(v.host)} <span class="muted">${v.workers.length}w · ${esc(v.roles.join('/'))}</span></span><span class="tnum muted" style="white-space:nowrap">${v.load != null ? v.load + '/' + v.cores + 'c' : '—'}</span></div>`).join('')}</div>
+    </div></section>`;
+  };
+  $('#view').innerHTML = head + `<div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">${Object.entries(dcs).map(card).join('')}</div>`;
+}
+async function viewLogs() {
+  renderNav('logs');
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Logs da frota</h1><div class="np-sub">Atividade recente dos workers (todos os hosts) · filtra por texto</div></div></div>`;
+  let d; try { d = await api('/api/logs'); } catch (e) { $('#view').innerHTML = head + errCard(e); return; }
+  const q = (window.__logq || '').toLowerCase();
+  const rows = (d.logs || []).filter((l) => !q || l.line.toLowerCase().includes(q) || (l.host || '').toLowerCase().includes(q));
+  const line = (l) => `<div style="display:flex;gap:8px;padding:2px 0;border-bottom:1px solid var(--np-border);font-size:11.5px"><span class="muted" style="min-width:120px;white-space:nowrap">${esc(l.host)}</span><span style="flex:1;white-space:pre-wrap;word-break:break-word">${esc(l.line)}</span></div>`;
+  $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">
+    <input id="logq" placeholder="filtrar (host, job, domínio…)" value="${esc(window.__logq || '')}" oninput="window.__logq=this.value;clearTimeout(window.__logt);window.__logt=setTimeout(viewLogs,300)" style="width:100%;padding:8px 10px;margin-bottom:10px;border:1px solid var(--np-border);border-radius:8px;background:var(--np-surface);color:var(--np-text)">
+    <div class="np-mono" style="max-height:68vh;overflow:auto">${rows.length ? rows.map(line).join('') : '<div class="np-empty">Sem logs recentes.</div>'}</div>
+    <div class="muted" style="font-size:11px;margin-top:8px">${rows.length} linhas · ${d.workers || 0} workers</div></div></div>`;
+  const inp = document.getElementById('logq'); if (inp && window.__logq) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
+}
 // ---------- Cobertura ----------
 let COV_THRESH = 'all';
 const COV_BUCKETS = { gt70: ['gt70'], gt60: ['gt70', 'b60'], gt50: ['gt70', 'b60', 'b50'], gt40: ['gt70', 'b60', 'b50', 'b40'], lt40: ['lt40'], all: ['gt70', 'b60', 'b50', 'b40', 'lt40'] };
@@ -947,7 +1039,8 @@ async function viewWorkers() {
       <div><div class="tnum" style="font-size:18px;font-weight:800;color:${w.fail24h ? 'var(--np-warn)' : 'var(--np-text)'}">${fmt(w.fail24h)}</div><div class="muted" style="font-size:10.5px">falhas 24h</div></div>
       <div><div class="tnum" style="font-size:18px;font-weight:800">${durMs(w.avgMs)}</div><div class="muted" style="font-size:10.5px">duração média</div></div>
     </div><div class="muted" style="font-size:11px;margin-top:8px">último sinal ${ago(w.beat)}</div></div></section>`;
-  $('#view').innerHTML = head + `<div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">${d.workers.map(card).join('')}</div>`;
+  const St = { workers: d.workers.length, done1h: d.workers.reduce((x, w) => x + (w.done1h || 0), 0), done24h: d.workers.reduce((x, w) => x + (w.done24h || 0), 0), fail24h: d.workers.reduce((x, w) => x + (w.fail24h || 0), 0) }; const byRole = {}; d.workers.forEach((w) => { const k = w.role || '?'; (byRole[k] = byRole[k] || { n: 0, done1h: 0 }); byRole[k].n++; byRole[k].done1h += (w.done1h || 0); }); const sk = (l, v, c) => `<div><div class="tnum" style="font-size:20px;font-weight:800;${c||''}">${fmt(v)}</div><div class="muted" style="font-size:10.5px">${l}</div></div>`; const statsCard = `<section class="np-card" style="margin-bottom:14px"><div class="np-card-b"><div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">${sk('workers', St.workers)}${sk('feitas 1h', St.done1h)}${sk('feitas 24h', St.done24h)}${sk('falhas 24h', St.fail24h, St.fail24h?'color:var(--np-warn)':'')}<div style="flex:1;min-width:200px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${Object.entries(byRole).sort((a,b)=>b[1].done1h-a[1].done1h).map(([r,v])=>`<span class="np-chip" title="${fmt(v.done1h)}/h">${esc(r)} ·${v.n}w</span>`).join('')}</div></div></div></section>`; 
+  $('#view').innerHTML = head + statsCard + `<div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">${d.workers.map(card).join('')}</div>`;
 }
 window.openWorker = async (id) => {
   let w; try { w = await api('/api/workers/' + encodeURIComponent(id)); } catch (e) { return; }
@@ -966,7 +1059,7 @@ async function viewQueues() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
   renderNav('queues');
   let d; try { d = await api('/api/queues'); } catch (e) { $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Filas</h1></div></div><div class="np-card"><div class="np-card-b"><b>NATS indisponível.</b> <span class="muted">${esc(e.message)}</span></div></div>`; return; }
-  const totPending = d.consumers.reduce((a, c) => a + c.pending, 0), totProc = d.consumers.reduce((a, c) => a + c.ackPending, 0), totRedeliv = d.consumers.reduce((a, c) => a + c.redelivered, 0);
+  const totPending = d.consumers.reduce((a, c) => a + c.pending, 0), totProc = d.consumers.reduce((a, c) => a + c.ackPending, 0), totRedeliv = d.consumers.reduce((a, c) => a + c.redelivered, 0); const totRate = d.consumers.reduce((a, c) => a + (c.rate || 0), 0);
   const kpi = (icon, label, v, sub) => `<div class="np-kpi"><div class="np-kpi-l"><span class="np-kpi-ic">${ic(icon, 15)}</span>${label}</div><div class="np-kpi-v tnum">${fmt(v)}</div>${sub ? `<div class="muted" style="font-size:11px;margin-top:2px">${sub}</div>` : ''}</div>`;
   const maxDepth = Math.max(1, ...d.consumers.map((c) => c.pending + c.ackPending));
   const row = (c) => `<tr onclick="openQueue('${esc(c.name)}')" style="cursor:pointer" title="Ver / gerir jobs desta fila">
@@ -976,15 +1069,15 @@ async function viewQueues() {
     <td class="tnum" style="text-align:right;font-weight:700;${c.pending ? 'color:var(--np-warn)' : ''}">${fmt(c.pending)}</td>
     <td class="tnum" style="text-align:right">${fmt(c.ackPending)}</td>
     <td class="tnum" style="text-align:right;${c.redelivered ? 'color:var(--np-warn)' : 'color:var(--np-text-3)'}">${fmt(c.redelivered)}</td>
-    <td class="tnum" style="text-align:right;color:var(--np-text-3)">${fmt(c.waiting)}</td></tr>`;
+    <td class="tnum" style="text-align:right;color:var(--np-text-3)">${fmt(c.waiting)}</td><td class="tnum" style="text-align:right;font-weight:600;color:${c.rate?'var(--np-ok-mark)':'var(--np-text-3)'}">${c.rate!=null?fmt(c.rate):'—'}</td><td class="tnum" style="text-align:right;color:var(--np-text-3)">${c.eta!=null?c.eta+'h':(c.pending&&c.rate===0?'∞':'')}</td></tr>`;
   const active = d.consumers.filter((c) => c.pending + c.ackPending > 0), idle = d.consumers.filter((c) => c.pending + c.ackPending === 0);
   $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Filas</h1><div class="np-sub">Fila NATS JetStream <b>NP_JOBS</b> · clica numa fila para ver/gerir os jobs · atualiza a cada 10 s</div></div></div>
     <div class="np-kpis">
       ${kpi('server', 'Mensagens na stream', d.stream.messages, fmtBytes(d.stream.bytes) + ' · ' + d.stream.consumerCount + ' consumers')}
-      ${kpi('activity', 'Em fila (por entregar)', totPending)}${kpi('power', 'A processar agora', totProc)}${kpi('clock', 'Re-tentativas (nak)', totRedeliv)}
+      ${kpi('activity', 'Em fila (por entregar)', totPending)}${kpi('power', 'A processar agora', totProc)}${kpi('clock', 'Re-tentativas (nak)', totRedeliv)}${kpi('activity', 'Throughput (/h)', totRate)}
     </div>
     <section class="np-card"><div class="np-card-h"><h2>Filas / consumers (${d.consumers.length})</h2><span class="muted" style="font-size:12px">${active.length} com trabalho · ${idle.length} vazias</span></div>
-      <div class="np-tablewrap"><table class="np-table"><thead><tr><th>Fila</th><th>Role</th><th>Subject</th><th>Profundidade</th><th style="text-align:right">Em fila</th><th style="text-align:right">A processar</th><th style="text-align:right">Retry</th><th style="text-align:right">Idle</th></tr></thead>
+      <div class="np-tablewrap"><table class="np-table"><thead><tr><th>Fila</th><th>Role</th><th>Subject</th><th>Profundidade</th><th style="text-align:right">Em fila</th><th style="text-align:right">A processar</th><th style="text-align:right">Retry</th><th style="text-align:right">Idle</th><th style="text-align:right">/h</th><th style="text-align:right">ETA</th></tr></thead>
       <tbody>${[...active, ...idle].map(row).join('')}</tbody></table></div></section>`;
 }
 window.openQueue = async (name) => {
@@ -1020,7 +1113,7 @@ window.purgeQueue = async (name) => {
 async function viewIsps() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
   renderNav('isps');
-  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  if (!REFRESHING) $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
   const page = +parseHashQuery().page || 1;
   const d = await api('/api/isps?page=' + page + '&limit=30');
   const max = Math.max(1, ...d.rows.map((r) => r.sites));
@@ -1041,7 +1134,7 @@ async function viewIsps() {
 async function viewClients() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
   renderNav('clients');
-  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  if (!REFRESHING) $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
   const { clients, totalMrr } = await api('/api/clients');
   const kpi = (icon, label, v) => `<div class="np-kpi"><div class="np-kpi-l"><span class="np-kpi-ic">${ic(icon, 15)}</span>${label}</div><div class="np-kpi-v tnum">${v}</div></div>`;
   const row = (c) => `<tr>
@@ -1200,7 +1293,7 @@ window.runPlanner = async () => {
 async function viewConfig() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
   renderNav('config');
-  $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  if (!REFRESHING) $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
   let c; try { c = await api('/api/config'); } catch (e) { $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Configuração</h1></div></div><div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
   const st = c.status, cfg = c.config;
   const svc = (name, ok, detail) => `<div class="np-kpi"><div class="np-kpi-l"><span class="np-dot" style="background:${ok ? 'var(--np-ok-mark)' : 'var(--np-neutral-mark)'}"></span>${name}</div><div style="font-size:14px;font-weight:800;margin-top:6px;color:${ok ? 'var(--np-ok)' : 'var(--np-text-3)'}">${ok ? 'ligado' : 'desligado'}</div><div class="muted" style="font-size:11px;margin-top:2px;word-break:break-all">${detail || ''}</div></div>`;
@@ -1241,9 +1334,12 @@ async function route() {
     else if (h === 'clients') await viewClients();
     else if (h === 'isps') await viewIsps();
     else if (h === 'import') await viewImport();
+    else if (h === 'servers') await viewServers();
+    else if (h === 'vms') await viewVms();
     else if (h === 'workers') await viewWorkers();
     else if (h === 'queues') await viewQueues();
     else if (h === 'coverage') await viewCoverage();
+    else if (h === 'logs') await viewLogs();
     else if (h === 'config') await viewConfig();
     else if (h === 'settings') await viewSettings();
     else await viewOverview();
@@ -1252,7 +1348,8 @@ async function route() {
 }
 // Auto-refresh global (10s) das páginas de dados. NÃO refresca ferramentas (import/agents/
 // settings), nem enquanto se edita um campo, nem com um drawer aberto; preserva o scroll.
-const NO_AUTOREFRESH = new Set(['import', 'agents', 'settings', 'coverage']);
+let REFRESHING = false;
+  const NO_AUTOREFRESH = new Set(['import', 'agents', 'settings', 'coverage', 'logs']);
 window.addEventListener('hashchange', route);
 route();
 setInterval(() => {
@@ -1261,7 +1358,7 @@ setInterval(() => {
   const ae = document.activeElement;
   if (ae && ['INPUT', 'TEXTAREA', 'SELECT'].includes(ae.tagName)) return;
   if ($('#drawer').classList.contains('open')) return;
-  const y = window.scrollY; Promise.resolve(route()).then(() => window.scrollTo(0, y));
+  REFRESHING = true; const y = window.scrollY; Promise.resolve(route()).then(() => window.scrollTo(0, y)).finally(() => { REFRESHING = false; });
 }, 10000);
 </script>
 </body>

@@ -128,10 +128,20 @@ sed -i 's|^CLICKHOUSE_URL=.*|CLICKHOUSE_URL=http://<ANALYTICS_IP>:8123|' docker/
 cd docker && docker compose up -d --force-recreate dashboard worker
 ```
 
-## 7. PostHog (OPT-IN, só quando houver RAM) — **Claude faz, adiado**
+## 7. PostHog (OPT-IN) — ⏸️ TENTADO, PARADO no bootstrap do ClickHouse
 
-> Só arrancar se a VM tiver os 16 GB. O PostHog é o `docker/posthog.compose.yml` (Postgres + Redis +
-> Kafka + ClickHouse próprios). Passa a correr na `de-analytics`, **não** no HEL1.
+> **Estado (2026-07):** os 6 containers sobem (bem — precisou de `chown 101` na pasta do Redpanda +
+> `CLICKHOUSE_USER/PASSWORD` explícitos no compose por causa de um `Code:516`), o **Postgres migra**,
+> mas o `posthog-web` fica **preso em loop** a inicializar os users/roles do ClickHouse dele — a parte
+> frágil que o próprio `docker/posthog.compose.yml` avisa ("para produção séria, o `install.sh` oficial
+> é o recomendado; este ficheiro é um ponto de partida"). Parei o `posthog-web`+`posthog-worker` (dados
+> intactos em `/srv/analytics/posthog`) para não queimar CPU na VM do ClickHouse de analytics.
+>
+> **A analítica do NetProspect NÃO depende disto** (vive no ClickHouse do §4, a funcionar). O PostHog é
+> só product-analytics do dashboard. **Para o pôr a funcionar:** usar o `install.sh` oficial do PostHog
+> (o caminho suportado deles) em vez deste compose, ou deixar parado.
+
+> _(Instruções originais do compose, se quiseres insistir nele — precisa dos 16 GB:)_
 
 ```bash
 # na de-analytics: definir POSTHOG_SECRET_KEY (>=32 chars) + POSTHOG_DB_PASSWORD no .env

@@ -20,10 +20,13 @@
 
 *Ainda por criar:* Worker VMs dedicadas (decompor os workers do HEL1) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
 
-> **Dashboard + control-plane agora no `np-server`:** o dashboard passou a ser **`http://100.114.17.74:3001`**
-> (o do monólito parou). O portátil já foi repontado; o control-plane do monólito (directus/dashboard/nats/redis)
-> foi **desmantelado** (dados em `docker/.data/*` como rollback). O HEL1 largou control-plane + Ollama + ClickHouse
-> → load caiu para ~0,2.
+> **Dashboard + control-plane agora no `np-server`** (o do monólito parou). Acessos públicos (atrás do
+> Authentik/NPMPlus): dashboard **https://netprospect.netmaster.pt** · Directus
+> **https://netprospect.directus.netmaster.pt** · consola MinIO **https://netprospect.minio.netmaster.pt**
+> (o NPMPlus aponta a `http://100.124.43.117:9001` — a consola passou a estar no tailnet; antes só em
+> `127.0.0.1`, e era ESSE o motivo de não abrir, não a firewall do DE1). O control-plane do monólito
+> (directus/dashboard/nats/redis) foi **desmantelado** (dados em `docker/.data/*` como rollback). O HEL1
+> largou control-plane + Ollama + ClickHouse → load caiu para ~0,2.
 
 > ### ⚠️ Convenções de provisionamento — aplicar a TODA a VM nova
 >
@@ -124,7 +127,7 @@ Runbook: <a href="docs/runbook-ollama-hel1.md">docs/runbook-ollama-hel1.md</a>.
 | hel1 | **Worker B** | — | 2 | 8 GB | — | Base | `base` (pipeline) | 🟡 | ✅ |
 | hel1 | **Worker L** | — | 2 | 4 GB | — | Light | `security` (nuclei/wpscan) | ❌ | ❌ |
 | de1 | **de-minio** | 300 | 2 | 4 GB | 500G storage-zfs | Storage | MinIO (reports + snapshots) | ✅ | ✅ |
-| de1 | **de-analytics** | 301 | 6 | 16 GB | ~200G storage-zfs | Analytics | **ClickHouse** ✅ + **PostHog** 🟢 | ✅ | ✅ |
+| de1 | **de-analytics** | 301 | 6 | 16 GB | ~200G storage-zfs | Analytics | **ClickHouse** ✅ + PostHog ⏸️ | ✅ | ✅ |
 | de1 | **Worker H** | — | 4 | 8 GB | — | Heavy | `browser` (lighthouse) | ❌ | ❌ |
 | de1 | **Worker B** | — | 2 | 4 GB | — | Base | `base` | ✅ | ✅ |
 | de1 | **Worker L** | — | 3 | 6 GB | — | Light | `security` (nuclei/wpscan) | ✅ | ✅ |
@@ -205,6 +208,6 @@ host remoto uma fatia de um job que os locais **também** consomem.
 | 2 | **ClickHouse — usar ou desmantelar?** | ✅ **Manter** (10M observações) → vai para a `de-analytics`. |
 | 3 | **industry (IA) — GPU ou heurístico?** | ✅ **Heurístico** no batch (154× mais rápido, custo 0). O Ollama fica em CPU no `hel1-ollama` para on-demand. **Sem compra de GPU.** |
 | 4 | **Directus — np-server ou co-localizar no np-db?** | ✅ **np-server** (os workers já escrevem direto ao PG via A2 → a chattiness dele importa menos). |
-| 5 | **Oracle A1 = ARM** | 🟡 **Aberto** — construir a `worker-security` multi-arch (arm64)? Sem Chromium é trivial. É o que desbloqueia a Fase 1. |
+| 5 | **Oracle A1 = ARM** | 🟡 **Aberto** — construir a `worker-security` multi-arch (arm64)? Sem Chromium é trivial. **Prioridade subiu:** é o que acelera o batch WPScan (24,8k em curso, só HEL1+DE1). |
 | 6 | **WPScan** | ✅ **Resolvido** — **batch keyless** (`enqueue-wpscan.js`) p/ todos os ~1,57M sites WP (enumera, sem vuln-DB); a **API key fica só p/ on-demand** (1 key por host, 25/dia). |
-| 7 | **PostHog** | 🟡 **Aberto** — opt-in pesado (+4-6 GB). Arrancar já com a `de-analytics`, ou só o ClickHouse primeiro? |
+| 7 | **PostHog** | ⏸️ **Parado (bootstrap CH).** Os 6 containers sobem e o Postgres migra, mas o `posthog-web` fica **preso em loop** a inicializar os users/roles do ClickHouse dele (o `docker/posthog.compose.yml` é um "ponto de partida", não a instalação oficial). Parei o web+worker (dados intactos) para não queimar CPU na VM do ClickHouse de analytics. **Opções:** (a) usar o `install.sh` oficial do PostHog, ou (b) deixar parado — a analítica do NetProspect **não depende** disto (vive no ClickHouse de analytics). |

@@ -206,4 +206,8 @@ Marcar `de-minio` como ✅ na §0 da [`LOAD-DISTRIBUTION.md`](../LOAD-DISTRIBUTI
   re-auditar subir, um `mc mirror` periódico para outra VM chega. Com a Opção B (ZFS-na-VM), snapshots
   locais: `zfs snapshot minio@$(date +%F)`.
 - **Lifecycle:** expiração por bucket, ex. snapshots a 90 dias: `mc ilm rule add --expire-days 90 dst/snapshots`.
-- **Consola web:** `ssh -L 9001:127.0.0.1:9001 root@<DEMINIO_IP>` → http://localhost:9001.
+- **Consola web:** por túnel `ssh -L 9001:127.0.0.1:9001 root@<DEMINIO_IP>` → http://localhost:9001,
+  **ou** em https://netprospect.minio.netmaster.pt (NPMPlus + Authentik). Para o reverse-proxy chegar à
+  consola, ela tem de bindar o **tailnet** (`${TAILNET_IP}:9001`), não só `127.0.0.1` — o NPMPlus aponta
+  a `http://<DEMINIO_IP>:9001` e é preciso `MINIO_BROWSER_REDIRECT_URL=https://netprospect.minio.netmaster.pt`
+  no `.env` (senão o login redireciona para o host interno e parte). **Não** era a firewall do DE1.

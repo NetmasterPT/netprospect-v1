@@ -1,5 +1,23 @@
 # Load Distribution — plano de deploy da frota
 
+## 0. Inventário VIVO da frota (Claude mantém isto a cada VM que entra)
+
+> Modelo de gestão: **tu** crias a VM + corres `deploy/bootstrap-vm.sh` (Docker+Tailscale+repo);
+> **Claude** faz o deploy do role (compose+env) via tailnet e atualiza esta tabela. Ambos com SSH.
+
+| Hostname (Tailscale) | Tailnet IP | Servidor | Role/stack | Imagem | Réplicas | Estado |
+|----------------------|-----------|----------|-----------|--------|---------:|--------|
+| *(HEL1 monolito)* | 100.108.94.126 | hel1 | App + browser + base + NATS/Redis/Directus/MinIO/ClickHouse | ambas | 4H+5B | ✅ a correr |
+| np-db | 100.77.60.44 | hel1 | Postgres + PgBouncer | — | — | ✅ a correr |
+| *(DE1 base)* | 100.120.214.45 | de1 | `base` (whois) + fila dedicada | worker-base | 4 | ✅ a correr |
+| *(DE1 heavy)* | 100.120.214.45 | de1 | `security` (nuclei/wpscan) | worker | 3 | ✅ a correr |
+| **de-minio** | *(a criar)* | de1 | MinIO (HDD) | minio | 1 | ❌ **Fase 2 — em curso** |
+
+*Ainda por criar:* de-clickhouse · hel1-ollama · np-server (decompor) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
+
+---
+
+
 > **Princípio único:** cada peça vive onde o seu **perfil de I/O** encaixa — não onde "sobra espaço".
 > Foi provado por medição, não por palpite (ver a coluna *evidência*). Mover a coisa errada custa
 > throughput: os workers remotos morriam à fome quando competiam com o HEL1 na workqueue partilhada

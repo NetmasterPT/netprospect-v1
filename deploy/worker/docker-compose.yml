@@ -1,0 +1,10 @@
+# Worker genérico da frota. O ROLE define-se por WORKER_ROLES no .env (base|security|browser|ai).
+# Imagem: worker-base (leve, roles base) OU worker (pesada, browser/security/ai) via WORKER_IMAGE.
+services:
+  worker:
+    image: ${WORKER_IMAGE:-netprospect-worker-base:latest}
+    restart: unless-stopped
+    init: true
+    env_file: [.env]
+    deploy:
+      replicas: ${WORKER_REPLICAS:-2}

@@ -16,7 +16,7 @@
 | **hel1-ollama** | 100.126.196.112 (LAN `10.10.10.53`) | hel1 | Ollama (CPU, sem GPU) — LXC CT, nativo | — | — | ✅ a servir on-demand |
 | **de-analytics** | 100.115.240.35 | de1 | ClickHouse (10,2M observações) — 200G ext4 (VMID 301) | clickhouse | 1 | ✅ **MIGRADO** |
 | **de1-pve** | 100.87.226.117 | de1 | *host Proxmox* (não é da stack — exit node, `tag:proxmox`) | — | — | ✅ |
-| **gpedro-laptop** | *(no tailnet)* | laptop | `residential` (**GMB** — IP residencial) + overflow opcional | worker | 1 | 🟡 daily-driver; **intermitente**, entra a pedido ⁸ |
+| **gpedro-laptop** | 100.107.10.15 | laptop | `residential` (**GMB** — IP residencial) + overflow opcional | worker | 1 | ✅ a correr (intermitente ⁸) |
 
 *Ainda por criar:* Worker VMs dedicadas (decompor os workers do HEL1) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
 
@@ -113,43 +113,46 @@ Runbook: <a href="docs/runbook-ollama-hel1.md">docs/runbook-ollama-hel1.md</a>.
 
 ---
 
-## 3. Tabela de VMs (alvo)
+## 3. Tabela de VMs
 
-> `Deployed`: ✅ a correr · 🟡 existe no monolito HEL1 (a separar) · ❌ por criar.
-> CPU/RAM das VMs a criar são **propostas** — ajustar à capacidade dos Proxmox.
+> **A correr** (specs reais) em cima; **por criar** (a decomposição-alvo dos workers + free VMs) em baixo.
+> Os workers do HEL1/DE1 correm HOJE nos hosts `hel1-docker`/`np-wk-de1` (não em VMs dedicadas ainda).
 
-| Server | VM | VMID | CPU | RAM | Disk | Type | Jobs / Containers | Deployed | Created |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| hel1 | **np-db** | 900 | 14 | 64 GB | NVMe | DB | Postgres + PgBouncer | ✅ | ✅ |
-| hel1 | **np-server** | 801 | 4 | 8 GB | 40G local-zfs | App | Directus, Dashboard, **NATS**, Redis | ✅ | ✅ |
-| hel1 | **hel1-ollama** | 503 | 6 | 8 GB | — | AI | Ollama CPU — on-demand (o batch usa o heurístico) | ✅ | ✅ |
-| hel1 | **Worker H** | — | 6 | 16 GB | — | Heavy | `browser` (lighthouse) — imagem pesada | 🟡 | ✅ |
-| hel1 | **Worker B** | — | 2 | 8 GB | — | Base | `base` (pipeline) | 🟡 | ✅ |
-| hel1 | **Worker L** | — | 2 | 4 GB | — | Light | `security` (nuclei/wpscan) | ❌ | ❌ |
-| de1 | **de-minio** | 300 | 2 | 4 GB | 500G storage-zfs | Storage | MinIO (reports + snapshots) | ✅ | ✅ |
-| de1 | **de-analytics** | 301 | 6 | 16 GB | ~200G storage-zfs | Analytics | **ClickHouse** ✅ + PostHog ⏸️ | ✅ | ✅ |
-| de1 | **Worker H** | — | 4 | 8 GB | — | Heavy | `browser` (lighthouse) | ❌ | ❌ |
-| de1 | **Worker B** | — | 2 | 4 GB | — | Base | `base` | ✅ | ✅ |
-| de1 | **Worker L** | — | 3 | 6 GB | — | Light | `security` (nuclei/wpscan) | ✅ | ✅ |
-| laptop | **gpedro-laptop** | — | 22 | 16 GB | 30 GB | **Residential** | `residential` (GMB) + overflow opcional | 🟡 | ✅ |
-| oracle | **A1-1** | — | 1 (ARM) | 6 GB | 48 GB | Light+Base | `security` + `base` *(imagem arm64)* | ❌ | ❌ |
-| oracle | **A1-2** | — | 1 (ARM) | 6 GB | 48 GB | Light+Base | `security` + `base` | ❌ | ❌ |
-| oracle | **AMD-1** | — | 1/8 | 1 GB | 48 GB | Light | whois / verify (baixa conc) | ❌ | ❌ |
-| oracle | **AMD-2** | — | 1/8 | 1 GB | 48 GB | Light | whois / verify | ❌ | ❌ |
-| gcp | **e2-micro** | — | 2 | 1 GB | 30 GB | Light | **só whois/verify** (egress 1 GB/mês) ⁶ | ❌ | ❌ |
+### A correr
+
+| Servidor | VM / host | VMID | CPU | RAM | Disco | Papel | Deployed |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| hel1 | **np-db** | 900 | 14 | 64 GB | NVMe | Postgres + PgBouncer | ✅ |
+| hel1 | **np-server** | 801 | 4 | 8 GB | 40 GB local-zfs | Directus + Dashboard + NATS + Redis | ✅ |
+| hel1 | **hel1-docker** *(ex-monólito)* | — | 18 | 251 GB | 99 GB NVMe | Workers `browser`+`base`+`security`+`ai` (4H+5B) + MinIO-rollback | ✅ |
+| hel1 | **hel1-ollama** | 503 | 6 | 8 GB | 300 GB (CT/ZFS) | Ollama CPU (LXC CT) — on-demand | ✅ |
+| de1 | **de-minio** | 300 | 2 | 4 GB | 500 GB storage-zfs | MinIO (reports + snapshots) | ✅ |
+| de1 | **de-analytics** | 301 | 6 | 16 GB | 20 GB root + **200 GB** dados | ClickHouse ✅ (PostHog ⏸️ — ver §6) | ✅ |
+| de1 | **np-wk-de1** | — | 6 | 23 GB | 99 GB | Workers `base` (proj. `np-worker`) + `security`+`ai` (proj. `np-worker-heavy`) | ✅ |
+| laptop | **gpedro-laptop** | — | 22 | 16 GB | 30 GB | `residential` (GMB) + overflow opcional — Windows/Docker Desktop | ✅ ⁸ |
+
+### Por criar (decomposição-alvo dos workers + free VMs)
+
+| Servidor | VM | CPU | RAM | Disco | Papel | Estado |
+| --- | --- | --- | --- | --- | --- | --- |
+| hel1 | Worker H (browser) | 6 | 16 GB | — | tirar o `browser` do `hel1-docker` p/ VM própria | ❌ (corre no hel1-docker) |
+| hel1 | Worker B (base) | 2 | 8 GB | — | idem, `base` | ❌ (corre no hel1-docker) |
+| de1 | Worker H (browser) | 4 | 8 GB | — | `browser` no DE1 | ❌ |
+| oracle | A1-1 / A1-2 (ARM) | 1 | 6 GB | 48 GB | `security` + `base` *(imagem arm64)* | ❌ ⁵ |
+| oracle | AMD-1 / AMD-2 | 1/8 | 1 GB | 48 GB | whois / verify | ❌ |
+| gcp | e2-micro | 2 | 1 GB | 30 GB | **só** whois / verify (egress 1 GB/mês) ⁶ | ❌ |
 
 <sub>
-⁵ 8 GB chegam se correres SÓ o ClickHouse do NetProspect; o PostHog quer +4-6 GB (traz o seu próprio
-ClickHouse+Kafka+Postgres) → 16 GB se forem os dois.
+⁵ Falta a imagem `worker-security` (arm64, sem Chromium) — é o que desbloqueia as free VMs e acelera o
+batch WPScan (24,8k em curso, hoje só HEL1+DE1).
 <br>
 ⁶ O egress de 1 GB/mês do GCP proíbe jobs que descarregam páginas (lighthouse ~1-3 MB/site). O whois
 (~3 KB) e o verify (bytes) cabem à vontade. O nuclei dispara muitos pedidos → só nas Oracle (10 TB).
 <br>
 ⁸ **`gpedro-laptop`** (Windows + Docker Desktop) é o daily-driver do Gonçalo → <strong>IP residencial</strong>,
 algo que nenhuma outra máquina tem. Corre por defeito SÓ o role <code>residential</code> (o <strong>GMB</strong>, que o
-Google bloqueia em IPs de datacenter). É <strong>intermitente</strong> (ele precisa dele para trabalhar) → nada crítico
-depende dele; a workqueue segura os jobs quando está offline. Pode receber <code>security</code>/<code>base</code> como
-overflow quando estiver livre e o Claude pedir. Runbook: <a href="docs/runbook-laptop.md">docs/runbook-laptop.md</a>.
+Google bloqueia em IPs de datacenter). É <strong>intermitente</strong> → nada crítico depende dele; a workqueue
+segura os jobs quando está offline. Runbook: <a href="docs/runbook-laptop.md">docs/runbook-laptop.md</a>.
 </sub>
 
 ---
@@ -200,6 +203,36 @@ host remoto uma fatia de um job que os locais **também** consomem.
 
 ---
 
+## 5b. Cobertura de jobs na DB (2026-07)
+
+> **Nada se perdeu na migração do NATS** — o backlog estava a **0** no momento do cutover (o pipeline
+> base tinha drenado). A fila só ter WPScan é porque (a) o pipeline base terminou os lotes enfileirados
+> e (b) as auditorias **nunca foram enfileiradas à escala** (só agora o WPScan). Cobertura sobre **1.567.798** sites:
+
+| Camada | Job / campo | Cobertos | % | Falta correr |
+| --- | --- | ---: | ---: | --- |
+| Base | `score` (lead_score) | 1.567.798 | 100% | — ✅ |
+| Base | `is_live` | 1.442.139 | 92% | — |
+| Base | `fingerprint` (tech_detected) | 1.439.176 | 92% | — |
+| Base | plataforma/CMS | 882.060 | 56% | resto: sem CMS detetável |
+| Base | `ssl` | 739.821 | 51% | **~700k** |
+| Base | `dnsprovider` | 739.128 | 51% | **~700k** |
+| Base | **`whois`** | 262.512 | 18% | **~1,18M** ⚠️ (precisa de +IPs → free VMs) |
+| Contactos | sites c/ email | 787.360 | 55% | resto: sem email público |
+| Contactos | contactos (linhas) | 1.534.885 | — | — |
+| Contactos | **`verify`** (email_status) | 75 | ~0% | **~156k** com email ⚠️ (precisa das keys/IPs free) |
+| Auditoria | **`industry`** | 19.690 | 1,3% | **~1,4M** (heurístico é rápido → enfileirar) |
+| Auditoria | **`lighthouse`** (seo_score) | 11.261 | 0,7% | os leads qualificados (~724k) |
+| Auditoria | **`nuclei`** | 6.759 | 0,4% | **~1,4M** (network-bound → free VMs) |
+| Auditoria | **`wpscan`** | 545 | 0,03% | **24.813 em curso** (WP+Woo score≥50); faltam ~730k WP |
+| Auditoria | **`gmb`** | 5.178 | 0,3% | só via portátil (residential), on-demand p/ bons leads |
+
+**O que falta, por prioridade de valor:** (1) `industry` — barato (heurístico), enche a segmentação;
+(2) `lighthouse`+`nuclei` nos qualificados — material do relatório; (3) `whois`+`verify` — precisam das
+**free VMs** (quota por IP); (4) `wpscan` — a drenar; escala com as free VMs de security.
+
+---
+
 ## 6. Decisões — estado
 
 | # | Decisão | Estado |
@@ -210,4 +243,4 @@ host remoto uma fatia de um job que os locais **também** consomem.
 | 4 | **Directus — np-server ou co-localizar no np-db?** | ✅ **np-server** (os workers já escrevem direto ao PG via A2 → a chattiness dele importa menos). |
 | 5 | **Oracle A1 = ARM** | 🟡 **Aberto** — construir a `worker-security` multi-arch (arm64)? Sem Chromium é trivial. **Prioridade subiu:** é o que acelera o batch WPScan (24,8k em curso, só HEL1+DE1). |
 | 6 | **WPScan** | ✅ **Resolvido** — **batch keyless** (`enqueue-wpscan.js`) p/ todos os ~1,57M sites WP (enumera, sem vuln-DB); a **API key fica só p/ on-demand** (1 key por host, 25/dia). |
-| 7 | **PostHog** | ⏸️ **Parado (bootstrap CH).** Os 6 containers sobem e o Postgres migra, mas o `posthog-web` fica **preso em loop** a inicializar os users/roles do ClickHouse dele (o `docker/posthog.compose.yml` é um "ponto de partida", não a instalação oficial). Parei o web+worker (dados intactos) para não queimar CPU na VM do ClickHouse de analytics. **Opções:** (a) usar o `install.sh` oficial do PostHog, ou (b) deixar parado — a analítica do NetProspect **não depende** disto (vive no ClickHouse de analytics). |
+| 7 | **PostHog** | ⛔ **Precisa de VM própria.** O compose hand-rolled partia no bootstrap do CH; o `install.sh` **oficial** é o caminho certo MAS o stack "hobby" são **~40 serviços** (Elasticsearch, Temporal, Kafka, Zookeeper, 2× ClickHouse, browserless, SeaweedFS…) — não cabe na `de-analytics` (6c/16GB, que já corre o ClickHouse de analytics **em uso**); ia dar OOM. **Decisão pendente:** VM dedicada `de-posthog` (~8c/32GB) **ou** PostHog Cloud (free tier) **ou** deixar de fora (a analítica do NetProspect NÃO depende disto). |

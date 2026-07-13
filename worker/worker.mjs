@@ -26,6 +26,7 @@ import { getSnapshot, ensureBucket, ensureReportsBucket, putReport } from '../li
 import { initEgress, egressDispatcher } from '../lib/egress.js';
 import { makeClient } from '../lib/directus.js';
 import { startTelemetry, taskStart, taskEnd, logLine } from '../lib/worker-telemetry.js';
+import { classifyIndustryHeuristic } from '../lib/audit/industry-heuristic.js';
 
 const WORKER_ROLES = process.env.WORKER_ROLES || ''; // vazio=todos; ex.: base|browser|security|ai|verify
 
@@ -63,6 +64,8 @@ const LIGHTHOUSE_CONC = Math.max(1, parseInt(process.env.LIGHTHOUSE_CONC || '2',
 const INDUSTRY_CONC = Math.max(1, parseInt(process.env.INDUSTRY_CONC || '1', 10));
 const AUDIT_ENABLED = /^(1|true|yes)$/i.test(process.env.AUDIT_ENABLED || '');
 const GMB_ENABLED = /^(1|true|yes)$/i.test(process.env.GMB_ENABLED || '');
+// industry: heurístico por default (instantâneo, sem GPU). INDUSTRY_LLM=true volta ao Ollama.
+const INDUSTRY_LLM = /^(1|true|yes)$/i.test(process.env.INDUSTRY_LLM || '');
 const WID = process.env.HOSTNAME || String(process.pid);
 const log = (m) => console.log(`${new Date().toISOString().slice(11, 19)} [w:${WID}] ${m}`);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -114,7 +117,14 @@ function makeHeavyFineHandlers(ctx, audit, js) {
     let html = snap?.html;
     if (!html) { const h = await fetchHomepage(site.final_url || `https://${site.domain}/`); html = h?.html; }
     if (!html) return 'ack';
-    try { const s = audit.ollama.summarizeForClassify(html, {}); const cls = await audit.ollama.classifyIndustry(s); if (cls.industry) { await client.request(updateItem('sites', site.id, { industry: cls.industry, industry_confidence: cls.confidence })); } } catch (e) { log(`industry ${site.domain}: ${e.message}`); }
+    // Classificador HEURÍSTICO (keywords) por default — instantâneo, sem GPU. O Ollama em CPU
+    // levava 107 s/site (26 dias p/ 729k) e roubava CPU ao Lighthouse. INDUSTRY_LLM=true volta
+    // ao Ollama (só faz sentido numa VM com GPU).
+    try {
+      const s = audit.ollama.summarizeForClassify(html, {});
+      const cls = INDUSTRY_LLM ? await audit.ollama.classifyIndustry(s) : classifyIndustryHeuristic(s);
+      if (cls.industry) await client.request(updateItem('sites', site.id, { industry: cls.industry, industry_confidence: cls.confidence }));
+    } catch (e) { log(`industry ${site.domain}: ${e.message}`); }
     return 'ack';
   }
   async function lighthouse(job, kind) {

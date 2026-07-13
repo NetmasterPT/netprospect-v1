@@ -1,144 +1,207 @@
-# Runbook — migrar o MinIO para disco HDD barato no DE1
+# Runbook — MinIO numa VM dedicada no DE1 (object storage em disco barato)
 
-> **Porquê.** O MinIO é *object storage*: escreve-se **uma vez**, lê-se **raramente** (só ao gerar
-> o relatório do cliente). Não tem qualquer benefício em estar em **NVMe** no HEL1 — é o perfil
-> de I/O que MENOS precisa de disco rápido, e é o que MAIS vai crescer.
+> **Porquê.** O MinIO é *object storage*: escreve-se **uma vez** (fire-and-forget no fim da
+> auditoria), lê-se **raramente** (só ao gerar o relatório do cliente). É o perfil de I/O que
+> MENOS precisa de disco rápido e o que MAIS vai crescer → tirá-lo do NVMe do HEL1 é ganho puro.
 >
-> **Escala medida:** o relatório integral de Lighthouse (sem screenshots) são **71 KB gzip/site**.
-> A 729k qualificados ≈ **52 GB**; a 1M sites ≈ **71 GB**. Com screenshots seriam **396 GB/M**
-> (82% do peso são base64 de JPEG, que não comprimem — ver `lib/audit/lighthouse.js:leanLhr`).
-> O HEL1 tem ~34 GB livres: **não cabe**. O DE1 tem HDD barato por usar.
+> **Escala medida:** o relatório integral de Lighthouse (sem screenshots) são **71 KB gzip/site**
+> → ~52 GB aos 729k qualificados, ~71 GB por 1M. Com screenshots seriam ~396 GB/M (82% do peso são
+> base64 de JPEG, que não comprimem — ver `lib/audit/lighthouse.js:leanLhr`). O HEL1 já está a 88%
+> de disco: **não cabe**. A VM nova leva **500 GB**.
 >
-> **Latência não é problema aqui:** o MinIO é acedido fora do hot-path (escrita fire-and-forget
-> no fim da auditoria, leitura só quando se gera o PDF). Os ~35 ms de WAN FI↔DE são irrelevantes
-> — ao contrário do NATS/Redis/Directus, que **têm** de ficar ao pé dos workers.
+> **Latência não importa aqui:** acesso fora do hot-path → os ~35 ms de WAN FI↔DE são irrelevantes
+> (ao contrário do NATS/Redis/Directus, que TÊM de ficar ao pé dos workers).
+
+## Parâmetros desta migração
+| | |
+|---|---|
+| **VMID** | **300** |
+| **Nome / hostname tailnet** | `de-minio` |
+| **Host Proxmox** | DE1 (Alemanha) |
+| **Storage** | `storage-zfs` (ZFS) |
+| **Disco de dados** | **500 GB** |
+| **CPU / RAM** | 2 vCPU / 4 GB |
+| **SO** | Debian 12 (cloud image + cloud-init) |
 
 ---
 
-## 0. Pré-requisitos
-- DE1 (VM Alemanha, tailnet `100.120.214.45`) com Docker + Tailscale (já tem — ver `docs/runbook-worker-vms.md`).
-- Um disco HDD adicional no host Proxmox alemão, por atribuir à VM.
-- Acesso SSH root ao DE1 e ao host Proxmox.
+## 1. Criar a VM + instalar o SO (no host Proxmox DE1)
 
-## 1. Adicionar o disco HDD à VM (no host Proxmox alemão)
+Método cloud-image + cloud-init (headless, sem ISO/GUI). Correr como root no host Proxmox.
+
 ```bash
-# Ver os storages disponíveis e escolher o HDD (não o SSD/NVMe)
-pvesm status
+# 1.1 — Baixar a cloud image do Debian 12 (uma vez; inclui cloud-init)
+cd /var/lib/vz/template/iso
+wget -nc https://cloud.debian.org/images/cloud/bookworm/latest/debian-12-genericcloud-amd64.qcow2
 
-# Adicionar um disco de 200G à VM 800 no storage HDD (ajusta o nome do storage)
-qm set 800 --scsi1 <storage-hdd>:200
+# 1.2 — Criar a VM 300 (disco de arranque importado a seguir)
+qm create 300 --name de-minio --memory 4096 --cores 2 \
+  --net0 virtio,bridge=vmbr0 --ostype l26 --scsihw virtio-scsi-single --agent 1
 
-# Aplica a quente (SCSI hotplug); se não aparecer, faz cold-boot:
-#   qm stop 800 && qm start 800   ← ATENÇÃO: um `reboot` de DENTRO da VM NÃO aplica
+# 1.3 — Importar a cloud image como disco de arranque, no storage-zfs
+qm importdisk 300 debian-12-genericcloud-amd64.qcow2 storage-zfs
+qm set 300 --scsi0 storage-zfs:vm-300-disk-0        # (confirma o nome com: qm config 300)
+qm resize 300 scsi0 20G                              # a cloud image vem com ~2G → cresce p/ 20G
+
+# 1.4 — Disco de DADOS de 500 GB, no storage-zfs (é onde vive o MinIO)
+qm set 300 --scsi1 storage-zfs:500
+
+# 1.5 — cloud-init: consola série + user/SSH + rede DHCP
+qm set 300 --ide2 storage-zfs:cloudinit
+qm set 300 --boot order=scsi0 --serial0 socket --vga serial0
+qm set 300 --ciuser root --cipassword '<define-uma-password>' \
+  --sshkeys ~/.ssh/authorized_keys                  # a TUA chave (+ a do Claude, se separada)
+qm set 300 --ipconfig0 ip=dhcp
+
+# 1.6 — Arrancar
+qm start 300
+qm guest cmd 300 network-get-interfaces 2>/dev/null | grep -A2 ip-address   # descobrir o IP (após ~30s)
+# ou: qm terminal 300   (Ctrl+O para sair)
 ```
 
-## 2. Formatar e montar (no DE1)
+> **Nota (memory/CPU a quente):** mudanças de CPU/RAM em VMs Proxmox só pegam com **cold-boot do
+> qemu** (`qm stop` + `qm start`), NÃO com um `reboot` de dentro da VM. (Aprendido à força nesta frota.)
+
+---
+
+## 2. Bootstrap da VM (Docker + Tailscale + repo)
+
+SSH para a VM (pelo IP DHCP do passo 1.6) e corre o bootstrap da frota:
+
 ```bash
-lsblk                                  # confirmar o disco novo (ex.: /dev/sdb)
-mkfs.ext4 -L minio /dev/sdb            # ext4 chega (é object storage, não é DB)
+ssh root@<ip-dhcp-da-vm>
+curl -fsSL https://raw.githubusercontent.com/NetmasterPT/netprospect-v1/main/deploy/bootstrap-vm.sh \
+  | bash -s -- <TAILSCALE_AUTHKEY> de-minio tag:storage
+```
+Isto instala o Docker + Tailscale, junta ao tailnet como `de-minio`, clona o repo em
+`/root/netprospect-v1`, e **imprime o tailnet IP** — guarda-o (chamemos-lhe `<DEMINIO_IP>`).
+
+---
+
+## 3. Preparar o disco de dados
+
+O disco de dados (`/dev/sdb`, 500 GB) precisa de filesystem. **Decisão importante:**
+
+> ⚠️ **ZFS-on-ZFS.** O `storage-zfs` do Proxmox JÁ é ZFS — o disco da VM é um *zvol* em cima de ZFS.
+> Pôr ZFS OUTRA VEZ dentro da VM = **ZFS-on-ZFS**: dobra o COW, os checksums e o consumo de RAM (ARC
+> no host + na VM). O Proxmox já dá checksums/compressão/snapshots a nível do host. Por isso:
+
+### Opção A — ext4 na VM (RECOMENDADA quando o storage é ZFS)
+```bash
+lsblk                                          # confirmar o disco de dados (ex.: /dev/sdb, 500G)
+mkfs.ext4 -L minio /dev/sdb
 mkdir -p /srv/minio
 echo 'LABEL=minio /srv/minio ext4 defaults,noatime 0 2' >> /etc/fstab
-mount -a && df -h /srv/minio           # deve mostrar o HDD montado
+mount -a && df -h /srv/minio
 ```
+*(Snapshots/compressão/integridade → geridos no Proxmox: `zfs snapshot storage-zfs/vm-300-disk-1@…`,
+compressão do dataset, etc.)*
 
-## 3. Subir o MinIO no DE1 (ligado só à tailnet)
+### Opção B — ZFS dentro da VM (só se quiseres gerir snapshots/compressão a partir da VM)
 ```bash
-mkdir -p /root/np-minio && cd /root/np-minio
-TS_IP=$(tailscale ip -4)               # ex.: 100.120.214.45
+apt-get update && apt-get install -y zfsutils-linux
+zpool create -o ashift=12 minio /dev/sdb
+# os relatórios JÁ vão gzipados → compressão extra não rende; recordsize grande p/ objetos:
+zfs set compression=off recordsize=1M atime=off mountpoint=/srv/minio minio
+df -h /srv/minio
+```
+*(Aceita o custo de RAM do ARC duplo — limita-o com `zfs_arc_max` se a VM só tiver 4 GB.)*
 
-cat > docker-compose.yml <<EOF
-services:
-  minio:
-    image: minio/minio:latest
-    restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: \${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: \${MINIO_ROOT_PASSWORD}
-    volumes:
-      - /srv/minio:/data           # ← o HDD
-    ports:
-      # SÓ na tailnet. NUNCA público (o MinIO tem as credenciais em env).
-      - '${TS_IP}:9000:9000'
-      - '127.0.0.1:9001:9001'      # consola: só por túnel SSH
-    healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
-      interval: 30s
-      timeout: 10s
-      retries: 5
-EOF
+---
 
-# As MESMAS credenciais do HEL1 (para não haver reconfiguração do lado da app)
-cat > .env <<'EOF'
-MINIO_ROOT_USER=netprospect
-MINIO_ROOT_PASSWORD=<copiar de docker/.env do HEL1>
-EOF
+## 4. Deploy do MinIO (usa o `deploy/minio/` do repo)
+
+```bash
+cd /root/netprospect-v1/deploy/minio
+cp .env.example .env
+# preencher .env:
+#   MINIO_ROOT_USER      = netprospect        (igual ao HEL1)
+#   MINIO_ROOT_PASSWORD  = <copiar de docker/.env do HEL1>   (MESMA pass → app não muda)
+#   TAILNET_IP           = <DEMINIO_IP>       (tailscale ip -4)
 chmod 600 .env
-
 docker compose up -d && docker compose ps
 ```
+O MinIO fica em `<DEMINIO_IP>:9000` (API, só tailnet) e `127.0.0.1:9001` (consola, só por túnel SSH).
+Os buckets `snapshots` e `reports` são criados pela app no arranque (`ensureBucket`/`ensureReportsBucket`).
 
-## 4. Migrar os dados existentes (do HEL1 para o DE1)
-> Hoje são apenas ~10 MB (snapshots). Fazer **antes** de os relatórios encherem o bucket.
+---
+
+## 5. Migrar os dados existentes (HEL1 → de-minio)
+
+> Hoje são ~571 MB de reports + ~10 MB de snapshots. Fazer **agora**, antes de encher.
 
 ```bash
-# No HEL1 — usar o cliente `mc` do próprio container do MinIO
-docker run --rm --network host -e MC_HOST_src=http://netprospect:<PASS>@127.0.0.1:9000 \
-  -e MC_HOST_dst=http://netprospect:<PASS>@100.120.214.45:9000 \
+# No HEL1. Password = a de docker/.env (MINIO_ROOT_PASSWORD). SRC = MinIO local; DST = de-minio.
+PASS=$(grep -oP '(?<=^MINIO_ROOT_PASSWORD=).*' /root/Github/netprospect-v1/docker/.env)
+docker run --rm --network host \
+  -e MC_HOST_src="http://netprospect:${PASS}@127.0.0.1:9000" \
+  -e MC_HOST_dst="http://netprospect:${PASS}@<DEMINIO_IP>:9000" \
+  minio/mc mirror --preserve src/reports dst/reports
+docker run --rm --network host \
+  -e MC_HOST_src="http://netprospect:${PASS}@127.0.0.1:9000" \
+  -e MC_HOST_dst="http://netprospect:${PASS}@<DEMINIO_IP>:9000" \
   minio/mc mirror --preserve src/snapshots dst/snapshots
 
-# Repetir para o bucket dos relatórios se já existir
-docker run --rm --network host -e MC_HOST_src=... -e MC_HOST_dst=... \
-  minio/mc mirror --preserve src/reports dst/reports
-
-# Verificar contagens dos dois lados
-docker run --rm --network host -e MC_HOST_x=... minio/mc ls --recursive x/reports | wc -l
+# Verificar que as contagens batem certo
+for H in "http://netprospect:${PASS}@127.0.0.1:9000|SRC" "http://netprospect:${PASS}@<DEMINIO_IP>:9000|DST"; do
+  docker run --rm --network host -e MC_HOST_x="${H%|*}" minio/mc ls --recursive x/reports | wc -l
+done
 ```
 
-## 5. Repontar a app (no HEL1)
+---
+
+## 6. Repontar a app (no HEL1)
+
 ```bash
 cd /root/Github/netprospect-v1
-# docker/.env
-#   MINIO_URL=http://100.120.214.45:9000     ← tailnet do DE1 (era http://minio:9000)
-sed -i 's|^MINIO_URL=.*|MINIO_URL=http://100.120.214.45:9000|' docker/.env
+sed -i 's|^MINIO_URL=.*|MINIO_URL=http://<DEMINIO_IP>:9000|' docker/.env   # era http://minio:9000
 
-# O compose passa MINIO_URL aos workers e ao dashboard; o serviço `minio` local deixa de ser
-# preciso → comentar/remover do docker/docker-compose.yml (mantém o volume p/ rollback).
-docker compose -f docker/docker-compose.yml up -d worker worker-base dashboard
+# recriar os serviços que falam com o MinIO (workers pesados + dashboard) p/ apanharem a env nova
+cd docker && docker compose up -d --force-recreate worker dashboard
 ```
 
-## 6. Verificação (obrigatória antes de desmantelar)
+---
+
+## 7. Verificação (OBRIGATÓRIA antes de desmantelar o do HEL1)
+
 ```bash
-# 1) O worker consegue escrever? (força uma auditoria on-demand)
-node enqueue-audits.js --domain=<um-dominio-qualificado>
+# 1) Escrita: forçar uma auditoria (o lighthouse escreve o report integral no MinIO)
+node enqueue-audits.js --domain=<um-dominio-qualificado>          # ou o fine: --only=lighthouse
 
-# 2) O objeto aparece no DE1?
-ssh root@100.120.214.45 'ls -la /srv/minio/reports/ | head'
+# 2) O objeto novo aparece no de-minio?
+ssh root@<DEMINIO_IP> 'ls -la /srv/minio/reports/ | tail'
 
-# 3) O ponteiro ficou no Postgres?
-#    site_reports.report->'_full' deve ter { bucket, key, bytes }
-psql -c "SELECT report->'_full' FROM site_reports WHERE kind='lighthouse_seo' ORDER BY id DESC LIMIT 1"
+# 3) O ponteiro _full ficou no Postgres (bucket/key/bytes)?
+ssh root@100.77.60.44 "sudo -u postgres psql -d netprospect -tAc \
+  \"SELECT report->'_full' FROM site_reports WHERE kind='lighthouse_seo' ORDER BY id DESC LIMIT 1\""
 
 # 4) Leitura ponta-a-ponta (o que gera o PDF do cliente)
-node -e "import('./lib/artifacts.js').then(async m => console.log(Object.keys(await m.getReport('<siteId>/lighthouse_seo.json.gz'))))"
+node -e "import('./lib/artifacts.js').then(async m => console.log(await m.getReport('<siteId>/lighthouse_seo.json.gz') ? 'LEU OK' : 'null'))"
 ```
 
-## 7. Desmantelar o MinIO do HEL1
-> **Só depois** do passo 6 passar. O volume local fica para rollback.
+---
+
+## 8. Desmantelar o MinIO do HEL1 (só depois do §7 passar)
+
 ```bash
-docker compose -f docker/docker-compose.yml stop minio
-docker compose -f docker/docker-compose.yml rm -f minio
+cd /root/Github/netprospect-v1/docker
+docker compose stop minio && docker compose rm -f minio
+# comentar o serviço `minio` no docker-compose.yml (mantém o volume p/ rollback)
 # NÃO apagar ./docker/.data/minio ainda — é o rollback.
 ```
 
 ## Rollback
-`MINIO_URL=http://minio:9000` no `docker/.env` + `docker compose up -d minio worker dashboard`.
-Os dados locais continuam em `docker/.data/minio`.
+`sed -i 's|^MINIO_URL=.*|MINIO_URL=http://minio:9000|' docker/.env` + `docker compose up -d minio worker dashboard`.
+Os dados locais continuam intactos em `docker/.data/minio`.
+
+## Depois: atualizar o inventário
+Marcar `de-minio` como ✅ na §0 da [`LOAD-DISTRIBUTION.md`](../LOAD-DISTRIBUTION.md) com o `<DEMINIO_IP>`.
 
 ## Notas operacionais
-- **Fail-soft:** `putReport()` (`lib/artifacts.js`) devolve `null` se o storage falhar — a auditoria
-  **nunca** morre por causa do MinIO. O `site_reports` fica só com o resumo e o `_full` a null.
-- **Backup:** o HDD do DE1 não tem redundância. Os relatórios são **regeneráveis** (basta re-auditar),
-  logo não justificam RAID — mas vale a pena um `mc mirror` periódico se o custo de re-auditar subir.
-- **Lifecycle:** dá para pôr expiração por bucket (ex.: snapshots a 90 dias) com
-  `mc ilm rule add --expire-days 90 dst/snapshots`.
+- **Fail-soft:** `putReport()` (`lib/artifacts.js`) devolve `null` se o storage falhar → a auditoria
+  **nunca** morre por causa do MinIO; o `site_reports` fica só com o resumo (`_full` a null).
+- **Backup:** os relatórios são **regeneráveis** (re-auditar). Não justificam RAID; se o custo de
+  re-auditar subir, um `mc mirror` periódico para outra VM chega. Com a Opção B (ZFS-na-VM), snapshots
+  locais: `zfs snapshot minio@$(date +%F)`.
+- **Lifecycle:** expiração por bucket, ex. snapshots a 90 dias: `mc ilm rule add --expire-days 90 dst/snapshots`.
+- **Consola web:** `ssh -L 9001:127.0.0.1:9001 root@<DEMINIO_IP>` → http://localhost:9001.

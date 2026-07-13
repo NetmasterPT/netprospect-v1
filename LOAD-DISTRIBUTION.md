@@ -7,7 +7,7 @@
 
 | Hostname (Tailscale) | Tailnet IP | Servidor | Role/stack | Imagem | Réplicas | Estado |
 | --- | --- | --- | --- | --- | ---: | --- |
-| *(HEL1 monolito)* `hel1-docker` | 100.108.94.126 | hel1 | `browser` + `base` workers (control-plane→np-server; CH→de-analytics; Ollama→hel1-ollama) | ambas | 4H+5B | ✅ a correr |
+| `hel1-docker` (ex-monólito) | 100.108.94.126 | hel1 | `browser` + `base` workers + MinIO-rollback (control-plane **desmantelado** → np-server) | ambas | 4H+5B | ✅ a correr |
 | **np-db** | 100.77.60.44 | hel1 | Postgres + PgBouncer | — | — | ✅ a correr |
 | **np-server** | 100.114.17.74 (LAN `10.10.10.81`) | hel1 | Directus + Dashboard + NATS + Redis (control-plane) | — | — | ✅ **a servir a frota** |
 | **np-wk-de1** | 100.120.214.45 | de1 | `base` (whois) + fila dedicada — projeto `/root/np-worker` (`.env.worker`) | worker-base | 4 | ✅ a correr |
@@ -20,9 +20,10 @@
 
 *Ainda por criar:* Worker VMs dedicadas (decompor os workers do HEL1) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
 
-> **Pendente do teu lado:** repontar o **`gpedro-laptop`** para o `np-server` (o `.env` dele ainda
-> aponta ao monólito) — depois disso, desmantelo os serviços de control-plane do monólito
-> (directus/dashboard/nats/redis), que hoje só servem o portátil. Ver [runbook-laptop](docs/runbook-laptop.md).
+> **Dashboard + control-plane agora no `np-server`:** o dashboard passou a ser **`http://100.114.17.74:3001`**
+> (o do monólito parou). O portátil já foi repontado; o control-plane do monólito (directus/dashboard/nats/redis)
+> foi **desmantelado** (dados em `docker/.data/*` como rollback). O HEL1 largou control-plane + Ollama + ClickHouse
+> → load caiu para ~0,2.
 
 > ### ⚠️ Convenções de provisionamento — aplicar a TODA a VM nova
 >
@@ -123,7 +124,7 @@ Runbook: <a href="docs/runbook-ollama-hel1.md">docs/runbook-ollama-hel1.md</a>.
 | hel1 | **Worker B** | — | 2 | 8 GB | — | Base | `base` (pipeline) | 🟡 | ✅ |
 | hel1 | **Worker L** | — | 2 | 4 GB | — | Light | `security` (nuclei/wpscan) | ❌ | ❌ |
 | de1 | **de-minio** | 300 | 2 | 4 GB | 500G storage-zfs | Storage | MinIO (reports + snapshots) | ✅ | ✅ |
-| de1 | **de-analytics** | 301 | 6 | 16 GB | ~200G storage-zfs | Analytics | **ClickHouse** ✅ + **PostHog** ✅ | ✅ | ✅ |
+| de1 | **de-analytics** | 301 | 6 | 16 GB | ~200G storage-zfs | Analytics | **ClickHouse** ✅ + **PostHog** 🟢 | ✅ | ✅ |
 | de1 | **Worker H** | — | 4 | 8 GB | — | Heavy | `browser` (lighthouse) | ❌ | ❌ |
 | de1 | **Worker B** | — | 2 | 4 GB | — | Base | `base` | ✅ | ✅ |
 | de1 | **Worker L** | — | 3 | 6 GB | — | Light | `security` (nuclei/wpscan) | ✅ | ✅ |
@@ -205,5 +206,5 @@ host remoto uma fatia de um job que os locais **também** consomem.
 | 3 | **industry (IA) — GPU ou heurístico?** | ✅ **Heurístico** no batch (154× mais rápido, custo 0). O Ollama fica em CPU no `hel1-ollama` para on-demand. **Sem compra de GPU.** |
 | 4 | **Directus — np-server ou co-localizar no np-db?** | ✅ **np-server** (os workers já escrevem direto ao PG via A2 → a chattiness dele importa menos). |
 | 5 | **Oracle A1 = ARM** | 🟡 **Aberto** — construir a `worker-security` multi-arch (arm64)? Sem Chromium é trivial. É o que desbloqueia a Fase 1. |
-| 6 | **WPScan API key** | 🟡 **Aberto** — 25 pedidos/dia no free → só dá para on-demand, não batch. Chave em <https://wpscan.com/register>. |
+| 6 | **WPScan** | ✅ **Resolvido** — **batch keyless** (`enqueue-wpscan.js`) p/ todos os ~1,57M sites WP (enumera, sem vuln-DB); a **API key fica só p/ on-demand** (1 key por host, 25/dia). |
 | 7 | **PostHog** | 🟡 **Aberto** — opt-in pesado (+4-6 GB). Arrancar já com a `de-analytics`, ou só o ClickHouse primeiro? |

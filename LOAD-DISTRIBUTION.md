@@ -15,8 +15,11 @@
 
 *Ainda por criar:* de-clickhouse · hel1-ollama · np-server (decompor) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
 
-> **Convenção de rede (Proxmox):** as VMs desta stack usam **SEMPRE a bridge `vmbr1`** — tanto no HEL1
-> como no DE1. A `vmbr0` está **reservada** para a VM da WHM (não faz parte desta stack, mas vive no HEL1).
+> **Convenções de rede (Proxmox) — aplicar a TODA a VM nova:**
+> - **Bridge:** sempre **`vmbr1`** (HEL1 e DE1). A `vmbr0` está reservada para a VM da WHM (fora da stack, no HEL1).
+> - **IP LAN estático:** último octeto = o **VMID sem o dígito do meio** (dezenas) → `300`→`10.10.10.30`,
+>   `301`→`10.10.10.31`, `501`→`10.10.10.51`, `900`→`10.10.10.90`. Gateway `10.10.10.1`, /24. Nunca DHCP.
+> - Cross-datacenter só pela **tailnet** (as LANs 10.10.10.0/24 do HEL1 e do DE1 são separadas, não roteadas).
 
 ---
 

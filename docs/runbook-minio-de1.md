@@ -13,15 +13,16 @@
 > (ao contrário do NATS/Redis/Directus, que TÊM de ficar ao pé dos workers).
 
 ## Parâmetros desta migração
-| | |
-|---|---|
-| **VMID** | **300** |
-| **Nome / hostname tailnet** | `de-minio` |
-| **Host Proxmox** | DE1 (Alemanha) |
-| **Storage** | `storage-zfs` (ZFS) |
-| **Disco de dados** | **500 GB** |
-| **CPU / RAM** | 2 vCPU / 4 GB |
-| **SO** | Debian 12 (cloud image + cloud-init) |
+
+|                                   |                                      |
+| --------------------------------- | ------------------------------------ |
+| **VMID**                    | **300**                        |
+| **Nome / hostname tailnet** | `de-minio`                         |
+| **Host Proxmox**            | DE1 (Alemanha)                       |
+| **Storage**                 | `storage-zfs` (ZFS)                |
+| **Disco de dados**          | **500 GB**                     |
+| **CPU / RAM**               | 2 vCPU / 4 GB                        |
+| **SO**                      | Debian 12 (cloud image + cloud-init) |
 
 ---
 
@@ -51,13 +52,16 @@ qm set 300 --ide2 storage-zfs:cloudinit
 qm set 300 --boot order=scsi0 --serial0 socket --vga serial0
 qm set 300 --ciuser root --cipassword '<define-uma-password>' \
   --sshkeys ~/.ssh/authorized_keys                  # a TUA chave (+ a do Claude, se separada)
-qm set 300 --ipconfig0 ip=dhcp
+qm set 300 --ipconfig0  ip=10.10.10.30/24,gw=10.10.10.1
 
-# 1.6 — Arrancar
+# 1.6 — Arrancar (IP LAN estático = 10.10.10.30, pela convenção — ver abaixo)
 qm start 300
-qm guest cmd 300 network-get-interfaces 2>/dev/null | grep -A2 ip-address   # descobrir o IP (após ~30s)
-# ou: qm terminal 300   (Ctrl+O para sair)
+# aguardar ~30s pelo cloud-init; consola série se preciso: qm terminal 300 (Ctrl+O p/ sair)
 ```
+
+> **Convenção de IP LAN da frota:** o último octeto = o **VMID sem o dígito do meio** (das dezenas).
+> `300`→`10.10.10.30` · `301`→`10.10.10.31` · `501`→`10.10.10.51`. Gateway sempre `10.10.10.1`, /24.
+> (Estático em cloud-init: `--ipconfig0 ip=10.10.10.30/24,gw=10.10.10.1`.) A `vmbr0` é da VM da WHM → usar **`vmbr1`**.
 
 > **Nota (memory/CPU a quente):** mudanças de CPU/RAM em VMs Proxmox só pegam com **cold-boot do
 > qemu** (`qm stop` + `qm start`), NÃO com um `reboot` de dentro da VM. (Aprendido à força nesta frota.)
@@ -66,13 +70,16 @@ qm guest cmd 300 network-get-interfaces 2>/dev/null | grep -A2 ip-address   # de
 
 ## 2. Bootstrap da VM (Docker + Tailscale + repo)
 
-SSH para a VM (pelo IP DHCP do passo 1.6) e corre o bootstrap da frota:
+SSH para a VM (IP LAN estático `10.10.10.30`, a partir de uma máquina na LAN do DE1 — ex.: o host
+Proxmox; o HEL1 NÃO alcança a LAN do DE1) e corre o bootstrap. Após ele, a VM fica no tailnet e o
+Claude assume o resto (§3+) pelo `<DEMINIO_IP>` (100.x).
 
 ```bash
-ssh root@<ip-dhcp-da-vm>
+ssh root@10.10.10.30
 curl -fsSL https://raw.githubusercontent.com/NetmasterPT/netprospect-v1/main/deploy/bootstrap-vm.sh \
   | bash -s -- <TAILSCALE_AUTHKEY> de-minio tag:storage
 ```
+
 Isto instala o Docker + Tailscale, junta ao tailnet como `de-minio`, clona o repo em
 `/root/netprospect-v1`, e **imprime o tailnet IP** — guarda-o (chamemos-lhe `<DEMINIO_IP>`).
 
@@ -92,6 +99,7 @@ mkdir -p /srv/minio
 echo 'LABEL=minio /srv/minio ext4 defaults,noatime 0 2' >> /etc/fstab
 mount -a && df -h /srv/minio                   # deve mostrar ~500G montados em /srv/minio
 ```
+
 *(Snapshot do lado do host, se quiseres: `zfs snapshot storage-zfs/vm-300-disk-1@$(date +%F)`.)*
 
 ---
@@ -108,6 +116,7 @@ cp .env.example .env
 chmod 600 .env
 docker compose up -d && docker compose ps
 ```
+
 O MinIO fica em `<DEMINIO_IP>:9000` (API, só tailnet) e `127.0.0.1:9001` (consola, só por túnel SSH).
 Os buckets `snapshots` e `reports` são criados pela app no arranque (`ensureBucket`/`ensureReportsBucket`).
 
@@ -178,13 +187,16 @@ docker compose stop minio && docker compose rm -f minio
 ```
 
 ## Rollback
+
 `sed -i 's|^MINIO_URL=.*|MINIO_URL=http://minio:9000|' docker/.env` + `docker compose up -d minio worker dashboard`.
 Os dados locais continuam intactos em `docker/.data/minio`.
 
 ## Depois: atualizar o inventário
+
 Marcar `de-minio` como ✅ na §0 da [`LOAD-DISTRIBUTION.md`](../LOAD-DISTRIBUTION.md) com o `<DEMINIO_IP>`.
 
 ## Notas operacionais
+
 - **Fail-soft:** `putReport()` (`lib/artifacts.js`) devolve `null` se o storage falhar → a auditoria
   **nunca** morre por causa do MinIO; o `site_reports` fica só com o resumo (`_full` a null).
 - **Backup:** os relatórios são **regeneráveis** (re-auditar). Não justificam RAID; se o custo de

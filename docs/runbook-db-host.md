@@ -41,7 +41,7 @@ zfs set recordsize=16K compression=lz4 atime=off logbias=latency xattr=sa <nvme-
 # Criar o CT (unprivileged, 14 cores, 64G RAM, 8G swap, rootfs 20G no NVMe)
 pct create 900 local:vztmpl/debian-12-standard_*_amd64.tar.zst \
   --hostname np-db --cores 14 --memory 65536 --swap 8192 \
-  --rootfs <nvme-pool>:20 --net0 name=eth0,bridge=vmbr1,ip=dhcp \
+  --rootfs <nvme-pool>:20 --net0 name=eth0,bridge=vmbr1,ip=10.10.10.90/24,gw=10.10.10.1 \
   --features nesting=1 --unprivileged 1 --onboot 1
 # Montar o dataset de dados no CT
 pct set 900 --mp0 /np-db-data,mp=/var/lib/postgresql

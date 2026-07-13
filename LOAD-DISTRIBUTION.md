@@ -7,8 +7,9 @@
 
 | Hostname (Tailscale) | Tailnet IP | Servidor | Role/stack | Imagem | Réplicas | Estado |
 | --- | --- | --- | --- | --- | ---: | --- |
-| *(HEL1 monolito)* `hel1-docker` | 100.108.94.126 | hel1 | App + `browser` + `base` + NATS/Redis/Directus/ClickHouse | ambas | 4H+5B | ✅ a correr |
+| *(HEL1 monolito)* `hel1-docker` | 100.108.94.126 | hel1 | `browser` + `base` workers (control-plane→np-server; CH→de-analytics; Ollama→hel1-ollama) | ambas | 4H+5B | ✅ a correr |
 | **np-db** | 100.77.60.44 | hel1 | Postgres + PgBouncer | — | — | ✅ a correr |
+| **np-server** | 100.114.17.74 (LAN `10.10.10.81`) | hel1 | Directus + Dashboard + NATS + Redis (control-plane) | — | — | ✅ **a servir a frota** |
 | **np-wk-de1** | 100.120.214.45 | de1 | `base` (whois) + fila dedicada — projeto `/root/np-worker` (`.env.worker`) | worker-base | 4 | ✅ a correr |
 | **np-wk-de1** | 100.120.214.45 | de1 | `security` (nuclei/wpscan) + `ai` — projeto `/root/np-worker-heavy` (`.env.heavy`) | worker | 3 | ✅ a correr |
 | **de-minio** | 100.124.43.117 | de1 | MinIO — 500G storage-zfs / ext4 (VMID 300) | minio | 1 | ✅ **MIGRADO — toda a frota escreve aqui** |
@@ -17,15 +18,11 @@
 | **de1-pve** | 100.87.226.117 | de1 | *host Proxmox* (não é da stack — exit node, `tag:proxmox`) | — | — | ✅ |
 | **gpedro-laptop** | *(no tailnet)* | laptop | `residential` (**GMB** — IP residencial) + overflow opcional | worker | 1 | 🟡 daily-driver; **intermitente**, entra a pedido ⁸ |
 
-*Ainda por criar:* **np-server** (VMID 801) · Worker VMs (decompor o HEL1) · **PostHog** (na de-analytics,
-opt-in) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
+*Ainda por criar:* Worker VMs dedicadas (decompor os workers do HEL1) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
 
-> **O que está a bloquear os 3 deploys pendentes** (o compose+env de cada um **já existe** em
-> `deploy/{server,analytics,ollama}/` → o deploy é 1 comando assim que houver acesso):
->
-> | VM | Bloqueio | Quem desbloqueia |
-> | --- | --- | --- |
-> | `np-server` | VM não existe | **tu** — [runbook](docs/runbook-server-hel1.md) §1-2 (criar + bootstrap) |
+> **Pendente do teu lado:** repontar o **`gpedro-laptop`** para o `np-server` (o `.env` dele ainda
+> aponta ao monólito) — depois disso, desmantelo os serviços de control-plane do monólito
+> (directus/dashboard/nats/redis), que hoje só servem o portátil. Ver [runbook-laptop](docs/runbook-laptop.md).
 
 > ### ⚠️ Convenções de provisionamento — aplicar a TODA a VM nova
 >
@@ -81,10 +78,10 @@ E cada VM extra traz o **seu IP** → quota própria de rate-limit (registries d
 | --- | --- | --- | --- | --- |
 | **postgres + pgbouncer** | disco rápido + latência à app | **np-db** | — | ✅ **FEITO** |
 | **minio** | **disco-pesado**, escreve-1×/lê-raro, latency-**tolerante** | **de-minio** (HDD/DE1) | — | ✅ **FEITO** ² |
-| **nats** | ⚡ **latência-CRÍTICA** (workers puxam em loop) | **np-server** (central) | ⛔ nunca sair do centro | separar ¹ |
-| **redis** | latência-sensível (cache+telemetria), minúsculo | **np-server** | ⛔ nunca sair do centro | separar ¹ |
-| **directus** | REST sobre a DB (os workers já a contornam via A2) | **np-server** | 🟡 | separar ¹ |
-| **dashboard** | leve, user-facing | **np-server** | 🟢 | separar ¹ |
+| **nats** | ⚡ **latência-CRÍTICA** (workers puxam em loop) | **np-server** (central) | — | ✅ **FEITO** ¹ |
+| **redis** | latência-sensível (cache+telemetria), minúsculo | **np-server** | — | ✅ **FEITO** ¹ |
+| **directus** | REST sobre a DB (os workers já a contornam via A2) | **np-server** | — | ✅ **FEITO** ¹ |
+| **dashboard** | leve, user-facing | **np-server** | — | ✅ **FEITO** ¹ |
 | **clickhouse** (+ posthog opt-in) | disco-pesado, analítico (a Fase E tem **10,2M observações**) | **de-analytics** (DE1) | — | ✅ **FEITO** ³ |
 | **ollama** | CPU-bound — **sem GPU** (decisão de custo: fica em CPU) | **hel1-ollama** | — | ✅ **FEITO** ⁴ |
 
@@ -120,13 +117,13 @@ Runbook: <a href="docs/runbook-ollama-hel1.md">docs/runbook-ollama-hel1.md</a>.
 | Server | VM | VMID | CPU | RAM | Disk | Type | Jobs / Containers | Deployed | Created |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | hel1 | **np-db** | 900 | 14 | 64 GB | NVMe | DB | Postgres + PgBouncer | ✅ | ✅ |
-| hel1 | **np-server** | 801 | 4 | 8 GB | 40G local-zfs | App | Directus, Dashboard, **NATS**, Redis | 🟡 | ✅ |
+| hel1 | **np-server** | 801 | 4 | 8 GB | 40G local-zfs | App | Directus, Dashboard, **NATS**, Redis | ✅ | ✅ |
 | hel1 | **hel1-ollama** | 503 | 6 | 8 GB | — | AI | Ollama CPU — on-demand (o batch usa o heurístico) | ✅ | ✅ |
 | hel1 | **Worker H** | — | 6 | 16 GB | — | Heavy | `browser` (lighthouse) — imagem pesada | 🟡 | ✅ |
 | hel1 | **Worker B** | — | 2 | 8 GB | — | Base | `base` (pipeline) | 🟡 | ✅ |
 | hel1 | **Worker L** | — | 2 | 4 GB | — | Light | `security` (nuclei/wpscan) | ❌ | ❌ |
 | de1 | **de-minio** | 300 | 2 | 4 GB | 500G storage-zfs | Storage | MinIO (reports + snapshots) | ✅ | ✅ |
-| de1 | **de-analytics** | 301 | 6 | 16 GB ⁵ | ~200G storage-zfs | Analytics | **ClickHouse** ✅ (+ PostHog opt-in) | ✅ | ✅ |
+| de1 | **de-analytics** | 301 | 6 | 16 GB | ~200G storage-zfs | Analytics | **ClickHouse** ✅ + **PostHog** ✅ | ✅ | ✅ |
 | de1 | **Worker H** | — | 4 | 8 GB | — | Heavy | `browser` (lighthouse) | ❌ | ❌ |
 | de1 | **Worker B** | — | 2 | 4 GB | — | Base | `base` | ✅ | ✅ |
 | de1 | **Worker L** | — | 3 | 6 GB | — | Light | `security` (nuclei/wpscan) | ✅ | ✅ |

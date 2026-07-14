@@ -156,16 +156,22 @@
   .np-empty { text-align: center; padding: 48px 20px; color: var(--np-text-3); }
 
   /* ---- Mobile responsiveness ---- */
+  .np-navscrim { display: none; }
   @media (max-width: 860px) {
-    .np-nav { flex-basis: var(--np-nav-w-collapsed); width: var(--np-nav-w-collapsed); padding-left: 6px; padding-right: 6px; }
-    .np-nav-row { justify-content: center; padding: 0; }
-    .np-nav-row span, .np-nav-eyebrow, .np-nav .np-word, .np-nav-count { display: none; }
+    .np-nav { position: fixed; top: var(--np-topbar-h); left: 0; bottom: 0; height: auto; width: 264px; flex-basis: 264px; padding: 12px 10px; transform: translateX(-100%); transition: transform .25s var(--np-ease, ease); z-index: var(--np-z-drawer); box-shadow: var(--np-shadow-drawer); overflow-y: auto; }
+    .np-shell.nav-mobile-open .np-nav { transform: translateX(0); }
+    .np-shell .np-nav-row { justify-content: flex-start !important; padding: 0 12px !important; height: 42px; }
+    .np-shell .np-nav-row span, .np-shell .np-nav-eyebrow, .np-shell .np-nav-count { display: revert !important; }
+    .np-navscrim { display: block; position: fixed; inset: var(--np-topbar-h) 0 0 0; background: var(--np-overlay, rgba(0,0,0,.45)); z-index: calc(var(--np-z-drawer) - 1); opacity: 0; pointer-events: none; transition: opacity .25s; }
+    .np-shell.nav-mobile-open .np-navscrim { opacity: 1; pointer-events: auto; }
     .np-main { padding: 16px 12px; min-width: 0; }
     .np-grid { grid-template-columns: 1fr !important; }
     .np-kpis { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 8px; }
     .np-h1 { font-size: 20px; }
+    .np-head { flex-wrap: wrap; gap: 10px; }
     .np-drawer { width: 100%; max-width: 100%; }
-    .np-topbar { padding: 0 10px; gap: 8px; }
+    .np-topbar { padding: 0 10px; gap: 6px; }
+    .np-topbar .np-avatar + div { display: none; }
   }
   @media (max-width: 520px) {
     .np-topbar .np-search, .np-topbar .np-word { display: none; }
@@ -192,6 +198,7 @@
 </header>
 <div class="np-shell">
   <nav class="np-nav" id="nav"></nav>
+  <div class="np-navscrim" id="navscrim"></div>
   <main class="np-main" id="view"></main>
 </div>
 <div class="np-scrim" id="scrim"></div>
@@ -253,9 +260,12 @@ paintTheme();
 
 // ---------- sidebar colapsável (hambúrguer) ----------
 const shellEl = document.querySelector('.np-shell');
-function applyNav() { const c = localStorage.getItem('np-nav') === 'collapsed'; shellEl.classList.toggle('nav-collapsed', c); }
+const isMobile = () => window.matchMedia('(max-width: 860px)').matches;
+function applyNav() { const c = localStorage.getItem('np-nav') === 'collapsed'; shellEl.classList.toggle('nav-collapsed', c && !isMobile()); if (!isMobile()) shellEl.classList.remove('nav-mobile-open'); }
 try { applyNav(); } catch (e) {}
-$('#hambtn').onclick = () => { const c = shellEl.classList.toggle('nav-collapsed'); try { localStorage.setItem('np-nav', c ? 'collapsed' : 'open'); } catch (e) {} };
+$('#hambtn').onclick = () => { if (isMobile()) { shellEl.classList.toggle('nav-mobile-open'); return; } const c = shellEl.classList.toggle('nav-collapsed'); try { localStorage.setItem('np-nav', c ? 'collapsed' : 'open'); } catch (e) {} };
+const navscrim = document.getElementById('navscrim'); if (navscrim) navscrim.onclick = () => shellEl.classList.remove('nav-mobile-open');
+window.addEventListener('resize', applyNav);
 $('#setbtn').onclick = () => { location.hash = '#/settings'; };
 $('#importbtn').onclick = () => { location.hash = '#/import'; };
 $('#refreshbtn').onclick = () => { const b = $('#refreshbtn'); b.classList.add('rec'); Promise.resolve(route()).finally(() => setTimeout(() => b.classList.remove('rec'), 400)); };
@@ -966,12 +976,19 @@ async function viewLogs() {
   const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Logs da frota</h1><div class="np-sub">Atividade recente dos workers (todos os hosts) · filtra por texto</div></div></div>`;
   let d; try { d = await api('/api/logs'); } catch (e) { $('#view').innerHTML = head + errCard(e); return; }
   const q = (window.__logq || '').toLowerCase();
-  const rows = (d.logs || []).filter((l) => !q || l.line.toLowerCase().includes(q) || (l.host || '').toLowerCase().includes(q));
-  const line = (l) => `<div style="display:flex;gap:8px;padding:2px 0;border-bottom:1px solid var(--np-border);font-size:11.5px"><span class="muted" style="min-width:120px;white-space:nowrap">${esc(l.host)}</span><span style="flex:1;white-space:pre-wrap;word-break:break-word">${esc(l.line)}</span></div>`;
+  const onlyFail = !!window.__logFailOnly;
+  const kindOf = (t) => t.includes('✗') ? 'fail' : (t.includes('↻') ? 'retry' : (t.includes('✓') ? 'ok' : 'info'));
+  const colOf = { fail: 'var(--np-bad, #dc2626)', retry: 'var(--np-warn, #d97706)', ok: 'var(--np-ok, #16a34a)', info: 'var(--np-text-3)' };
+  let rows = (d.logs || []).filter((l) => !q || l.line.toLowerCase().includes(q) || (l.host || '').toLowerCase().includes(q));
+  if (onlyFail) rows = rows.filter((l) => kindOf(l.line) !== 'ok');
+  const line = (l) => { const k = kindOf(l.line); return `<div style="display:flex;gap:8px;padding:2px 0;border-bottom:1px solid var(--np-border);font-size:11.5px"><span class="muted" style="min-width:118px;white-space:nowrap">${esc(l.host)}</span><span style="flex:1;white-space:pre-wrap;word-break:break-word;color:${colOf[k]}">${esc(l.line)}</span></div>`; };
   $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">
-    <input id="logq" placeholder="filtrar (host, job, domínio…)" value="${esc(window.__logq || '')}" oninput="window.__logq=this.value;clearTimeout(window.__logt);window.__logt=setTimeout(viewLogs,300)" style="width:100%;padding:8px 10px;margin-bottom:10px;border:1px solid var(--np-border);border-radius:8px;background:var(--np-surface);color:var(--np-text)">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+      <input id="logq" placeholder="filtrar (host, job, domínio…)" value="${esc(window.__logq || '')}" oninput="window.__logq=this.value;clearTimeout(window.__logt);window.__logt=setTimeout(viewLogs,300)" style="flex:1;min-width:180px;padding:8px 10px;border:1px solid var(--np-border);border-radius:8px;background:var(--np-surface);color:var(--np-text)">
+      <button class="np-btn np-btn--sm ${onlyFail ? 'np-btn--primary' : ''}" onclick="window.__logFailOnly=!window.__logFailOnly;viewLogs()">${onlyFail ? '✗ só falhas' : 'Todos'}</button>
+    </div>
     <div class="np-mono" style="max-height:68vh;overflow:auto">${rows.length ? rows.map(line).join('') : '<div class="np-empty">Sem logs recentes.</div>'}</div>
-    <div class="muted" style="font-size:11px;margin-top:8px">${rows.length} linhas · ${d.workers || 0} workers</div></div></div>`;
+    <div class="muted" style="font-size:11px;margin-top:8px">${rows.length} linhas · ${d.workers || 0} workers · <span style="color:var(--np-ok,#16a34a)">✓ ok</span> · <span style="color:var(--np-warn,#d97706)">↻ retry</span> · <span style="color:var(--np-bad,#dc2626)">✗ falha</span></div></div></div>`;
   const inp = document.getElementById('logq'); if (inp && window.__logq) { inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }
 }
 // ---------- Cobertura ----------
@@ -1414,6 +1431,7 @@ async function viewConfig() {
 // ---------- router ----------
 async function route() {
   closeDrawer();
+  try { shellEl.classList.remove('nav-mobile-open'); } catch (e) {}
   const h = (location.hash || '#/overview').slice(2).split('?')[0] || 'overview';
   try {
     if (h === 'directory') await viewDirectory();
@@ -1422,6 +1440,8 @@ async function route() {
     else if (h === 'segments') await viewSegments();
     else if (h === 'campaigns') await viewCampaigns();
     else if (h === 'agents') await viewAgents();
+    else if (h === 'chat') await viewChat();
+    else if (h === 'outreach') await viewOutreach();
     else if (h === 'clients') await viewClients();
     else if (h === 'isps') await viewIsps();
     else if (h === 'import') await viewImport();

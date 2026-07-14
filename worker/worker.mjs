@@ -332,7 +332,7 @@ async function consumeLoop(js, durable, concurrency, fn) {
       try {
         const outcome = await fn(job);
         if (outcome === 'term') { m.term(); taskEnd(durable, started, false); return; }
-        m.ack(); taskEnd(durable, started, true);
+        m.ack(); taskEnd(durable, started, true); logLine(`✓ ${durable} ${label} (${Date.now() - started}ms)`);
       } catch (e) {
         const msg = e?.errors ? JSON.stringify(e.errors) : (e?.message || String(e));
         taskEnd(durable, started, false);

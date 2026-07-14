@@ -27,6 +27,7 @@ import { initEgress, egressDispatcher } from '../lib/egress.js';
 import { makeClient } from '../lib/directus.js';
 import { startTelemetry, taskStart, taskEnd, logLine } from '../lib/worker-telemetry.js';
 import { classifyIndustryHeuristic } from '../lib/audit/industry-heuristic.js';
+import os from 'os';
 
 const WORKER_ROLES = process.env.WORKER_ROLES || ''; // vazio=todos; ex.: base|browser|security|ai|verify
 
@@ -418,10 +419,36 @@ async function writerLoop(js) {
 const HEAVY = new Set(['industry', 'lighthouse_mobile', 'lighthouse_desktop', 'nuclei', 'wpscan', 'gmb', 'audit_ondemand', 'audit_qualified', 'audit_rest']);
 const DRAIN = new Set(['audit_ondemand', 'audit_qualified', 'audit_rest']);
 // Concorrência por consumer (heavy = 1; leves = mais).
-const CONC = { enrich: ENRICH_CONC, contacts: CONTACTS_CONC, fetch: 8, dns: 12, geoip: 12, fingerprint: FINGERPRINT_CONC, social: 8, locality: 8, emailauth: 10, traffic: 20, score: SCORE_CONC, ssl: DH_CONC, whois: Math.max(1, Math.ceil(DH_CONC / 2)), dnsprovider: DH_CONC, subdomains: 2, verify: VERIFY_CONC, discover: 2, campaign_generate: 4, campaign_send: 6,
-  // finos pesados (ver comentário no topo): nuclei é network-bound, industry é Ollama-bound.
-  nuclei: NUCLEI_JOB_CONC, wpscan: WPSCAN_CONC, lighthouse_mobile: LIGHTHOUSE_CONC, lighthouse_desktop: LIGHTHOUSE_CONC,
-  industry: INDUSTRY_CONC, gmb: GMB_CONC };
+// ---- Concorrência DINÂMICA por core: CONC[job] = cores × fator[job], com teto de RAM p/ os
+// pesados (evita OOM em VMs pequenas) e teto absoluto, dividido pelas réplicas. Uma VM nova só
+// precisa de WORKER_ROLES — a concorrência auto-escala aos cores/RAM dela. Definir a env do job
+// (ex.: NUCLEI_JOB_CONC=16) faz OVERRIDE p/ afinação fina. Fatores por perfil de I/O: -------------
+const _CORES = os.cpus().length;
+const _RAM_FREE = Math.max(256, Math.round(os.totalmem() / 1048576) - 550); // MB livres (reserva OS+Node)
+const _REP = Math.max(1, parseInt(process.env.WORKER_REPLICAS || '1', 10));
+const _PER_CORE = { enrich: 3, contacts: 5, fingerprint: 5, fetch: 1.5, dns: 2, geoip: 2, ssl: 2, dnsprovider: 2, emailauth: 2, traffic: 3, social: 1.5, locality: 1.5, subdomains: 0.5, whois: 0.5, verify: 0.75, gmb: 0.5, score: 0.3, campaign_generate: 0.5, campaign_send: 0.75, discover: 0.3, nuclei: 1.5, wpscan: 0.5, lighthouse: 0.4, industry: 0.2 };
+const _RAM_PER = { nuclei: 250, wpscan: 450, lighthouse: 550, industry: 300, gmb: 400 }; // MB por instância
+const _CAP = { fingerprint: 64, contacts: 128, enrich: 128, traffic: 64, dns: 48, geoip: 48, emailauth: 48 };
+function _auto(job) {
+  let total = Math.max(_REP, Math.round(_CORES * (_PER_CORE[job] ?? 1)));
+  if (_CAP[job]) total = Math.min(total, _CAP[job]);
+  if (_RAM_PER[job]) total = Math.min(total, Math.max(_REP, Math.floor(_RAM_FREE / _RAM_PER[job])));
+  return Math.max(1, Math.ceil(total / _REP)); // por-worker (× réplicas ≈ alvo VM)
+}
+const _conc = (env, job) => { const v = env && process.env[env]; return v ? Math.max(1, parseInt(v, 10)) : _auto(job); };
+const CONC = {
+  enrich: _conc('ENRICH_CONCURRENCY', 'enrich'), contacts: _conc('CONTACTS_CONCURRENCY', 'contacts'),
+  fetch: _conc(null, 'fetch'), dns: _conc(null, 'dns'), geoip: _conc(null, 'geoip'),
+  fingerprint: _conc('FINGERPRINT_CONC', 'fingerprint'), social: _conc(null, 'social'), locality: _conc(null, 'locality'),
+  emailauth: _conc(null, 'emailauth'), traffic: _conc(null, 'traffic'), score: _conc('SCORE_CONC', 'score'),
+  ssl: _conc('DOMAIN_HEALTH_CONC', 'ssl'), whois: _conc('WHOIS_CONC', 'whois'), dnsprovider: _conc('DOMAIN_HEALTH_CONC', 'dnsprovider'),
+  subdomains: _conc(null, 'subdomains'), verify: _conc('VERIFY_CONCURRENCY', 'verify'), discover: _conc(null, 'discover'),
+  campaign_generate: _conc(null, 'campaign_generate'), campaign_send: _conc(null, 'campaign_send'),
+  nuclei: _conc('NUCLEI_JOB_CONC', 'nuclei'), wpscan: _conc('WPSCAN_CONC', 'wpscan'),
+  lighthouse_mobile: _conc('LIGHTHOUSE_CONC', 'lighthouse'), lighthouse_desktop: _conc('LIGHTHOUSE_CONC', 'lighthouse'),
+  industry: _conc('INDUSTRY_CONC', 'industry'), gmb: _conc('GMB_CONC', 'gmb'),
+};
+log(`conc auto (cores=${_CORES} RAM_free=${_RAM_FREE}MB rep=${_REP}): whois=${CONC.whois} nuclei=${CONC.nuclei} wpscan=${CONC.wpscan} lh=${CONC.lighthouse_mobile} fingerprint=${CONC.fingerprint} contacts=${CONC.contacts} gmb=${CONC.gmb}`);
 
 // --- Arranque ---------------------------------------------------------------
 async function main() {

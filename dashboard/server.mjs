@@ -1132,34 +1132,45 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 // --- Cobertura de jobs por bucket de lead_score (np-db direto; cache 30min) ---
 // TEM de ficar ANTES do catch-all `app.get('*')`, senão a SPA engole /api/coverage.
 const COVERAGE_SQL = `
+WITH rep AS (
+  SELECT site,
+    bool_or(kind IN ('lighthouse_seo','lighthouse_mobile')) AS lh_mobile,
+    bool_or(kind = 'lighthouse_desktop') AS lh_desktop,
+    bool_or(kind = 'nuclei') AS nuclei,
+    bool_or(kind = 'wpscan') AS wpscan,
+    bool_or(kind = 'gmb') AS gmb
+  FROM site_reports GROUP BY site
+),
+unv AS (SELECT DISTINCT site FROM contacts WHERE email IS NOT NULL AND email_status IS NULL)
 SELECT
   CASE WHEN lead_score>70 THEN 'gt70' WHEN lead_score>60 THEN 'b60' WHEN lead_score>50 THEN 'b50'
        WHEN lead_score>40 THEN 'b40' ELSE 'lt40' END AS bucket,
   count(*)::int AS total,
-  count(*) FILTER (WHERE checked_at IS NOT NULL)::int AS enrich,
-  count(*) FILTER (WHERE http_status IS NOT NULL)::int AS fetch,
-  count(*) FILTER (WHERE is_live)::int AS live,
-  count(*) FILTER (WHERE hosting_ip IS NOT NULL)::int AS dns,
-  count(*) FILTER (WHERE ip_country IS NOT NULL)::int AS geoip,
-  count(*) FILTER (WHERE tech_detected IS NOT NULL)::int AS fingerprint,
-  count(*) FILTER (WHERE social_facebook OR social_instagram OR social_linkedin OR social_twitter)::int AS social,
-  count(*) FILTER (WHERE business_city IS NOT NULL)::int AS locality,
-  count(*) FILTER (WHERE spf_status IS NOT NULL)::int AS emailauth,
-  count(*) FILTER (WHERE traffic_rank IS NOT NULL)::int AS traffic,
-  count(*) FILTER (WHERE json_typeof(hostnames)='array' AND json_array_length(hostnames)>1)::int AS subdomains,
-  count(*) FILTER (WHERE ssl_grade IS NOT NULL)::int AS ssl,
-  count(*) FILTER (WHERE dns_provider IS NOT NULL)::int AS dnsprovider,
-  count(*) FILTER (WHERE whois_checked_at IS NOT NULL)::int AS whois,
-  count(*) FILTER (WHERE contacts_checked_at IS NOT NULL)::int AS contacts,
-  count(*) FILTER (WHERE id IN (SELECT site FROM contacts WHERE email_status IS NOT NULL))::int AS verify,
-  count(*) FILTER (WHERE lead_score IS NOT NULL)::int AS score,
-  count(*) FILTER (WHERE audit_checked_at IS NOT NULL)::int AS audit,
-  count(*) FILTER (WHERE industry IS NOT NULL)::int AS industry,
-  count(*) FILTER (WHERE seo_score IS NOT NULL)::int AS lighthouse,
-  count(*) FILTER (WHERE security_findings IS NOT NULL)::int AS nuclei,
-  count(*) FILTER (WHERE wp_vuln_count IS NOT NULL)::int AS wpscan,
-  count(*) FILTER (WHERE gmb_name IS NOT NULL)::int AS gmb
-FROM sites GROUP BY bucket`;
+  -- Cada métrica = O JOB CORREU para o site (não "tem resultado"). Marcador por job:
+  count(*) FILTER (WHERE s.checked_at IS NOT NULL)::int AS enrich,
+  count(*) FILTER (WHERE s.http_status IS NOT NULL)::int AS fetch,
+  count(*) FILTER (WHERE s.checked_at IS NOT NULL)::int AS dns,
+  count(*) FILTER (WHERE s.checked_at IS NOT NULL)::int AS geoip,
+  count(*) FILTER (WHERE s.tech_detected IS NOT NULL)::int AS fingerprint,
+  count(*) FILTER (WHERE s.tech_detected IS NOT NULL)::int AS social,
+  count(*) FILTER (WHERE s.tech_detected IS NOT NULL)::int AS locality,
+  count(*) FILTER (WHERE s.spf_status IS NOT NULL)::int AS emailauth,
+  count(*) FILTER (WHERE s.traffic_bucket IS NOT NULL)::int AS traffic,
+  count(*) FILTER (WHERE s.tech_detected IS NOT NULL)::int AS subdomains,
+  count(*) FILTER (WHERE s.ssl_grade IS NOT NULL)::int AS ssl,
+  count(*) FILTER (WHERE s.dns_provider IS NOT NULL)::int AS dnsprovider,
+  count(*) FILTER (WHERE s.whois_checked_at IS NOT NULL)::int AS whois,
+  count(*) FILTER (WHERE s.contacts_checked_at IS NOT NULL)::int AS contacts,
+  count(*) FILTER (WHERE s.contacts_checked_at IS NOT NULL AND s.id NOT IN (SELECT site FROM unv))::int AS verify,
+  count(*) FILTER (WHERE s.lead_score_at IS NOT NULL)::int AS score,
+  count(*) FILTER (WHERE s.cheap_checked_at IS NOT NULL)::int AS audit,
+  count(*) FILTER (WHERE s.industry IS NOT NULL)::int AS industry,
+  count(*) FILTER (WHERE r.lh_mobile)::int AS lighthouse_mobile,
+  count(*) FILTER (WHERE r.lh_desktop)::int AS lighthouse_desktop,
+  count(*) FILTER (WHERE r.nuclei)::int AS nuclei,
+  count(*) FILTER (WHERE r.wpscan)::int AS wpscan,
+  count(*) FILTER (WHERE r.gmb)::int AS gmb
+FROM sites s LEFT JOIN rep r ON r.site = s.id GROUP BY bucket`;
 app.get('/api/coverage', async (req, res) => {
   try {
     const data = await cached('np:coverage:v1', async () => {

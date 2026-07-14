@@ -1006,12 +1006,13 @@ async function viewLogs() {
 let COV_THRESH = 'all';
 const COV_BUCKETS = { gt70: ['gt70'], gt60: ['gt70', 'b60'], gt50: ['gt70', 'b60', 'b50'], gt40: ['gt70', 'b60', 'b50', 'b40'], lt40: ['lt40'], all: ['gt70', 'b60', 'b50', 'b40', 'lt40'] };
 const COV_JOBS = [
-  ['enrich', 'Enrich', 'base'], ['fetch', 'Fetch (homepage)', 'base'], ['live', 'Live', 'base'],
+  ['enrich', 'Enrich', 'base'], ['fetch', 'Fetch (homepage)', 'base'],
   ['dns', 'DNS → IP', 'base'], ['geoip', 'GeoIP', 'base'], ['fingerprint', 'Fingerprint / CMS', 'base'],
   ['social', 'Redes sociais', 'base'], ['locality', 'Localidade', 'base'], ['emailauth', 'Email auth (SPF)', 'base'],
   ['traffic', 'Tráfego (Tranco)', 'base'], ['subdomains', 'Subdomínios', 'base'], ['ssl', 'SSL', 'base'],
   ['dnsprovider', 'DNS provider', 'base'], ['whois', 'WHOIS', 'base'], ['contacts', 'Contactos', 'base'], ['verify', 'Verify (email)', 'base'], ['score', 'Score', 'base'],
-  ['audit', 'Auditoria (coarse)', 'audit'], ['industry', 'Indústria', 'audit'], ['lighthouse', 'Lighthouse', 'audit'],
+  ['audit', 'Auditoria (coarse)', 'audit'], ['industry', 'Indústria', 'audit'],
+  ['lighthouse_mobile', 'Lighthouse mobile', 'audit'], ['lighthouse_desktop', 'Lighthouse desktop', 'audit'],
   ['nuclei', 'Nuclei', 'audit'], ['wpscan', 'WPScan', 'audit'], ['gmb', 'GMB', 'audit'],
 ];
 function covSum(cov, thresh) {
@@ -1025,7 +1026,7 @@ function covSum(cov, thresh) {
 window.covSet = (t) => { COV_THRESH = t; viewCoverage(); };
 async function viewCoverage() {
   renderNav('coverage');
-  const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Cobertura de jobs</h1><div class="np-sub">Que fração dos sites tem cada job corrido · filtra por lead score · via np-db · cache 30 min</div></div></div>`;
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Cobertura de jobs</h1><div class="np-sub">Fração de sites onde o job <b>já correu</b> (não “tem resultado” — um job que correu e não achou nada conta como coberto) · filtra por lead score · via np-db</div></div></div>`;
   let cov; try { cov = await api('/api/coverage'); } catch (e) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
   if (!cov.ok) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Indisponível:</b> ${esc(cov.error || '—')} <span class="muted">(a página Cobertura precisa do PG_HOST/creds no dashboard).</span></div></div>`; return; }
   const THS = [['gt70', '&gt;70'], ['gt60', '&gt;60'], ['gt50', '&gt;50'], ['gt40', '&gt;40'], ['lt40', '&lt;40'], ['all', 'Todos']];

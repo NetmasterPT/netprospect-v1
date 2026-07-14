@@ -17,6 +17,8 @@
 | **de-analytics** | 100.115.240.35 | de1 | ClickHouse (10,2M observações) — 200G ext4 (VMID 301) | clickhouse | 1 | ✅ **MIGRADO** |
 | **de1-pve** | 100.87.226.117 | de1 | *host Proxmox* (não é da stack — exit node, `tag:proxmox`) | — | — | ✅ |
 | **gpedro-laptop** | 100.107.10.15 | laptop | `residential` (**GMB** — IP residencial) + overflow opcional | worker | 1 | ✅ a correr (intermitente ⁸) |
+| **oracle-e2-1** | 100.75.209.61 | oracle (free) | `base` → só **whois** (E2.1.Micro 2 vCPU/950 MB) — proj. `~/np-worker` | worker-base | 1 | ✅ a correr (2026-07-14) |
+| **oracle-e2-2** | 100.123.27.23 | oracle (free) | `base` → só **whois** (E2.1.Micro 2 vCPU/950 MB) — proj. `~/np-worker` | worker-base | 1 | ✅ a correr (2026-07-14) |
 
 *Ainda por criar:* Worker VMs dedicadas (decompor os workers do HEL1) · oracle A1-1/A1-2/AMD-1/AMD-2 · gcp e2-micro.
 
@@ -130,6 +132,8 @@ Runbook: <a href="docs/runbook-ollama-hel1.md">docs/runbook-ollama-hel1.md</a>.
 | de1 | **de-analytics** | 301 | 6 | 16 GB | 20 GB root + **200 GB** dados | ClickHouse ✅ (PostHog ⏸️ — ver §6) | ✅ |
 | de1 | **np-wk-de1** | — | 6 | 23 GB | 99 GB | Workers `base` (proj. `np-worker`) + `security`+`ai` (proj. `np-worker-heavy`) | ✅ |
 | laptop | **gpedro-laptop** | — | 22 | 16 GB | 30 GB | `residential` (GMB) + overflow opcional — Windows/Docker Desktop | ✅ ⁸ |
+| oracle (free) | **oracle-e2-1** | — | 2 | 950 MB | 46 GB + 1 GB swap | Worker `base`→**whois** (E2.1.Micro always-free ⁹) | ✅ (2026-07-14) |
+| oracle (free) | **oracle-e2-2** | — | 2 | 950 MB | 46 GB + 1 GB swap | Worker `base`→**whois** (E2.1.Micro always-free ⁹) | ✅ (2026-07-14) |
 
 ### Por criar (decomposição-alvo dos workers + free VMs)
 
@@ -156,6 +160,8 @@ segura os jobs quando está offline. Runbook: <a href="docs/runbook-laptop.md">d
 </sub>
 
 ---
+
+> ⁹ **oracle-e2-1/2** (2026-07-14): 2× VM.Standard.E2.1.Micro *always-free* (2 vCPU / 950 MB) — minúsculas, por isso só **whois** (network-bound, limitado por IP → +IPs = +throughput; não por CPU). Stream **principal NP_JOBS** (juntam-se ao pool do HEL1). Setup: `docker save worker-base | ssh | docker load` + Tailscale `tag:worker`. Chaves SSH em `deploy/E2-micro-{1,2}/` (gitignored). **Upgrade PAYG bloqueado no arranque → o Gonçalo repete +1 dia p/ desbloquear as VMs Oracle A1/AMD maiores.**
 
 ## 4. Estratégia das free VMs (o valor é o IP, não os cores)
 

@@ -43,6 +43,7 @@ const PAGE = 500;
 // job -> { subject, role, campo de resume }
 const JOBS = {
   lighthouse: { subject: SUBJECTS.lighthouseMobile, role: 'browser', resume: 'seo_score' },
+  lighthouse_desktop: { subject: SUBJECTS.lighthouseDesktop, role: 'browser', resume: 'perf_desktop' },
   nuclei: { subject: SUBJECTS.nuclei, role: 'security', resume: 'security_findings' },
   industry: { subject: SUBJECTS.industry, role: 'ai', resume: 'industry' },
   wpscan: { subject: SUBJECTS.wpscan, role: 'security', resume: 'wp_vuln_count' },

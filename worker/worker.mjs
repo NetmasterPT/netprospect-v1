@@ -150,9 +150,14 @@ function makeHeavyFineHandlers(ctx, audit, js) {
     return 'ack';
   }
   async function nuclei(job) {
-    const site = await load(job, []); if (!site) return 'ack';
+    const site = await load(job, ['tech_detected', 'load_bucket']); if (!site) return 'ack';
     try {
-      const r = await audit.nuclei.runNuclei(site.final_url || `https://${site.domain}/`);
+      // Tech-aware: só templates relevantes p/ a stack detetada (WP→wp/php/web, não nodejs/c#).
+      // On-demand (job.full) → corre TUDO sem timeout. Sites muito lentos → timeout mais curto.
+      const tags = audit.nuclei.nucleiTagsForTech(site.tech_detected);
+      const opts = { tags, full: !!job.full };
+      if (!job.full && site.load_bucket === 'very_slow') opts.timeoutMs = 120000;
+      const r = await audit.nuclei.runNuclei(site.final_url || `https://${site.domain}/`, opts);
       await client.request(updateItem('sites', site.id, { security_findings: r.findings, security_severity: r.severity }));
       await upsertReport(client, site.id, 'nuclei', { score: r.findings, summary: { findings: r.findings, severity: r.severity, bySeverity: r.bySeverity }, report: { _full: await putReport(site.id, "nuclei", { results: r.results }) } });
       await rescore({ domain: site.domain, siteId: site.id });
@@ -227,7 +232,7 @@ function makeHandlers(ctx, audit, js) {
     const job = decodeJob(m);
     if (!job?.domain && !job?.siteId) { m.term(); return; }
     const filter = job.siteId ? { id: { _eq: job.siteId } } : { domain: { _eq: job.domain } };
-    const rows = await client.request(readItems('sites', { filter, fields: ['id', 'domain', 'final_url', 'business_city', 'primary_platform.slug', 'company.name'], limit: 1 }));
+    const rows = await client.request(readItems('sites', { filter, fields: ['id', 'domain', 'final_url', 'business_city', 'primary_platform.slug', 'company.name', 'tech_detected', 'load_bucket'], limit: 1 }));
     const site = rows[0];
     if (!site) { m.term(); return; }
     const bizName = site.company?.name || null;
@@ -271,7 +276,7 @@ function makeHandlers(ctx, audit, js) {
       if (want('nuclei')) {
         m.working();
         try {
-          const r = await audit.nuclei.runNuclei(url);
+          const r = await audit.nuclei.runNuclei(url, { tags: audit.nuclei.nucleiTagsForTech(site.tech_detected), full: tier === 'ondemand' });
           patch.security_findings = r.findings; patch.security_severity = r.severity;
           await upsertReport(client, site.id, 'nuclei', { score: r.findings, summary: { findings: r.findings, severity: r.severity, bySeverity: r.bySeverity }, report: { _full: await putReport(site.id, "nuclei", { results: r.results }) } });
         } catch (e) { log(`nuclei ${site.domain}: ${e.message}`); }

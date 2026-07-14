@@ -130,18 +130,23 @@ function makeHeavyFineHandlers(ctx, audit, js) {
     } catch (e) { log(`industry ${site.domain}: ${e.message}`); }
     return 'ack';
   }
-  async function lighthouse(job, kind) {
+  async function lighthouse(job, formFactor) {
     const site = await load(job, []); if (!site) return 'ack';
     const url = site.final_url || `https://${site.domain}/`;
+    const kind = formFactor === 'desktop' ? 'lighthouse_desktop' : 'lighthouse_mobile';
     try {
-      const r = await audit.lh.runLighthouse(url);
-      await client.request(updateItem('sites', site.id, { seo_score: r.seo_score, mobile_score: r.mobile_score, mobile_friendly: r.mobile_friendly }));
+      const r = await audit.lh.runLighthouse(url, { formFactor });
+      // Mobile → seo/mobile-friendliness + perf mobile; Desktop → só perf desktop (não mexe no SEO/mobile).
+      const patch = formFactor === 'desktop'
+        ? { perf_desktop: r.performance }
+        : { seo_score: r.seo_score, mobile_score: r.mobile_score, mobile_friendly: r.mobile_friendly, perf_mobile: r.performance };
+      await client.request(updateItem('sites', site.id, patch));
       // Postgres = resumo (rápido p/ o dashboard); MinIO = relatório INTEGRAL sem screenshots
       // (71 KB gzip vs 396 KB com imagens) — é dele que sai o PDF/relatório do cliente.
       const _full = await putReport(site.id, kind, audit.lh.leanLhr(r.lhr));
-      await upsertReport(client, site.id, kind, { score: r.seo_score, summary: audit.lh.lighthouseSummary(r), report: { ...audit.lh.trimLhr(r.lhr), _full } });
+      await upsertReport(client, site.id, kind, { score: r.performance ?? r.seo_score, summary: audit.lh.lighthouseSummary(r), report: { ...audit.lh.trimLhr(r.lhr), _full } });
       await rescore({ domain: site.domain, siteId: site.id });
-    } catch (e) { log(`lighthouse ${site.domain}: ${e.message}`); }
+    } catch (e) { log(`lighthouse ${formFactor} ${site.domain}: ${e.message}`); }
     return 'ack';
   }
   async function nuclei(job) {
@@ -183,8 +188,8 @@ function makeHeavyFineHandlers(ctx, audit, js) {
   }
   return {
     industry,
-    lighthouse_mobile: (j) => lighthouse(j, 'lighthouse_seo'),
-    lighthouse_desktop: (j) => lighthouse(j, 'lighthouse_mobile'),
+    lighthouse_mobile: (j) => lighthouse(j, 'mobile'),
+    lighthouse_desktop: (j) => lighthouse(j, 'desktop'),
     nuclei, wpscan, gmb,
   };
 }

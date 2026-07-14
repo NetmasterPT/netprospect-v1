@@ -36,6 +36,7 @@ const FORCE = argv.includes('--force');
 // RE-enfileirar um job cujos msgIds ainda estão na janela (ex.: trocar o classificador de
 // industry e re-processar hoje). Seguro num enqueue de uma passagem (cada domínio 1×).
 const NO_DEDUP = argv.includes('--no-dedup');
+const BY_SCORE = argv.includes('--by-score'); // ordena lead_score DESC (leads de maior valor primeiro)
 const ONLY = flag('only', 'lighthouse,nuclei,industry').split(',').map((s) => s.trim()).filter(Boolean);
 const PAGE = 500;
 
@@ -68,15 +69,18 @@ async function main() {
     + `${MIN_SCORE != null ? ` | lead_score >= ${MIN_SCORE}` : ''}`
     + `${FORCE ? ' (force)' : ` | resume: ${resumeField} IS NULL`}${LIMIT ? ` | limite ${LIMIT}` : ''}`);
 
-  let lastId = 0, sites = 0, jobs = 0;
+  let lastId = 0, lastScore = null, sites = 0, jobs = 0;
   for (;;) {
     if (LIMIT && sites >= LIMIT) break;
     const pageSize = LIMIT ? Math.min(PAGE, LIMIT - sites) : PAGE;
+    const cursor = BY_SCORE
+      ? (lastScore == null ? {} : { _or: [{ lead_score: { _lt: lastScore } }, { _and: [{ lead_score: { _eq: lastScore } }, { id: { _gt: lastId } }] }] })
+      : { id: { _gt: lastId } };
     const rows = await client.request(readItems('sites', {
-      filter: { ...base, id: { _gt: lastId } }, fields: ['id', 'domain'], sort: ['id'], limit: pageSize,
+      filter: { ...base, ...cursor }, fields: ['id', 'domain', 'lead_score'], sort: BY_SCORE ? ['-lead_score', 'id'] : ['id'], limit: pageSize,
     }));
     if (!rows.length) break;
-    lastId = rows[rows.length - 1].id;
+    lastId = rows[rows.length - 1].id; lastScore = rows[rows.length - 1].lead_score;
     for (const s of rows) {
       for (const o of ONLY) {
         await publishJob(js, JOBS[o].subject, { domain: s.domain, siteId: s.id }, NO_DEDUP ? {} : { msgId: `${o}:${s.domain}` });

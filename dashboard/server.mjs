@@ -1212,6 +1212,8 @@ function renderReport(em, full) {
   const s = em.site || {};
   const seo = s.seo_score != null ? Math.round(s.seo_score) : null;
   const mob = s.mobile_score != null ? Math.round(s.mobile_score) : null;
+  const pm = s.perf_mobile != null ? Math.round(s.perf_mobile) : null;
+  const pd = s.perf_desktop != null ? Math.round(s.perf_desktop) : null;
   const sev = s.security_severity || (s.security_findings ? 'medium' : null);
   const techName = (t) => t == null ? '' : (typeof t === 'string' ? t : (t.name || t.slug || t.technology || ''));
   const techArr = Array.isArray(s.tech_detected) ? s.tech_detected : (s.tech_detected && typeof s.tech_detected === 'object' ? Object.keys(s.tech_detected) : []);
@@ -1232,8 +1234,10 @@ function renderReport(em, full) {
   const fullSections = full ? `
     <div class="sec"><b>Análise detalhada</b>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px">
-        ${card('SEO', seo != null ? seo + '/100' : '—', 'categoria SEO (Lighthouse mobile)', scoreCol(seo))}
-        ${card('Mobile', mob != null ? mob + '/100' : '—', 'compatibilidade móvel', scoreCol(mob))}
+        ${card('SEO', seo != null ? seo + '/100' : '—', 'categoria SEO (Lighthouse)', scoreCol(seo))}
+        ${card('Mobile-friendly', mob != null ? mob + '/100' : '—', 'viewport · fontes · tap', scoreCol(mob))}
+        ${card('Performance mobile', pm != null ? pm + '/100' : '—', 'Lighthouse mobile', scoreCol(pm))}
+        ${card('Performance desktop', pd != null ? pd + '/100' : '—', 'Lighthouse desktop', scoreCol(pd))}
       </div></div>
     ${tech.length ? `<div class="sec"><b>Stack tecnológica (${tech.length})</b><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${tech.map((t) => `<span style="background:var(--chip);border-radius:20px;padding:4px 10px;font-size:12px">${escH(t)}</span>`).join('')}</div></div>` : ''}
     ${recs.length ? `<div class="sec"><b>Recomendações da Netmaster</b><ul style="margin:10px 0 0;padding-left:20px;line-height:1.8">${recs.map((r) => `<li>${escH(r)}</li>`).join('')}</ul></div>` : ''}
@@ -1276,7 +1280,7 @@ ul{color:var(--text)}
 
 app.get('/r/:token', async (req, res) => {
   try {
-    const rows = await d(`/items/emails?filter[token][_eq]=${encodeURIComponent(req.params.token)}&fields=id,token,opened_at,site.domain,site.seo_score,site.mobile_score,site.security_findings,site.security_severity,site.ssl_grade,site.ssl_days_left,site.tech_detected,site.gmb_name,site.gmb_rating,site.gmb_reviews,site.industry,site.cms_outdated,site.wp_vuln_count,contact.name,campaign.angle,campaign.from_email&limit=1`).catch(() => []);
+    const rows = await d(`/items/emails?filter[token][_eq]=${encodeURIComponent(req.params.token)}&fields=id,token,opened_at,site.domain,site.seo_score,site.mobile_score,site.perf_mobile,site.perf_desktop,site.security_findings,site.security_severity,site.ssl_grade,site.ssl_days_left,site.tech_detected,site.gmb_name,site.gmb_rating,site.gmb_reviews,site.industry,site.cms_outdated,site.wp_vuln_count,contact.name,campaign.angle,campaign.from_email&limit=1`).catch(() => []);
     const em = rows[0];
     if (!em || !em.site) return res.status(404).type('html').send('<h1 style="font-family:sans-serif;text-align:center;margin-top:60px">Relatório não encontrado</h1>');
     if (!em.opened_at) fetch(`${DIRECTUS_URL}/items/emails/${em.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ opened_at: new Date().toISOString() }) }).catch(() => {});

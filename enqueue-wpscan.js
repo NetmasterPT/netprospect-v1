@@ -28,6 +28,7 @@ const LIMIT = flag('limit', null) ? parseInt(flag('limit'), 10) : null;
 const MIN_SCORE = flag('min-score', null) ? parseInt(flag('min-score'), 10) : null;
 const FORCE = argv.includes('--force');
 const NO_DEDUP = argv.includes('--no-dedup');
+const BY_SCORE = argv.includes('--by-score'); // lead_score DESC (maior valor primeiro)
 const PAGE = 500;
 
 async function main() {
@@ -46,15 +47,18 @@ async function main() {
     + `${MIN_SCORE != null ? ` | lead_score >= ${MIN_SCORE}` : ''}`
     + `${FORCE ? ' (force)' : ' | resume: wp_vuln_count IS NULL'}${LIMIT ? ` | limite ${LIMIT}` : ''}`);
 
-  let lastId = 0, n = 0;
+  let lastId = 0, lastScore = null, n = 0;
   for (;;) {
     if (LIMIT && n >= LIMIT) break;
     const pageSize = LIMIT ? Math.min(PAGE, LIMIT - n) : PAGE;
+    const cursor = BY_SCORE
+      ? (lastScore == null ? {} : { _or: [{ lead_score: { _lt: lastScore } }, { _and: [{ lead_score: { _eq: lastScore } }, { id: { _gt: lastId } }] }] })
+      : { id: { _gt: lastId } };
     const rows = await client.request(readItems('sites', {
-      filter: { ...base, id: { _gt: lastId } }, fields: ['id', 'domain'], sort: ['id'], limit: pageSize,
+      filter: { ...base, ...cursor }, fields: ['id', 'domain', 'lead_score'], sort: BY_SCORE ? ['-lead_score', 'id'] : ['id'], limit: pageSize,
     }));
     if (!rows.length) break;
-    lastId = rows[rows.length - 1].id;
+    lastId = rows[rows.length - 1].id; lastScore = rows[rows.length - 1].lead_score;
     for (const s of rows) {
       await publishJob(js, SUBJECTS.wpscan, { domain: s.domain, siteId: s.id, keyless: true }, NO_DEDUP ? {} : { msgId: `wpscan:${s.domain}` });
       n++;

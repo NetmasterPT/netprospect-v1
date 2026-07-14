@@ -1210,17 +1210,19 @@ app.get('/api/outreach', async (req, res) => {
 const escH = (v) => String(v == null ? '' : v).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 function renderReport(em, full) {
   const s = em.site || {};
-  const perf = s.seo_score != null ? Math.round(s.seo_score) : null;
+  const seo = s.seo_score != null ? Math.round(s.seo_score) : null;
   const mob = s.mobile_score != null ? Math.round(s.mobile_score) : null;
   const sev = s.security_severity || (s.security_findings ? 'medium' : null);
-  const tech = Array.isArray(s.tech_detected) ? s.tech_detected : (s.tech_detected && typeof s.tech_detected === 'object' ? Object.keys(s.tech_detected) : []);
+  const techName = (t) => t == null ? '' : (typeof t === 'string' ? t : (t.name || t.slug || t.technology || ''));
+  const techArr = Array.isArray(s.tech_detected) ? s.tech_detected : (s.tech_detected && typeof s.tech_detected === 'object' ? Object.keys(s.tech_detected) : []);
+  const tech = techArr.map(techName).filter(Boolean);
   const token = em.token || em.id;
   const sender = em.campaign?.from_email || 'ola@netmaster.pt';
-  const scoreCol = (v) => v == null ? '#6b7280' : (v >= 90 ? '#16a34a' : v >= 50 ? '#d97706' : '#dc2626');
-  const sevCol = { critical: '#dc2626', high: '#dc2626', medium: '#d97706', low: '#16a34a' }[sev] || '#16a34a';
-  const card = (t, v, note, col) => `<div style="flex:1;min-width:150px;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:#6b7280">${t}</div><div style="font-size:26px;font-weight:800;margin:4px 0;color:${col || '#111827'}">${v}</div><div style="font-size:12px;color:#6b7280">${note || ''}</div></div>`;
+  const scoreCol = (v) => v == null ? '#9aa0aa' : (v >= 90 ? '#16a34a' : v >= 50 ? '#f59e0b' : '#ef4444');
+  const sevCol = { critical: '#ef4444', high: '#ef4444', medium: '#f59e0b', low: '#22c55e' }[sev] || '#22c55e';
+  const card = (t, v, note, col) => `<div style="flex:1;min-width:150px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px"><div style="font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)">${t}</div><div style="font-size:26px;font-weight:800;margin:4px 0;color:${col || 'var(--text)'}">${v}</div><div style="font-size:12px;color:var(--muted)">${note || ''}</div></div>`;
   const recs = [];
-  if (perf != null && perf < 90) recs.push('Otimizar a velocidade de carregamento (imagens, cache, JS) — impacta SEO e conversão.');
+  if (seo != null && seo < 90) recs.push('Melhorar o SEO técnico (metadados, estrutura, velocidade) — impacta a visibilidade no Google.');
   if (mob != null && mob < 90) recs.push('Melhorar a experiência mobile — a maioria do tráfego é telemóvel.');
   if (sev && sev !== 'low') recs.push('Corrigir os problemas de segurança detetados antes que sejam explorados.');
   if (s.ssl_days_left != null && s.ssl_days_left < 30) recs.push('Renovar o certificado SSL (expira em breve).');
@@ -1228,35 +1230,50 @@ function renderReport(em, full) {
   if (s.wp_vuln_count) recs.push(`Rever ${s.wp_vuln_count} potenciais vulnerabilidades de WordPress.`);
   if (!s.gmb_name) recs.push('Criar/otimizar o perfil Google Business — presença local grátis que traz clientes.');
   const fullSections = full ? `
-    <div class="sec"><b>Performance detalhada</b>
+    <div class="sec"><b>Análise detalhada</b>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:10px">
-        ${card('SEO / Desktop', perf != null ? perf + '/100' : '—', '', scoreCol(perf))}
-        ${card('Mobile', mob != null ? mob + '/100' : '—', '', scoreCol(mob))}
+        ${card('SEO', seo != null ? seo + '/100' : '—', 'categoria SEO (Lighthouse mobile)', scoreCol(seo))}
+        ${card('Mobile', mob != null ? mob + '/100' : '—', 'compatibilidade móvel', scoreCol(mob))}
       </div></div>
-    ${tech.length ? `<div class="sec"><b>Stack tecnológica (${tech.length})</b><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${tech.map((t) => `<span style="background:#f3f4f6;border-radius:20px;padding:4px 10px;font-size:12px">${escH(t)}</span>`).join('')}</div></div>` : ''}
+    ${tech.length ? `<div class="sec"><b>Stack tecnológica (${tech.length})</b><div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${tech.map((t) => `<span style="background:var(--chip);border-radius:20px;padding:4px 10px;font-size:12px">${escH(t)}</span>`).join('')}</div></div>` : ''}
     ${recs.length ? `<div class="sec"><b>Recomendações da Netmaster</b><ul style="margin:10px 0 0;padding-left:20px;line-height:1.8">${recs.map((r) => `<li>${escH(r)}</li>`).join('')}</ul></div>` : ''}
   ` : `
     ${recs.length ? `<div class="sec"><b>O que encontrámos para melhorar</b><ul style="margin:10px 0 0;padding-left:20px;line-height:1.7">${recs.slice(0, 3).map((r) => `<li>${escH(r)}</li>`).join('')}${recs.length > 3 ? `<li class="muted">…e mais ${recs.length - 3} no relatório completo.</li>` : ''}</ul></div>` : ''}`;
-  return `<!doctype html><html lang="pt"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${full ? 'Relatório completo' : 'Análise'} — ${escH(s.domain)}</title>
-<style>body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#f9fafb;color:#111827;line-height:1.5}.wrap{max-width:820px;margin:0 auto;padding:32px 20px}h1{font-size:26px;margin:0 0 4px}.muted{color:#6b7280}.sec{background:#fff;border:1px solid #e5e7eb;border-radius:14px;padding:20px;margin:16px 0}.cta{background:#111827;color:#fff;border-radius:14px;padding:24px;text-align:center;margin-top:20px}.btn{display:inline-block;background:#e11d48;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:700;margin:6px}ul{color:#374151}</style></head>
-<body><div class="wrap">
+  return `<!doctype html><html lang="pt" data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${full ? 'Relatório completo' : 'Análise'} — ${escH(s.domain)}</title>
+<style>
+:root,:root[data-theme="dark"]{--bg:#0e1014;--card:#191c22;--text:#e9ebef;--muted:#9aa0aa;--border:#282d36;--chip:#232830;--cta:#141821}
+:root[data-theme="light"]{--bg:#f9fafb;--card:#ffffff;--text:#111827;--muted:#6b7280;--border:#e5e7eb;--chip:#f3f4f6;--cta:#111827}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;transition:background .2s,color .2s}
+.wrap{max-width:820px;margin:0 auto;padding:32px 20px}h1{font-size:26px;margin:0 0 4px}.muted{color:var(--muted)}
+.sec{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;margin:16px 0}
+.cta{background:var(--cta);color:#fff;border:1px solid var(--border);border-radius:14px;padding:24px;text-align:center;margin-top:20px}
+.btn{display:inline-block;background:#e11d48;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:700;margin:6px}
+ul{color:var(--text)}
+.themebtn{position:fixed;top:14px;right:14px;background:var(--card);border:1px solid var(--border);color:var(--text);width:38px;height:38px;border-radius:10px;cursor:pointer;font-size:16px;line-height:1;z-index:9}
+</style></head>
+<body>
+<button class="themebtn" onclick="(function(){var r=document.documentElement,n=r.getAttribute('data-theme')==='dark'?'light':'dark';r.setAttribute('data-theme',n);try{localStorage.setItem('np-r-theme',n)}catch(e){}document.querySelector('.themebtn').textContent=n==='dark'?'☀️':'🌙'})()" title="Tema claro/escuro">☀️</button>
+<script>(function(){try{var t=localStorage.getItem('np-r-theme');if(t){document.documentElement.setAttribute('data-theme',t);var b=document.querySelector('.themebtn');if(b)b.textContent=t==='dark'?'☀️':'🌙';}}catch(e){}})();</script>
+<div class="wrap">
   <div class="muted" style="font-size:12px">Netmaster · Análise técnica do seu site</div>
   <h1>${escH(s.domain)}</h1>
   <p class="muted">Olá${em.contact?.name ? ' ' + escH(em.contact.name) : ''}, fizemos uma análise automática ao seu site. ${full ? 'Aqui está o relatório completo.' : 'Aqui está o resumo.'}</p>
   <div style="display:flex;gap:12px;flex-wrap:wrap">
-    ${card('Performance', perf != null ? perf + '/100' : '—', perf != null ? (perf >= 90 ? 'excelente' : perf >= 50 ? 'a melhorar' : 'crítico') : 'não medido', scoreCol(perf))}
+    ${card('SEO', seo != null ? seo + '/100' : '—', seo != null ? (seo >= 90 ? 'excelente' : seo >= 50 ? 'a melhorar' : 'crítico') : 'não medido', scoreCol(seo))}
+    ${card('Mobile', mob != null ? mob + '/100' : '—', mob != null ? (mob >= 90 ? 'ótimo' : 'a melhorar') : 'não medido', scoreCol(mob))}
     ${card('Segurança', s.security_findings != null ? s.security_findings + ' achados' : '—', sev || 'sem dados', sevCol)}
-    ${card('SSL', s.ssl_grade || '—', s.ssl_days_left != null ? s.ssl_days_left + ' dias' : '', s.ssl_grade && /^A/.test(s.ssl_grade) ? '#16a34a' : '#d97706')}
+    ${card('SSL', s.ssl_grade || '—', s.ssl_days_left != null ? s.ssl_days_left + ' dias' : '', s.ssl_grade && /^A/.test(s.ssl_grade) ? '#22c55e' : '#f59e0b')}
     ${s.gmb_name ? card('Google Business', s.gmb_rating ? s.gmb_rating + '★' : '✓', (s.gmb_reviews || 0) + ' reviews') : ''}
   </div>
   ${s.wp_vuln_count || s.cms_outdated ? `<div class="sec"><b>⚠️ WordPress</b><p class="muted" style="margin:6px 0 0">${s.cms_outdated ? 'CMS desatualizado. ' : ''}${s.wp_vuln_count ? s.wp_vuln_count + ' potenciais vulnerabilidades detetadas.' : ''} Recomendamos uma revisão de segurança.</p></div>` : ''}
   ${fullSections}
   <div class="cta"><div style="font-size:20px;font-weight:800">${full ? 'Quer que tratemos disto por si?' : 'Quer o relatório completo + plano de melhoria?'}</div>
-    <p style="color:#d1d5db;margin:8px 0 14px">Marque uma chamada gratuita de 15 min com a Netmaster.</p>
+    <p style="color:#cbd0d8;margin:8px 0 14px">Marque uma chamada gratuita de 15 min com a Netmaster.</p>
     <a class="btn" href="mailto:${escH(sender)}?subject=${encodeURIComponent('Chamada sobre ' + (s.domain || 'o meu site'))}">Marcar chamada</a>${full ? '' : `<a class="btn" style="background:#374151" href="/r/${escH(token)}?full=1">Ver relatório completo</a>`}</div>
   <p class="muted" style="font-size:11px;text-align:center;margin-top:24px">Netmaster · análise gerada automaticamente · responder ao email remove-o da lista.</p>
 </div></body></html>`;
 }
+
 app.get('/r/:token', async (req, res) => {
   try {
     const rows = await d(`/items/emails?filter[token][_eq]=${encodeURIComponent(req.params.token)}&fields=id,token,opened_at,site.domain,site.seo_score,site.mobile_score,site.security_findings,site.security_severity,site.ssl_grade,site.ssl_days_left,site.tech_detected,site.gmb_name,site.gmb_rating,site.gmb_reviews,site.industry,site.cms_outdated,site.wp_vuln_count,contact.name,campaign.angle,campaign.from_email&limit=1`).catch(() => []);

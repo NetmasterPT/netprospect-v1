@@ -250,3 +250,41 @@ host remoto uma fatia de um job que os locais **também** consomem.
 | 5 | **Oracle A1 = ARM** | 🟡 **Aberto** — construir a `worker-security` multi-arch (arm64)? Sem Chromium é trivial. **Prioridade subiu:** é o que acelera o batch WPScan (24,8k em curso, só HEL1+DE1). |
 | 6 | **WPScan** | ✅ **Resolvido** — **batch keyless** (`enqueue-wpscan.js`) p/ todos os ~1,57M sites WP (enumera, sem vuln-DB); a **API key fica só p/ on-demand** (1 key por host, 25/dia). |
 | 7 | **PostHog** | ⛔ **Precisa de VM própria.** O compose hand-rolled partia no bootstrap do CH; o `install.sh` **oficial** é o caminho certo MAS o stack "hobby" são **~40 serviços** (Elasticsearch, Temporal, Kafka, Zookeeper, 2× ClickHouse, browserless, SeaweedFS…) — não cabe na `de-analytics` (6c/16GB, que já corre o ClickHouse de analytics **em uso**); ia dar OOM. **Decisão pendente:** VM dedicada `de-posthog` (~8c/32GB) **ou** PostHog Cloud (free tier) **ou** deixar de fora (a analítica do NetProspect NÃO depende disto). |
+
+## 7. Concorrência DINÂMICA por core (padrão auto-escala) — 2026-07-14
+
+O `worker.mjs` calcula a concorrência de cada job a partir dos **cores + RAM da própria VM**, por
+isso uma VM nova só precisa de `WORKER_ROLES` (+ `WORKER_REPLICAS`) — ajusta-se sozinha. Loga no
+arranque: `conc auto (cores=… RAM_free=… rep=…): …`.
+
+**Fórmula:** `conc[job] = min( cores × fator[job] , teto_RAM , teto_abs ) ÷ réplicas`  (env override → ganha)
+
+| Perfil I/O | Jobs (fator/core) | Teto RAM/instância |
+| --- | --- | ---: |
+| Fetch/parse-bound | enrich·3 contacts·5 fingerprint·5 fetch·1.5 | — |
+| Lookups de rede | dns·2 geoip·2 ssl·2 dnsprovider·2 emailauth·2 traffic·3 social·1.5 locality·1.5 | — |
+| Network-scan | **nuclei·1.5** | 250 MB |
+| CPU/RAM-bound | **wpscan·0.5** **lighthouse·0.4** industry·0.2 | 450 / 550 / 300 MB |
+| Recurso externo | whois·0.5 (IP) verify·0.75 (quota) gmb·0.5 (residencial) | gmb 400 MB |
+
+**O teto de RAM salva as VMs pequenas:** numa VM de 950MB, nuclei/wpscan/lighthouse/gmb auto-limitam
+a **1** (RAM_livre 404MB ÷ 250MB) — foi a falta disto que crashou a `oracle-e2-1`.
+
+**⚠️ hel1 usa `environment:` (não `env_file`)** → tem de passar `WORKER_REPLICAS` + cada `*_CONC` ao
+container explicitamente, senão o padrão vê `rep=1` e cada réplica pega o total inteiro (oversubscrição Nx).
+
+### Overrides finos ATUAIS (2026-07-14)
+
+| Host | Override | Porquê |
+| --- | --- | --- |
+| **hel1 heavy** (18c, host partilhado) | LIGHTHOUSE_CONC=3 · WPSCAN_CONC=4 · nuclei=auto(28) | ≤14 de load p/ proteger np-db/np-server no mesmo host físico (steady ~10-13) |
+| **DE1 heavy** (6c) | roles `security,ai,`**`browser`** · réplicas **1** · nuclei=24 · wpscan=6 · LIGHTHOUSE=1 | +browser partilha o lighthouse (offload do hel1); réplicas 1 senão o Chromium dá load 8.5. Steady ~4.5-5 (~80%) |
+| **Oracle e2-1/2** (2c/950MB) | role `base` (whois-only) · mem_limit **550m** | 950MB pequeno demais p/ nuclei; o whois (IP-limitado) é o uso útil e seguro |
+| **laptop** (temp.) | roles +`security` · nuclei=8 · wpscan=5 | drenar wpscan temporariamente (cores rápidos) — reverter depois |
+
+**Lições do rebalanceamento (2026-07-14):** (1) o pico de load 23 do hel1 era o **fingerprint** (base,
+wappalyzer CPU) — agora drenado; o que resta (lighthouse/nuclei/wpscan) é I/O-bound e não satura CPU.
+(2) o **lighthouse (Chromium ~1.5 core/job) só corria no hel1** → sobrecarregava-o; distribuí-o p/ o DE1
+(tem a imagem heavy c/ Chromium). (3) DE1/Oracle ficam subutilizados no nuclei/whois porque o **hel1
+(0ms ao NATS) agarra os jobs antes** deles (35ms+) → mais IPs, não mais conc, escala o whois. (4)
+`mem_limit` < RAM_total − OS (senão o container enche RAM+swap e a VM inteira thrasha, como a oracle-e2-1).

@@ -585,7 +585,7 @@ window.openSite = async (domain) => {
       (site.domain_expiry || site.domain_age_days != null) ? `<div class="k">Domínio</div><div class="v">${site.domain_age_days != null ? `<b>${site.domain_age_days}</b>d de idade` : ''}${site.domain_expiry ? ` · expira ${esc(String(site.domain_expiry).slice(0, 10))}` : ''} ${site.expiring_soon ? '<span class="np-badge warn" style="height:18px">a expirar</span>' : ''}${site.whois_registrar ? `<div class="muted" style="font-size:11px">${esc(site.whois_registrar)}</div>` : ''}</div>` : '',
       site.dns_provider ? `<div class="k">DNS</div><div class="v">${esc(site.dns_provider)}</div>` : '',
     ].filter(Boolean).join('');
-    const reportLinks = (reports || []).map((rp) => `<a class="np-chip" href="${esc((directusPublicUrl || '') + '/admin/content/site_reports/' + rp.id)}" target="_blank" rel="noopener">${esc(rp.kind)}${rp.score != null ? ` · ${rp.score}` : ''}</a>`).join(' ');
+    const reportLinks = (reports || []).map((rp) => `<a class="np-chip" href="#/report?id=${rp.id}">${esc(REPORT_LABEL(rp.kind))}${rp.score != null ? ` · ${rp.score}` : ''}</a>`).join(' ');
     const isWp = (site.primary_platform?.slug || site.primary_platform?.name || '').toLowerCase().includes('wordpress');
     const auditSection = `
         <div class="np-sec-t" style="display:flex;justify-content:space-between;align-items:center;gap:6px">Auditoria &amp; prospeção
@@ -1400,6 +1400,65 @@ async function viewOutreach() {
       ${recent.length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Quando</th><th>Para</th><th>Assunto</th><th>Campanha</th><th>Estado</th></tr></thead><tbody>${recent.map(logRow).join('')}</tbody></table></div>` : '<div class="muted">Sem emails registados. Aparecem aqui à medida que as campanhas geram/enviam.</div>'}</div></section>`;
 }
 
+// ========== REPORT VIEWER (páginas human-readable por tipo, p/ comerciais/marketing) ==========
+function REPORT_LABEL(k) { return { lighthouse_seo: 'Performance & SEO (mobile)', lighthouse_mobile: 'Performance & SEO (mobile)', lighthouse_desktop: 'Performance (desktop)', nuclei: 'Segurança', wpscan: 'WordPress', gmb: 'Google Business' }[k] || k; }
+async function viewReport() {
+  const id = parseHashQuery().id;
+  renderNav('');
+  if (!REFRESHING) $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
+  let dd; try { dd = await api('/api/report/' + encodeURIComponent(id)); } catch (e) { $('#view').innerHTML = errCard(e); return; }
+  if (!dd.ok) { $('#view').innerHTML = `<div class="np-empty">Report não encontrado.</div>`; return; }
+  const r = dd.report; const dom = r.site?.domain || '';
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Relatório · ${esc(dom)}</div><h1 class="np-h1">${esc(REPORT_LABEL(r.kind))}</h1></div><button class="np-btn np-btn--sm" onclick="history.back()">← Voltar</button></div>`;
+  $('#view').innerHTML = head + reportBody(r);
+}
+function reportBody(r) {
+  const k = r.kind || '', rep = r.report || {}, sum = r.summary || {};
+  if (k.startsWith('lighthouse')) return lhReportBody(rep, sum);
+  if (k === 'nuclei') return nucleiReportBody(sum);
+  if (k === 'wpscan') return wpscanReportBody(rep, sum);
+  if (k === 'gmb') return gmbReportBody(rep);
+  return `<div class="np-card"><div class="np-card-b"><pre style="white-space:pre-wrap;font-size:12px">${esc(JSON.stringify(rep, null, 2).slice(0, 4000))}</pre></div></div>`;
+}
+function lhReportBody(rep, sum) {
+  const cats = rep.categories || {};
+  const catCard = (key, label) => { const sc = cats[key]?.score != null ? Math.round(cats[key].score * 100) : null; const col = sc == null ? '#9aa0aa' : (sc >= 90 ? '#16a34a' : sc >= 50 ? '#f59e0b' : '#ef4444'); return `<div class="np-kpi"><div class="np-kpi-l">${label}</div><div class="np-kpi-v tnum" style="color:${col}">${sc == null ? '—' : sc}</div></div>`; };
+  const audits = rep.audits || {};
+  const failing = Object.values(audits).filter((a) => a && a.score != null && a.score < 0.9 && a.title).sort((a, b) => a.score - b.score).slice(0, 15);
+  return `<div class="np-kpis">${catCard('performance', 'Performance')}${catCard('seo', 'SEO')}${catCard('accessibility', 'Acessibilidade')}${catCard('best-practices', 'Boas práticas')}</div>
+    <section class="np-card" style="margin-top:16px"><div class="np-card-h"><h2>Oportunidades de melhoria</h2><span class="muted" style="font-size:12px">o que a Netmaster pode corrigir</span></div><div class="np-card-b">
+    ${failing.length ? failing.map((a) => `<div style="padding:9px 0;border-bottom:1px solid var(--np-border)"><b>${esc(a.title)}</b>${a.displayValue ? ` <span class="muted">— ${esc(a.displayValue)}</span>` : ''}${a.description ? `<div class="muted" style="font-size:12px;margin-top:2px">${esc(String(a.description).replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').slice(0, 220))}</div>` : ''}</div>`).join('') : '<div class="muted">Sem problemas relevantes — o site está bem neste aspeto.</div>'}
+    </div></section>${rep.finalUrl ? `<div class="muted" style="font-size:11px;margin-top:8px">Analisado: ${esc(rep.finalUrl)}</div>` : ''}`;
+}
+function nucleiReportBody(sum) {
+  const bs = sum.bySeverity || {};
+  const sevCard = (sv, label, col) => `<div class="np-kpi"><div class="np-kpi-l">${label}</div><div class="np-kpi-v tnum" style="color:${col}">${bs[sv] || 0}</div></div>`;
+  return `<div class="np-kpis">
+    <div class="np-kpi"><div class="np-kpi-l">Total achados</div><div class="np-kpi-v tnum">${sum.findings || 0}</div></div>
+    ${sevCard('critical', 'Críticos', '#ef4444')}${sevCard('high', 'Altos', '#ef4444')}${sevCard('medium', 'Médios', '#f59e0b')}${sevCard('low', 'Baixos', '#22c55e')}</div>
+    <section class="np-card" style="margin-top:16px"><div class="np-card-b">${sum.findings ? `<b>${sum.findings} problema(s) de segurança detetado(s)</b> — severidade máxima <b>${esc(sum.severity || '—')}</b>. São vetores que um atacante pode explorar; a Netmaster corrige-os numa revisão de segurança.` : '<div class="muted">Nenhum problema de segurança detetado nas verificações relevantes para a tecnologia deste site.</div>'}</div></section>`;
+}
+function wpscanReportBody(rep, sum) {
+  if (!rep || rep.scan_aborted) return `<div class="np-card"><div class="np-card-b muted">Scan sem dados${rep && rep.scan_aborted ? ` (${esc(String(rep.scan_aborted))})` : ''}.</div></div>`;
+  const plugins = rep.plugins || {}, themes = rep.themes || {};
+  const row = (name, o) => `<tr><td style="font-weight:600">${esc(name)}</td><td>${esc((o.version && o.version.number) || '—')}</td><td>${(o.vulnerabilities || []).length ? `<span class="np-badge warn" style="height:18px">${o.vulnerabilities.length} vuln</span>` : '<span class="muted">—</span>'}</td></tr>`;
+  const list = (obj) => Object.entries(obj).map(([n, o]) => row(n, o)).join('');
+  return `<div class="np-kpis">
+    <div class="np-kpi"><div class="np-kpi-l">WordPress</div><div class="np-kpi-v" style="font-size:16px">${esc((rep.version && rep.version.number) || '—')}</div></div>
+    <div class="np-kpi"><div class="np-kpi-l">Plugins</div><div class="np-kpi-v tnum">${Object.keys(plugins).length}</div></div>
+    <div class="np-kpi"><div class="np-kpi-l">Temas</div><div class="np-kpi-v tnum">${Object.keys(themes).length}</div></div>
+    <div class="np-kpi"><div class="np-kpi-l">Vulnerabilidades</div><div class="np-kpi-v tnum" style="color:${(sum.vulnCount || 0) ? '#ef4444' : 'inherit'}">${sum.vulnCount || 0}</div></div></div>
+    ${Object.keys(plugins).length ? `<section class="np-card" style="margin-top:16px"><div class="np-card-h"><h2>Plugins detetados</h2></div><div class="np-card-b"><div class="np-tablewrap"><table class="np-table"><thead><tr><th>Plugin</th><th>Versão</th><th>Segurança</th></tr></thead><tbody>${list(plugins)}</tbody></table></div></div></section>` : '<div class="muted" style="margin-top:12px">Sem plugins enumerados (scan keyless).</div>'}
+    ${Object.keys(themes).length ? `<section class="np-card" style="margin-top:16px"><div class="np-card-h"><h2>Temas</h2></div><div class="np-card-b"><div class="np-tablewrap"><table class="np-table"><thead><tr><th>Tema</th><th>Versão</th><th>Segurança</th></tr></thead><tbody>${list(themes)}</tbody></table></div></div></section>` : ''}`;
+}
+function gmbReportBody(rep) {
+  const f = (l, v) => v ? `<div style="padding:7px 0;border-bottom:1px solid var(--np-border)"><span class="muted" style="display:inline-block;min-width:130px">${l}</span> <b>${esc(String(v))}</b></div>` : '';
+  return `<section class="np-card"><div class="np-card-b">
+    ${f('Nome', rep.name)}${f('Categoria', rep.category)}${f('Avaliação', rep.rating ? rep.rating + ' ★' : '')}${f('Reviews', rep.reviews)}${f('Telefone', rep.phone)}${f('Morada', rep.address)}${f('Cidade', rep.city)}
+    ${rep.url ? `<div style="margin-top:12px"><a class="np-btn np-btn--sm np-btn--primary" href="${esc(rep.url)}" target="_blank" rel="noopener">Ver no Google Maps</a></div>` : ''}
+    ${!rep.name ? '<div class="muted">Sem perfil Google Business encontrado.</div>' : ''}</div></section>`;
+}
+
 // ========== CONFIGURAÇÃO / SISTEMA (B5) ==========
 async function viewConfig() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
@@ -1462,6 +1521,7 @@ async function route() {
     else if (h === 'workers') await viewWorkers();
     else if (h === 'queues') await viewQueues();
     else if (h === 'coverage') await viewCoverage();
+    else if (h === 'report') await viewReport();
     else if (h === 'logs') await viewLogs();
     else if (h === 'config') await viewConfig();
     else if (h === 'settings') await viewSettings();

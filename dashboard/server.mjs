@@ -1301,6 +1301,15 @@ app.get('/r/:token', async (req, res) => {
   }
 });
 
+// Report individual (para o report-viewer human-readable). Antes do catch-all.
+app.get('/api/report/:id', async (req, res) => {
+  try {
+    const rows = await d(`/items/site_reports?filter[id][_eq]=${encodeURIComponent(req.params.id)}&fields=id,kind,score,summary,report,site.domain,site.id&limit=1`).catch(() => []);
+    const r = rows[0];
+    if (!r) return res.status(404).json({ ok: false, error: 'report não encontrado' });
+    res.json({ ok: true, report: r });
+  } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`));

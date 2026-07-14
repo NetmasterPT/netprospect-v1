@@ -278,7 +278,9 @@ services:
       AUDIT_CONC: ${AUDIT_CONC:-1}
       LIGHTHOUSE_CONC: ${LIGHTHOUSE_CONC:-2}
       INDUSTRY_CONC: ${INDUSTRY_CONC:-1}
-      NUCLEI_JOB_CONC: ${NUCLEI_JOB_CONC:-6}
+      NUCLEI_JOB_CONC: ${NUCLEI_JOB_CONC:-}
+      WPSCAN_CONC: ${WPSCAN_CONC:-}
+      WORKER_REPLICAS: ${WORKER_REPLICAS:-1}
       # Nuclei: agressividade do scan. Subir acelera mas puxa CPU/rede (medido: rate=100 c=30
       # pôs a load do host a 18.5/18). Baixar se saturar.
       NUCLEI_RATE: ${NUCLEI_RATE:-100}
@@ -353,6 +355,7 @@ services:
       ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-10}
       CONTACTS_CONCURRENCY: ${CONTACTS_CONCURRENCY:-5}
       DOMAIN_HEALTH_CONC: ${DOMAIN_HEALTH_CONC:-8}
+      WORKER_REPLICAS: ${WORKER_BASE_REPLICAS:-1}
       # fingerprint (cms) é CPU/fetch-pesado — concorrência própria (desacoplada). Subir p/ acelerar
       # o backfill de cms quando há folga de CPU; baixar se saturar. N_workers × este valor = parses.
       FINGERPRINT_CONC: ${FINGERPRINT_CONC:-4}

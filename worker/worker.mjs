@@ -161,7 +161,7 @@ function makeHeavyFineHandlers(ctx, audit, js) {
       await client.request(updateItem('sites', site.id, { security_findings: r.findings, security_severity: r.severity }));
       await upsertReport(client, site.id, 'nuclei', { score: r.findings, summary: { findings: r.findings, severity: r.severity, bySeverity: r.bySeverity }, report: { _full: await putReport(site.id, "nuclei", { results: r.results }) } });
       await rescore({ domain: site.domain, siteId: site.id });
-    } catch (e) { log(`nuclei ${site.domain}: ${e.message}`); }
+    } catch (e) { if (/não instalado|not installed/i.test(e.message)) throw e; log(`nuclei ${site.domain}: ${e.message}`); }
     return 'ack';
   }
   async function wpscan(job) {
@@ -176,7 +176,7 @@ function makeHeavyFineHandlers(ctx, audit, js) {
       const r = await audit.wpscan.runWpscan(site.final_url || `https://${site.domain}/`, { token });
       await client.request(updateItem('sites', site.id, { wp_vuln_count: r.vulnCount }));
       await upsertReport(client, site.id, 'wpscan', { score: r.vulnCount, summary: { vulnCount: r.vulnCount }, report: r.report });
-    } catch (e) { log(`wpscan ${site.domain}: ${e.message}`); }
+    } catch (e) { if (/não instalado|not installed/i.test(e.message)) throw e; log(`wpscan ${site.domain}: ${e.message}`); }
     return 'ack';
   }
   async function gmb(job) {
@@ -279,7 +279,7 @@ function makeHandlers(ctx, audit, js) {
           const r = await audit.nuclei.runNuclei(url, { tags: audit.nuclei.nucleiTagsForTech(site.tech_detected), full: tier === 'ondemand' });
           patch.security_findings = r.findings; patch.security_severity = r.severity;
           await upsertReport(client, site.id, 'nuclei', { score: r.findings, summary: { findings: r.findings, severity: r.severity, bySeverity: r.bySeverity }, report: { _full: await putReport(site.id, "nuclei", { results: r.results }) } });
-        } catch (e) { log(`nuclei ${site.domain}: ${e.message}`); }
+        } catch (e) { if (/não instalado|not installed/i.test(e.message)) throw e; log(`nuclei ${site.domain}: ${e.message}`); }
       }
 
       // GMB via browser — só on-demand + opt-in (GMB_ENABLED). Frágil/lento e o
@@ -307,7 +307,7 @@ function makeHandlers(ctx, audit, js) {
           const r = await audit.wpscan.runWpscan(url);
           patch.wp_vuln_count = r.vulnCount;
           await upsertReport(client, site.id, 'wpscan', { score: r.vulnCount, summary: { vulnCount: r.vulnCount }, report: r.report });
-        } catch (e) { log(`wpscan ${site.domain}: ${e.message}`); }
+        } catch (e) { if (/não instalado|not installed/i.test(e.message)) throw e; log(`wpscan ${site.domain}: ${e.message}`); }
       }
 
       patch.audit_status = 'done';

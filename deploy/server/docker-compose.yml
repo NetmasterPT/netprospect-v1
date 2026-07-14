@@ -35,9 +35,11 @@ services:
       CACHE_ENABLED: 'false'
       TELEMETRY: 'false'
       # Várias pipelines em paralelo bloqueiam o event loop com queries grandes; o default
-      # de 500ms devolvia 503 "Under pressure". Numa VM só dele isto deve deixar de acontecer,
-      # mas mantemos a folga.
-      PRESSURE_LIMITER_MAX_EVENT_LOOP_DELAY: '1500'
+      # de 500ms devolvia 503 "Under pressure". Numa VM de 4 cores (control-plane) a frota ainda
+      # provoca sheds em rajada; 3000ms tolera a latência do enrich (workload sem utilizador à
+      # espera) e reduz os 503 — os workers já fazem nak+retry a "Under pressure" (lib/jobs.js).
+      # Escritas de site já contornam o Directus (DIRECT_PG_WRITE*), sobrando sobretudo reads.
+      PRESSURE_LIMITER_MAX_EVENT_LOOP_DELAY: '3000'
       PRESSURE_LIMITER_MAX_EVENT_LOOP_UTILIZATION: '0.99'
       PUBLIC_URL: ${DIRECTUS_PUBLIC_URL:-http://localhost:8056}
       CORS_ENABLED: 'true'

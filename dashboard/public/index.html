@@ -15,6 +15,7 @@
 <style>
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; }
+  html, body { max-width: 100%; overflow-x: hidden; }
   body { background: var(--np-bg); color: var(--np-text); font-family: var(--np-font); font-size: var(--np-fs-body); line-height: var(--np-lh-body); }
   a { color: inherit; text-decoration: none; }
   ::-webkit-scrollbar { width: 10px; height: 10px; } ::-webkit-scrollbar-thumb { background: var(--np-border-2); border-radius: 999px; } ::-webkit-scrollbar-track { background: transparent; }
@@ -178,6 +179,15 @@
     .np-topbar .np-search, .np-topbar .np-word { display: none; }
     .np-main { padding: 12px 8px; }
     .np-card-b { padding: 12px; }
+    /* topbar: manter só o essencial (refresh/tema/sino); esconder import+definições */
+    #importbtn, #setbtn { display: none; }
+    .np-table th, .np-table td { font-size: 12px; padding: 0 10px; }
+    .np-h1 { font-size: 18px; }
+    .np-head { align-items: flex-start; }
+    .np-kpi-v { font-size: 20px; }
+  }
+  @media (max-width: 380px) {
+    .np-kpis { grid-template-columns: 1fr !important; }
   }
 </style>
 </head>

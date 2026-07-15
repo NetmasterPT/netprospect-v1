@@ -36,5 +36,10 @@ services:
       - ../../data/geoip:/app/data/geoip:ro
       - ../../data/tranco:/app/data/tranco:ro
       - ../../config:/app/config:ro
+      # Código montado do repo → iterar o gmb (scraping frágil) SEM rebuild.
+      #   1ª vez (aplicar estes volumes):  git pull && docker compose -f deploy/laptop/docker-compose.yml up -d
+      #   updates seguintes (recarregar código montado):  git pull && docker compose -f deploy/laptop/docker-compose.yml restart
+      - ../../lib:/app/lib:ro
+      - ../../worker:/app/worker:ro
     deploy:
       replicas: ${WORKER_REPLICAS:-1}

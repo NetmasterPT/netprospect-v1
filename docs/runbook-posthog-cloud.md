@@ -1,74 +1,83 @@
 # Runbook — PostHog **Cloud** (product analytics, sem self-host)
 
-> **Decisão (2026-07):** o PostHog self-hosted é pesado demais (o stack "hobby" oficial são ~40
-> serviços — ver [`runbook-analytics-de.md`](runbook-analytics-de.md) §7). O **Cloud** resolve tudo:
-> sem VM, sem manutenção, e o **free tier chega-nos à larga** (1M eventos/mês; nós enviamos os
-> `change_events` + emails + uso do dashboard → uma fração disso).
->
-> **O Cloud NÃO liga ao nosso ClickHouse.** Ele tem o ClickHouse dele; nós **enviamos eventos** via a
-> API `/capture/`. Os `change_events` continuam a ir para o **nosso** ClickHouse (Fase E, `de-analytics`)
-> na mesma — o PostHog é um destino ADICIONAL e opcional. São coisas independentes.
+> **Decisão (2026-07):** o PostHog self-hosted é pesado demais (~40 serviços). O **Cloud** (região **EU /
+> Frankfurt**) resolve tudo, e o **free tier chega-nos à larga** (1M eventos/mês). O Cloud tem o ClickHouse
+> dele; nós **enviamos eventos** via `/capture/`. O nosso ClickHouse (`de-analytics`) continua a ser a fonte
+> de verdade das séries temporais — o PostHog é a camada de product-analytics/funis POR CIMA, adicional.
 
-## O que já está pronto no sistema
+## Duas integrações (independentes, mesmo projeto PostHog)
 
-Nada de código a mudar — o plumbing existe:
+Há **dois** fluxos de eventos, com **variáveis de ambiente diferentes**. Devem apontar para o **mesmo
+projeto** PostHog (mesma `phc_…` key) para os eventos caírem juntos.
 
-- `lib/metrics.js` → `capture('np_<evento>', domain, {…})` por cada **change_event** detetado (só se
-  `POSTHOG_HOST` + `POSTHOG_KEY` estiverem definidos; senão é no-op).
-- `worker/handlers.mjs` → `capture('np_email_sent', …)` por cada email de campanha enviado.
-- `docker/docker-compose.yml` já passa `POSTHOG_HOST`/`POSTHOG_KEY` aos workers (`worker`, `worker-base`).
+| # | Integração | O que mede | Env vars | Código |
+|---|---|---|---|---|
+| **A** | **Pipeline / workers** | `np_*` (change_events) + `np_email_sent` | `POSTHOG_HOST` / `POSTHOG_KEY` | `lib/metrics.js`, `worker/handlers.mjs` |
+| **B** | **Dashboard** (product analytics) | 14 eventos de uso + error tracking + session replay | `POSTHOG_PUBLIC_HOST` / `POSTHOG_PUBLIC_KEY` | `dashboard/public/posthog-init.js`, `dashboard/server.mjs` (SDK client + server-side) |
 
-Ou seja: **basta pôr as 2 variáveis no `.env` de cada host e recriar os workers.**
+## Estado atual (o que JÁ está tratado)
+
+- ✅ **Projeto criado** no PostHog Cloud EU (tens acesso ao dashboard).
+- ✅ **Integração A** (workers `np_*`): `POSTHOG_HOST/KEY` definidos em **`docker/.env`** (HEL1). `lib/metrics.js`
+  ativo. *(Falta confirmar DE1 — ver passo 4.)*
+- ✅ **Integração B — server-side**: `POSTHOG_PUBLIC_HOST/KEY` no `.env` (raiz), endpoint `/api/posthog-config`,
+  e os eventos server-side (`campaign_created`, `audit_requested`, `report_viewed`, …) via `fetch` ao `/capture/`.
+  **Já funcionam** assim que o container servir o código (já serve).
+- ✅ **Integração B — bugs de client-side CORRIGIDOS no código** (Claude):
+  1. `posthog-js` estava só no `package.json` da **raiz**, mas o dashboard faz build isolado de `dashboard/` →
+     **adicionado a `dashboard/package.json`**.
+  2. O mount `/vendor` usava `path.join(__dirname, '../node_modules')` → no container resolvia `/node_modules`
+     (errado; deps em `/app/node_modules`) → **corrigido para `path.join(__dirname, 'node_modules')`**.
 
 ---
 
-## 1. Criar o projeto no PostHog Cloud — **TU fazes**
+## O que FALTA (ordenado) — **começa no Passo 1**
 
-1. Regista-te em **<https://eu.posthog.com>** (região **EU / Frankfurt** — perto da infra + GDPR).
-2. Cria a organização + um projeto (ex.: `NetProspect`).
-3. **Project settings → Project API Key** — copia a **Project API Key** (começa por `phc_…`).
-4. O host da API do EU é **`https://eu.i.posthog.com`**.
+### ▶ Passo 1 — Rebuild do container do dashboard (ativa o client-side) — **Claude faz / tu confirmas**
 
-## 2. Ligar os workers (backend: change_events + emails) — **Claude faz**
-
-Pôr as 2 variáveis em cada host que corre workers e recriar:
+Sem isto, o `posthog-js` não é instalado no container e o `/vendor/posthog-js` dá 404 → **nenhum** evento
+client, session replay ou error-tracking client. Depois dos 2 fixes acima:
 
 ```bash
-# HEL1 (docker/.env)
-POSTHOG_HOST=https://eu.i.posthog.com
-POSTHOG_KEY=phc_<a-tua-key>
-# → cd docker && docker compose up -d --force-recreate worker worker-base
-
-# DE1 (/root/np-worker/.env.worker  E  /root/np-worker-heavy/.env.heavy) — as MESMAS 2 linhas
-# → docker compose --env-file <env> up -d --force-recreate
-
-# np-server (dashboard, deploy/server/.env) — para o dashboard mostrar o modo e, se ativado, o snippet
+cd docker
+docker compose build dashboard && docker compose up -d dashboard
+# (dev, se correres o dashboard fora de container: cd dashboard && npm install)
 ```
 
-Os workers passam a enviar `np_<evento>` (ex.: `np_liveness`, `np_cms_change`, …) e `np_email_sent`.
+### Passo 2 — Terminar o onboarding no PostHog — **TU fazes**
 
-## 3. (Opcional) Product analytics do DASHBOARD (frontend) — **Claude faz, se quiseres**
+Em **"Which products would you like to use?"**, escolhe:
+- ✅ **Product Analytics** (já instrumentado — os 14 eventos)
+- ✅ **Session Replay** (grava por default; enorme valor num tool interno)
+- ✅ **Error Tracking** (já ligado no `posthog-init.js`)
+- *(opcional)* Web Analytics. **Saltar:** Data Warehouse, Experiments, Surveys, MCP, Logs, Workflows, Support.
 
-Para funis de uso/retenção do próprio dashboard (page views, cliques), adiciona o snippet JS do PostHog
-ao `dashboard/public/index.html` (`<head>`), com a mesma key. Isto é **separado** do backend acima e só
-mede o uso da UI. **Atenção:** o dashboard está atrás do Authentik → é uso interno (poucos eventos).
-
-## 4. Verificação
+### Passo 3 — Verificar que os eventos chegam
 
 ```bash
-# 1) um worker confirma que está ligado
-docker exec <worker> node -e "import('./lib/metrics.js').then(m=>console.log('posthog:', m.posthogEnabled()))"
-# 2) forçar um evento: re-observar um site que mude algo (ou enviar um email de campanha em dry-run=false)
-# 3) no PostHog Cloud → Activity / Events: aparecem os np_* em segundos
+# server-side (workers, integração A):
+docker exec <worker> node -e "import('./lib/metrics.js').then(m=>console.log('posthog A:', m.posthogEnabled()))"
+# client-side (integração B): abre o dashboard, faz uma pesquisa / abre um site / troca o tema
+#   → PostHog → Activity/Events: aparecem dashboard_search_submitted, site_detail_opened, theme_toggled…
+#   → /vendor/posthog-js/dist/module.full.js deve dar 200 (não 404)
 ```
+
+### Passo 4 — Fechar pontas — **opcional / mais tarde**
+
+- **DE1 (integração A):** pôr `POSTHOG_HOST/KEY` (as mesmas) em `/root/np-worker/.env.worker` +
+  `/root/np-worker-heavy/.env.heavy` e `docker compose … up -d --force-recreate`. *(HEL1 já tem.)*
+- **Confirmar o mesmo projeto:** `POSTHOG_KEY` (A) e `POSTHOG_PUBLIC_KEY` (B) devem ser a MESMA `phc_…`.
+- **`$pageview` da SPA:** o `posthog-init.js` tem `capture_pageview:false`; se quiseres navegação/retenção,
+  capturar `$pageview` na mudança de rota (hash). Nice-to-have.
+- **`.env.example`:** documentar `POSTHOG_PUBLIC_HOST/KEY` (+ `POSTHOG_HOST/KEY`) para colaboradores.
+- **Insights/dashboard no PostHog:** criar depois de os eventos aparecerem (o wizard deixou um dashboard base:
+  project 224592 → dashboard 822272).
+
+---
 
 ## Notas
 
-- **Free tier:** 1M eventos/mês. Nós enviamos ~1 evento por change_event (raros por site) + emails.
-  Muito longe do teto. Se um dia crescer, o PostHog tem `capture` em batch (já usamos 1×/change).
-- **Fail-soft:** sem `POSTHOG_HOST/KEY`, `capture()` é no-op — nada quebra. Se o Cloud estiver em baixo,
-  o `fetch` falha em silêncio (não bloqueia a pipeline).
-- **Privacidade:** enviamos `domain`, `site_id`, `old/new_value`, `severity` — dados de negócio, não PII
-  de pessoas. Rever se algum `new_value` puder conter email antes de ativar em massa.
-- **O nosso ClickHouse de analytics** (`de-analytics`) continua a ser a fonte de verdade das séries
-  temporais; o PostHog é só a camada de product-analytics/funis por cima.
+- **Free tier:** 1M eventos/mês — muito longe do teto (uso interno + change_events raros).
+- **Fail-soft:** sem as env vars, `capture()` é no-op; se o Cloud cair, o `fetch` falha em silêncio (não bloqueia).
+- **Privacidade:** integração A envia dados de negócio (domain, site_id, old/new_value) — rever se algum
+  `new_value` puder conter email. Integração B (session replay) grava a UI interna — só a equipa a usa.

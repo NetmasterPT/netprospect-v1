@@ -469,7 +469,10 @@ async function main() {
   // Consumers ativos = os do(s) role(s) deste worker; pesados só se AUDIT_ENABLED.
   const active = consumersForRoles(WORKER_ROLES).filter((name) => AUDIT_ENABLED || !HEAVY.has(name));
   for (const name of active) await ensureConsumer(jsm, CONSUMERS[name]);
-  await startTelemetry({ roles: WORKER_ROLES || 'todos', consumers: active.join(',') }); // heartbeat + métricas (Redis, fail-soft)
+  // Config por-worker (para os cards de Servidores validarem versão/conc/maxacks por host).
+  const concByJob = {}, maxacksByJob = {};
+  for (const name of active) { concByJob[name] = CONC[name] || 1; maxacksByJob[name] = CONSUMERS[name].maxAckPending ?? null; }
+  await startTelemetry({ roles: WORKER_ROLES || 'todos', consumers: active.join(','), version: CODE_VERSION, replicas: String(_REP), conc: JSON.stringify(concByJob), maxacks: JSON.stringify(maxacksByJob) }); // heartbeat + métricas (Redis, fail-soft)
 
   // Contexto pesado (wappalyzer + geoip + domínios conhecidos) só se algum consumer
   // ativo o exige (enrich/contacts/fetch/fingerprint/…). Um worker SÓ-verify (VM free

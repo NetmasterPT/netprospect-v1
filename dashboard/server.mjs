@@ -864,9 +864,11 @@ app.get('/api/workers', async (req, res) => {
       const h = await r.hGetAll(`np:wk:${id}`).catch(() => ({}));
       if (!h.id) continue;
       const durs = (await r.lRange(`np:wk:${id}:dur`, 0, -1).catch(() => [])).map(Number).filter(Number.isFinite);
+      const pj = (s) => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
       workers.push({ id, role: h.role || '?', host: h.host || '', consumers: (h.consumers || '').split(',').filter(Boolean),
         started: +h.started || null, beat: +h.beat || null, cur: h.cur || null, curStarted: +h.cur_started || null,
         load: h.load != null && h.load !== 'null' ? +h.load : null, cores: +h.cores || null,
+        version: h.version || null, replicas: +h.replicas || null, conc: pj(h.conc), maxacks: pj(h.maxacks),
         avgMs: durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null, ...(await workerCounts(r, id)) });
     }
     workers.sort((a, b) => (b.beat || 0) - (a.beat || 0));

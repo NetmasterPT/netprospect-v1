@@ -1017,6 +1017,10 @@ function groupByHost(ws) {
     load: (list.find((w) => w.load != null) || {}).load ?? null,
     cores: (list.find((w) => w.cores) || {}).cores ?? null,
     roles: [...new Set(list.map((w) => w.role))],
+    versions: [...new Set(list.map((w) => w.version).filter(Boolean))], // >1 = versões MISTURADAS (stale)
+    conc: (list.find((w) => w.conc) || {}).conc || null,
+    maxacks: (list.find((w) => w.maxacks) || {}).maxacks || null,
+    replicas: (list.find((w) => w.replicas) || {}).replicas || list.length,
     done1h: list.reduce((a, w) => a + (w.done1h || 0), 0),
     done24h: list.reduce((a, w) => a + (w.done24h || 0), 0),
     fail24h: list.reduce((a, w) => a + (w.fail24h || 0), 0),
@@ -1060,7 +1064,14 @@ async function viewServers() {
       <div style="font-weight:800;font-size:15px">${esc(dc)}</div><div class="muted" style="font-size:11px">${list.length} VMs · ${workers} workers</div>
       <div style="margin-top:10px">${loadBar(+totLoad.toFixed(2), totCores)}</div>
       <div style="display:flex;gap:16px;margin-top:10px"><div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(done1h)}/h</div><div class="muted" style="font-size:10px">throughput</div></div><div><div class="tnum" style="font-size:16px;font-weight:800;color:${fail24h ? 'var(--np-warn)' : ''}">${fmt(fail24h)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div></div>
-      <div style="margin-top:10px">${list.sort((a, b) => a.host.localeCompare(b.host)).map((v) => `<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0;border-top:1px solid var(--np-border)"><span onclick="location.hash='#/vms'" style="cursor:pointer">${esc(v.host)} <span class="muted">${v.workers.length}w · ${esc(v.roles.join('/'))}</span></span><span class="tnum muted" style="white-space:nowrap">${v.load != null ? v.load + '/' + v.cores + 'c' : '—'}</span></div>`).join('')}</div>
+      <div style="margin-top:10px">${list.sort((a, b) => a.host.localeCompare(b.host)).map((v) => {
+        const ver = v.versions.length === 0 ? '<span class="muted" style="font-size:10px">v?</span>'
+          : v.versions.length === 1 ? `<span class="np-badge" style="height:15px;font-size:9px" title="versão do código dos workers">${esc(v.versions[0])}</span>`
+          : `<span class="np-badge" style="height:15px;font-size:9px;background:var(--np-warn)" title="VERSÕES MISTURADAS — há workers com código diferente">⚠ ${v.versions.map(esc).join(' / ')}</span>`;
+        const jobs = Object.keys(v.conc || {}).sort();
+        const cfg = jobs.length ? `<details style="margin-top:2px"><summary style="cursor:pointer;font-size:10px;color:var(--np-text-2)">config · ${v.replicas}w</summary><table style="width:100%;font-size:10px;margin:3px 0;border-collapse:collapse">${jobs.map((j) => `<tr><td style="padding:1px 4px">${esc(j)}</td><td class="tnum" style="text-align:right;padding:1px 6px">conc ${v.conc[j]}</td><td class="tnum" style="text-align:right;padding:1px 4px;color:var(--np-text-2)">maxack ${(v.maxacks || {})[j] ?? '—'}</td></tr>`).join('')}</table></details>` : '';
+        return `<div style="padding:4px 0;border-top:1px solid var(--np-border)"><div style="display:flex;justify-content:space-between;font-size:12px;gap:6px"><span onclick="location.hash='#/vms'" style="cursor:pointer;min-width:0">${esc(v.host)} <span class="muted">${esc(v.roles.join('/'))}</span> ${ver}</span><span class="tnum muted" style="white-space:nowrap">${v.load != null ? v.load + '/' + v.cores + 'c' : '—'}</span></div>${cfg}</div>`;
+      }).join('')}</div>
     </div></section>`;
   };
   $('#view').innerHTML = head + `<div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">${Object.entries(dcs).map(card).join('')}</div>`;

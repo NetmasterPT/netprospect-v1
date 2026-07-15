@@ -84,6 +84,10 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       SMTP_HOST: ${SMTP_HOST:-}
+      # PostHog (product analytics do dashboard): serve o client SDK via /api/posthog-config + eventos
+      # server-side. Vazio = desligado (fail-soft). Valores no .env deste host (deploy/server/.env).
+      POSTHOG_PUBLIC_KEY: ${POSTHOG_PUBLIC_KEY:-}
+      POSTHOG_PUBLIC_HOST: ${POSTHOG_PUBLIC_HOST:-}
     ports:
       - '${LAN_IP}:3001:3000'
       - '${TAILNET_IP}:3001:3000'

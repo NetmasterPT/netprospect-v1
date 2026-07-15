@@ -158,12 +158,13 @@ async function cacheDrop(prefix) {
 // para aplicar os mesmos filtros a partir de outra coleção via relação m2o
 // (ex.: em `contacts` usa-se pfx='site' -> filter[site][is_cpanel][_eq]=true).
 function buildSiteFilters(f = {}, pfx = '') {
-  const p = [];
   const enc = encodeURIComponent;
-  const F = (field, op, val) => p.push(pfx ? `filter[${pfx}][${field}][${op}]=${enc(val)}` : `filter[${field}][${op}]=${enc(val)}`);
   const on = (v) => v === 'true' || v === '1';
-  // has_email/has_phone: na diretório é a flag do site; na página de contactos é
-  // tratado à parte (email/phone do próprio contacto), por isso só aqui p/ pfx=''.
+  // Constrói CRITÉRIOS: cada facet = 1 critério = lista de [field,op,val] ANDadas internamente
+  // (quase todos têm 1 condição; o "SPF e DMARC ambos" tem 2). Depois combina por E (flat) ou OU.
+  const crit = [];
+  const F = (field, op, val) => crit.push([[field, op, val]]);
+  // has_email/has_phone: na diretório é a flag do site; na página de contactos é tratado à parte.
   if (pfx === '') {
     if (on(f.has_email)) F('has_email', '_eq', 'true');
     if (on(f.has_phone)) F('has_phone', '_eq', 'true');
@@ -188,7 +189,7 @@ function buildSiteFilters(f = {}, pfx = '') {
   if (f.load) F('load_bucket', '_in', f.load);
   if (f.spf) F('spf_status', '_in', f.spf);       // UI envia missing,weak,invalid p/ "problemas"
   if (f.dmarc) F('dmarc_status', '_in', f.dmarc);
-  if (f.authboth === 'both') { F('spf_status', '_in', 'missing,weak,invalid'); F('dmarc_status', '_in', 'missing,weak,invalid'); } // ambos com problemas
+  if (f.authboth === 'both') crit.push([['spf_status', '_in', 'missing,weak,invalid'], ['dmarc_status', '_in', 'missing,weak,invalid']]); // 1 critério, 2 condições ANDadas
   if (f.seo_max) F('seo_score', '_lte', String(parseInt(f.seo_max, 10) || 0));
   if (f.mobile === 'bad') F('mobile_friendly', '_eq', 'false');
   if (f.desktop === 'bad') F('perf_desktop', '_lt', '50'); // proxy: sem coluna desktop_friendly, usa perf desktop <50
@@ -200,6 +201,20 @@ function buildSiteFilters(f = {}, pfx = '') {
   if (on(f.domain_expiring)) F('expiring_soon', '_eq', 'true');    // domínio a expirar ≤90d
   if (on(f.cms_outdated)) F('cms_outdated', '_eq', 'true');        // CMS desatualizado
   if (f.dns) F('dns_provider', '_icontains', f.dns);
+  // MODO OU (só no diretório): base AND (crit1 OU crit2 …). Aninhado em _and[0][_or] para NÃO colidir
+  // com o _or da pesquisa `q` (que também é top-level). Critério multi-condição → _and interno.
+  if (pfx === '' && f.match === 'any' && crit.length > 1) {
+    const parts = [];
+    crit.forEach((c, i) => {
+      const b = `filter[_and][0][_or][${i}]`;
+      if (c.length === 1) { const [fl, op, val] = c[0]; parts.push(`${b}[${fl}][${op}]=${enc(val)}`); }
+      else c.forEach(([fl, op, val], j) => parts.push(`${b}[_and][${j}][${fl}][${op}]=${enc(val)}`));
+    });
+    return parts;
+  }
+  // MODO E (default + relação/contactos): tudo ANDed (flat).
+  const p = [];
+  for (const c of crit) for (const [fl, op, val] of c) p.push(pfx ? `filter[${pfx}][${fl}][${op}]=${enc(val)}` : `filter[${fl}][${op}]=${enc(val)}`);
   return p;
 }
 

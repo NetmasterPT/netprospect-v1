@@ -407,7 +407,7 @@ window.dirSort = (col) => {
 function parseHashQuery() { const h = location.hash.split('?')[1] || ''; return Object.fromEntries(new URLSearchParams(h)); }
 
 // --- Facetas de auditoria (partilhadas por Negócios e Contactos) ---
-const AUDIT_KEYS = ['has_email', 'has_phone', 'dm', 'lead_min', 'lead_max', 'city', 'cpanel', 'notcpanel', 'fb', 'ig', 'li', 'tw', 'gmb', 'wa', 'pin', 'yt', 'tk', 'load', 'spf', 'dmarc', 'authboth', 'traffic', 'industry', 'seo_max', 'mobile', 'desktop', 'security', 'sev', 'wpvuln', 'ssl_expiring', 'domain_expiring', 'cms_outdated', 'isp', 'client'];
+const AUDIT_KEYS = ['has_email', 'has_phone', 'dm', 'lead_min', 'lead_max', 'city', 'cpanel', 'notcpanel', 'fb', 'ig', 'li', 'tw', 'gmb', 'wa', 'pin', 'yt', 'tk', 'load', 'spf', 'dmarc', 'authboth', 'traffic', 'industry', 'seo_max', 'mobile', 'desktop', 'security', 'sev', 'wpvuln', 'ssl_expiring', 'domain_expiring', 'cms_outdated', 'isp', 'client', 'match'];
 const INDUSTRIES = [['restauracao', 'Restauração'], ['retalho', 'Retalho'], ['saude', 'Saúde'], ['construcao', 'Construção'], ['imobiliario', 'Imobiliário'], ['turismo', 'Turismo'], ['juridico', 'Jurídico'], ['contabilidade', 'Contabilidade'], ['automovel', 'Automóvel'], ['beleza', 'Beleza'], ['educacao', 'Educação'], ['ti', 'TI'], ['marketing', 'Marketing'], ['industria', 'Indústria'], ['agricultura', 'Agricultura'], ['transportes', 'Transportes'], ['desporto', 'Desporto'], ['moda', 'Moda'], ['casa', 'Casa'], ['financeiro', 'Financeiro'], ['associacao', 'Associação'], ['outros', 'Outros']];
 const SP14 = '<span style="width:14px;display:inline-block"></span>';
 function auditParse(st, qp) { for (const k of AUDIT_KEYS) st[k] = qp[k] || ''; }
@@ -459,6 +459,7 @@ function auditChips(st) {
   if (st.cms_outdated) out.push(['cms_outdated', 'CMS desatualizado']);
   if (st.isp) out.push(['isp', 'ISP: ' + st.isp]);
   if (st.client) out.push(['client', st.client === 'true' ? 'É cliente' : 'Não é cliente']);
+  if (st.match === 'any') out.push(['match', 'Combinar: OU (qualquer)']);
   return out;
 }
 // Célula de sinais de prospeção para as tabelas.
@@ -531,6 +532,7 @@ async function paintDirectory() {
         <div class="np-facet ${DState.platform ? 'on' : ''}"><button onclick="dirFacet('platform')">Plataforma ${ic('chevD', 14)}</button>${DState.openFacet === 'platform' ? `<div class="np-facet-dd">${platforms.map((pl) => `<div class="np-opt" onclick="dirSet('platform','${DState.platform === pl.slug ? '' : pl.slug}')"><span class="np-dot" style="background:${CAT(pl.slug)}"></span>${esc(pl.name)}<span class="c tnum">${fmt(pl.count)}</span></div>`).join('')}</div>` : ''}</div>
         <div class="np-facet ${DState.country ? 'on' : ''}"><button onclick="dirFacet('country')">País ${ic('chevD', 14)}</button>${DState.openFacet === 'country' ? `<div class="np-facet-dd">${(STATS?.byCountry || []).map((c) => `<div class="np-opt" onclick="dirSet('country','${DState.country === c.name ? '' : c.name}')">${DState.country === c.name ? ic('check', 14) : SP14} ${esc(c.name)}<span class="c tnum">${fmt(c.count)}</span></div>`).join('')}</div>` : ''}</div>
         ${auditFacetsHtml(DState, 'dir')}
+        <button class="np-btn np-btn--sm ${DState.match === 'any' ? 'np-btn--primary' : ''}" onclick="dirSet('match','${DState.match === 'any' ? '' : 'any'}')" title="Como combinar os filtros de prospeção: E = todos têm de bater · OU = qualquer um basta (a pesquisa/qualificado/plataforma/país mantêm-se como âmbito)">Combinar: ${DState.match === 'any' ? 'OU' : 'E'}</button>
         <input class="np-input" id="dcity" style="width:150px" placeholder="Cidade do negócio…" value="${esc(DState.city)}"/>
       </div>
       ${chips.length ? `<div class="np-chiprow"><span class="muted" style="font-size:12px">Filtros:</span>${chips.map(([k, l]) => `<span class="np-fchip">${esc(l)}<button onclick="dirSet('${k}','')">${ic('x', 12)}</button></span>`).join('')}<button class="np-btn np-btn--sm" onclick="dirClear()">Limpar tudo</button></div>` : ''}

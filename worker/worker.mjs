@@ -439,7 +439,7 @@ function _auto(job) {
 const _conc = (env, job) => { const v = env && process.env[env]; return v ? Math.max(1, parseInt(v, 10)) : _auto(job); };
 const CONC = {
   enrich: _conc('ENRICH_CONCURRENCY', 'enrich'), contacts: _conc('CONTACTS_CONCURRENCY', 'contacts'),
-  fetch: _conc(null, 'fetch'), dns: _conc(null, 'dns'), geoip: _conc(null, 'geoip'),
+  fetch: _conc(null, 'fetch'), fetch_residential: _conc(null, 'fetch'), dns: _conc(null, 'dns'), geoip: _conc(null, 'geoip'),
   fingerprint: _conc('FINGERPRINT_CONC', 'fingerprint'), social: _conc(null, 'social'), locality: _conc(null, 'locality'),
   emailauth: _conc(null, 'emailauth'), traffic: _conc(null, 'traffic'), score: _conc('SCORE_CONC', 'score'),
   ssl: _conc('DOMAIN_HEALTH_CONC', 'ssl'), whois: _conc('WHOIS_CONC', 'whois'), dnsprovider: _conc('DOMAIN_HEALTH_CONC', 'dnsprovider'),
@@ -467,7 +467,7 @@ async function main() {
   // Contexto pesado (wappalyzer + geoip + domínios conhecidos) só se algum consumer
   // ativo o exige (enrich/contacts/fetch/fingerprint/…). Um worker SÓ-verify (VM free
   // pequena de 1 GB) arranca com contexto MÍNIMO — poupa RAM e tempo de arranque.
-  const HEAVY_CTX = new Set(['enrich', 'contacts', 'fetch', 'fingerprint', 'geoip', 'dns', 'discover', 'social', 'locality', 'industry']);
+  const HEAVY_CTX = new Set(['enrich', 'contacts', 'fetch', 'fetch_residential', 'fingerprint', 'geoip', 'dns', 'discover', 'social', 'locality', 'industry']);
   const ctx = active.some((n) => HEAVY_CTX.has(n))
     ? await createEnrichContext({ wappalyzer: true, loadKnownDomains: true })
     : { client: makeClient(), geoip: { mode: 'off', lookup: async () => ({}) }, platformIdBySlug: {}, knownDomains: new Set() };
@@ -486,7 +486,7 @@ async function main() {
   // Registo: nome do consumer -> handler (job)->outcome.
   const REG = {
     enrich: coarse.handleEnrich, contacts: fine.handleContacts, verify: fine.handleVerify,
-    fetch: fine.handleFetch, dns: fine.handleDns, geoip: fine.handleGeoip, fingerprint: fine.handleFingerprint,
+    fetch: fine.handleFetch, fetch_residential: fine.handleFetch, dns: fine.handleDns, geoip: fine.handleGeoip, fingerprint: fine.handleFingerprint,
     social: fine.handleSocial, locality: fine.handleLocality, emailauth: fine.handleEmailauth, traffic: fine.handleTraffic,
     score: fine.handleScore, ssl: fine.handleSsl, whois: fine.handleWhois, dnsprovider: fine.handleDnsprovider,
     subdomains: fine.handleSubdomains, discover: fine.handleDiscover,

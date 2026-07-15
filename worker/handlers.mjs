@@ -148,6 +148,8 @@ export function makeFineHandlers(ctx, js) {
     // Anti-bot / WAF / IP-bloqueado → marca p/ re-correr de IP residencial (laptop) e NÃO processa.
     if (isBlockedPage(resp.status, resp.html)) {
       await client.request(updateItem('sites', siteId, { blocked_datacenter: true, blocked_at: new Date().toISOString(), http_status: resp.status, final_url: clip(resp.finalUrl), is_live: true }));
+      // Auto-encaminha p/ IP residencial (portátil), a menos que ESTE fetch já venha de lá (anti-loop).
+      if (!job.residential) await pub(SUBJECTS.fetchResidential, { domain, residential: true }, `fetchres:${domain}`);
       return 'ack';
     }
     // Páginas de contacto (para o job contacts, sem re-fetch).

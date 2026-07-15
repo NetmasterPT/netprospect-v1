@@ -173,6 +173,10 @@ services:
       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-clickhouse}
       # Campanhas (Fase F) — só p/ o dashboard mostrar o modo (smtp vs dry-run).
       SMTP_HOST: ${SMTP_HOST:-}
+      # PostHog (product analytics do dashboard): serve o client SDK via /api/posthog-config e
+      # envia os eventos server-side ao /capture/. Vazio = desligado (fail-soft). Valor em docker/.env.
+      POSTHOG_PUBLIC_KEY: ${POSTHOG_PUBLIC_KEY:-}
+      POSTHOG_PUBLIC_HOST: ${POSTHOG_PUBLIC_HOST:-}
     ports:
       - '${DASHBOARD_PORT:-3001}:3000'
     volumes:

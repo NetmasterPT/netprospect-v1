@@ -288,3 +288,31 @@ wappalyzer CPU) — agora drenado; o que resta (lighthouse/nuclei/wpscan) é I/O
 (tem a imagem heavy c/ Chromium). (3) DE1/Oracle ficam subutilizados no nuclei/whois porque o **hel1
 (0ms ao NATS) agarra os jobs antes** deles (35ms+) → mais IPs, não mais conc, escala o whois. (4)
 `mem_limit` < RAM_total − OS (senão o container enche RAM+swap e a VM inteira thrasha, como a oracle-e2-1).
+
+## 8. Lições de fleet-ops (2026-07-15) — LER ANTES DE AFINAR LOAD/DEPLOY
+
+1. **O load average ENGANA nesta frota (I/O-inflado).** lighthouse (Chromium) e nuclei passam a maior
+   parte do tempo à espera da rede (carregar páginas / HTTP) → ficam em **D-state (uninterruptible)**, que
+   **conta para o load mas NÃO usa CPU**. Vimos **load 19 em 18 cores com 40% de CPU idle**, e **load 4 no
+   de1 com CPU a bursts de 15→60%**. Para afinar, MEDIR O CPU REAL, não o load nem snapshots do `top`:
+   ```bash
+   set -- $(head -1 /proc/stat); u1=$2;n1=$3;s1=$4;id1=$5;io1=$6; sleep 30
+   set -- $(head -1 /proc/stat); u2=$2;n2=$3;s2=$4;id2=$5;io2=$6
+   b=$(((u2-u1)+(n2-n1)+(s2-s1))); echo "CPU usado: $((100*b/(b+(id2-id1)+(io2-io1))))%"   # id=$5, NÃO iowait=$6
+   ```
+   (erro comum: usar o campo **iowait ($6)** como idle — o idle é o **$5**.)
+2. **Cap-starvation no workqueue partilhado.** O `maxAckPending` de um consumer é o teto FLEET-WIDE de
+   jobs em-voo. Um host agressivo (hel1, 0ms ao NATS, muita conc) **agarra todo o teto** e esfomeia os
+   pequenos (o de1 ficou a **load 0.5**). Fix: **subir o teto** para os pequenos terem quinhão (nuclei
+   96→256 pôs o de1 a ~70%). Subir a conc por-worker de um host esfomeado NÃO resolve — é o teto.
+3. **Deploy por VOLUME-MOUNT elimina o inferno das imagens stale.** Montar `lib/`+`worker/` do repo git
+   (em vez de imagem baked + `docker cp`) → deploy = `git pull && docker compose … restart`, SEM rebuild,
+   e a máquina NUNCA corre código baked antigo (o de1 tinha `maxAckPending:8` e sem gmb-v7 baked na imagem).
+   É o padrão do `deploy/worker/docker-compose.yml`. `data/` (geoip/tranco, gitignored) provisiona-se à parte.
+4. **`ensureConsumer` faz flip-flop da config.** ackWait/maxAckPending/backoff do consumer são postos por
+   quem correu `ensureConsumer` no arranque. Um worker com `jobs.js` antigo REVERTE a config no restart. Por
+   isso: mudar no `jobs.js` (deployado a TODA a frota, agora via volume-mount) OU one-off `consumers.update`
+   e não recriar workers com código antigo. Um one-off dura até o próximo restart de um worker stale.
+5. **O NATS força `ack_wait = backoff[0]`** quando há backoff. Um backoff fixo de 5s matava jobs Chromium
+   (15-97s) aos 5s → órfãos no workqueue (nunca ACK, nunca removidos). Backoff agora escala do ackWait; e o
+   stream tem `MaxAge 48h` para órfãos auto-expirarem. Ver `lib/jobs.js`.

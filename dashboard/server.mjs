@@ -297,14 +297,22 @@ app.get('/api/stats', async (req, res) => {
       .map((r) => ({ name: nameById[r.primary_platform] || 'Outro', slug: slugById[r.primary_platform] || 'custom', count: Number(r.count.id) }))
       .filter((r) => r.count > 0).sort((a, b) => b.count - a.count);
 
-    const byCountry = (await d('/items/sites?groupBy[]=ip_country&aggregate[count]=id&filter[ip_country][_nnull]=true'))
-      .map((r) => ({ name: r.ip_country, count: Number(r.count.id) })).sort((a, b) => b.count - a.count).slice(0, 10);
-
-    const byCity = (await d('/items/sites?groupBy[]=ip_city&aggregate[count]=id&filter[ip_city][_nnull]=true'))
-      .map((r) => ({ name: r.ip_city, count: Number(r.count.id) })).sort((a, b) => b.count - a.count).slice(0, 10);
-
-    const byIsp = (await d('/items/sites?groupBy[]=isp&aggregate[count]=id&filter[isp][_nnull]=true'))
-      .map((r) => ({ name: r.isp, count: Number(r.count.id) })).sort((a, b) => b.count - a.count).slice(0, 12);
+    // byCountry/byCity/byIsp: agregados EXATOS via PG direto. O groupBy do Directus sobre 1,5M sites
+    // devolve grupos CAPADOS e NÃO-ordenados → o "top N" (ISPs/países) saía errado/desatualizado. Filtra
+    // a is_live (prospetos reais, não sites mortos). Fallback ao Directus se não houver PG_HOST.
+    let byCountry, byCity, byIsp;
+    const _pgStats = await pgPool();
+    if (_pgStats) {
+      const topN = (col, n) => _pgStats.query(`SELECT ${col} AS name, count(*)::int AS count FROM sites WHERE ${col} IS NOT NULL AND is_live GROUP BY ${col} ORDER BY count DESC LIMIT ${n}`).then((r) => r.rows);
+      [byCountry, byCity, byIsp] = await Promise.all([topN('ip_country', 10), topN('ip_city', 10), topN('isp', 12)]);
+    } else {
+      byCountry = (await d('/items/sites?groupBy[]=ip_country&aggregate[count]=id&filter[ip_country][_nnull]=true'))
+        .map((r) => ({ name: r.ip_country, count: Number(r.count.id) })).sort((a, b) => b.count - a.count).slice(0, 10);
+      byCity = (await d('/items/sites?groupBy[]=ip_city&aggregate[count]=id&filter[ip_city][_nnull]=true'))
+        .map((r) => ({ name: r.ip_city, count: Number(r.count.id) })).sort((a, b) => b.count - a.count).slice(0, 10);
+      byIsp = (await d('/items/sites?groupBy[]=isp&aggregate[count]=id&filter[isp][_nnull]=true'))
+        .map((r) => ({ name: r.isp, count: Number(r.count.id) })).sort((a, b) => b.count - a.count).slice(0, 12);
+    }
 
     // Cidade do NEGÓCIO (business_city, do site/GMB) — distinta de ip_city (alojamento).
     const byBusinessCity = (await d('/items/sites?groupBy[]=business_city&aggregate[count]=id&filter[business_city][_nnull]=true'))

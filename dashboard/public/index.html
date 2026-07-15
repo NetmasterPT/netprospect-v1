@@ -174,6 +174,7 @@
     .np-drawer { width: 100%; max-width: 100%; }
     .np-topbar { padding: 0 10px; gap: 6px; }
     .np-topbar .np-avatar + div { display: none; }
+    .np-topbar .np-tsearch { display: none; }  /* searchbar fora em mobile (a classe era np-tsearch, não np-search) */
   }
   @media (max-width: 520px) {
     .np-topbar .np-search, .np-topbar .np-word { display: none; }
@@ -390,7 +391,7 @@ async function viewOverview() {
     </div>
     <div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(390px,1fr));margin-top:16px">
       <section class="np-card"><div class="np-card-h"><h2>Onde os prospetos estão alojados</h2></div><div class="np-card-b">${barRows(s.byIsp, (i) => i.count >= 10000 ? 'var(--np-brand)' : 'var(--cat-wordpress)', false)}</div></section>
-      <section class="np-card"><div class="np-card-h"><h2>Geografia</h2></div><div class="np-card-b" style="display:grid;grid-template-columns:1fr 1fr;gap:18px">
+      <section class="np-card"><div class="np-card-h"><h2>Geografia</h2></div><div class="np-card-b" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:18px">
         <div><div class="np-sec-t" style="margin-top:0">Países</div>${barRows(s.byCountry, () => 'var(--np-info-mark)', false)}</div>
         <div><div class="np-sec-t" style="margin-top:0">Cidades</div>${barRows((s.byCity || []).slice(0, 8), () => 'var(--np-info-mark)', false)}</div>
       </div></section>
@@ -1128,9 +1129,9 @@ async function viewCoverage() {
   $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center"><span class="muted" style="font-size:12px">Lead score:</span> ${seg}
       <span class="muted" style="margin-left:auto;font-size:11.5px">${fmt(s.total)} sites neste filtro</span></div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <div class="np-tablewrap"><table style="min-width:520px;width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="text-align:left;color:var(--np-text-2);font-size:11px"><th style="padding:6px 10px">Job</th><th style="text-align:right;padding:6px 10px">Coberto</th><th style="text-align:right;padding:6px 10px">Total</th><th style="padding:6px 10px">Progresso</th><th style="text-align:right;padding:6px 10px">%</th></tr></thead>
-      <tbody>${(() => { let g = null; return COV_JOBS.map((j) => { const hdr = j[2] !== g ? (g = j[2], `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${j[2] === 'audit' ? 'Auditoria' : 'Pipeline base'}</td></tr>`) : ''; return hdr + row(j); }).join(''); })()}</tbody></table>
+      <tbody>${(() => { let g = null; return COV_JOBS.map((j) => { const hdr = j[2] !== g ? (g = j[2], `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${j[2] === 'audit' ? 'Auditoria' : 'Pipeline base'}</td></tr>`) : ''; return hdr + row(j); }).join(''); })()}</tbody></table></div>
     <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email): ${fmt(v.verified || 0)} verificados de ${fmt(v.with_email || 0)} com email — nível-contacto, não filtrado por score · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
     <br>Filas sem métrica de cobertura (dispatchers/internas, não medem dados por site): <code>discover</code> (cria sites), <code>audit_ondemand/qualified/rest</code> (despacham as finas → contam em "Auditoria coarse"), <code>result_site</code> (writer PG), <code>campaign_generate/send</code> (tabela de campanhas).</div>
   </div></div>`;
@@ -1181,9 +1182,9 @@ async function viewDataCoverage() {
   $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center"><span class="muted" style="font-size:12px">Lead score:</span> ${seg}
       <span class="muted" style="margin-left:auto;font-size:11.5px">${fmt(s.total)} sites neste filtro</span></div>
-    <table style="width:100%;border-collapse:collapse;font-size:13px">
+    <div class="np-tablewrap"><table style="min-width:520px;width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="text-align:left;color:var(--np-text-2);font-size:11px"><th style="padding:6px 10px">Dado</th><th style="text-align:right;padding:6px 10px">Com dados</th><th style="text-align:right;padding:6px 10px">Total</th><th style="padding:6px 10px">Progresso</th><th style="text-align:right;padding:6px 10px">%</th></tr></thead>
-      <tbody>${(() => { let g = null; return DCOV_FIELDS.map((j) => { const hdr = j[2] !== g ? (g = j[2], `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${esc(j[2])}</td></tr>`) : ''; return hdr + row(j); }).join(''); })()}</tbody></table>
+      <tbody>${(() => { let g = null; return DCOV_FIELDS.map((j) => { const hdr = j[2] !== g ? (g = j[2], `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${esc(j[2])}</td></tr>`) : ''; return hdr + row(j); }).join(''); })()}</tbody></table></div>
     <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email): ${fmt(v.verified || 0)} verificados de ${fmt(v.with_email || 0)} com email · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
     <br>Compara com a <a href="#/coverage" style="color:var(--np-brand)">Cobertura de jobs</a>: se o job correu a ~100% mas o dado está baixo, é porque esse dado <b>não existe</b> para a maioria (não é trabalho em falta). <b>security</b>/<b>social</b> contam só quando há resultado real (não vazio).</div>
   </div></div>`;

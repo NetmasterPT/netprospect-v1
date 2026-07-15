@@ -190,8 +190,8 @@ function makeHeavyFineHandlers(ctx, audit, js) {
       if (g && g.name) {
         Object.assign(patch, { gmb: true, gmb_name: clip(g.name), gmb_category: clip(g.category, 120), gmb_rating: g.rating, gmb_reviews: g.reviews, gmb_phone: clip(g.phone, 60), gmb_url: clip(g.url), business_city: g.city ? clip(g.city, 120) : undefined, business_region: g.region ? clip(g.region, 120) : undefined, business_address: g.address ? clip(g.address) : undefined });
         await upsertReport(client, site.id, 'gmb', { summary: g, report: g });
-      } else if (g && g._debug) { log(`gmb ${site.domain} null: ${JSON.stringify(g._debug)}`); }
-    } catch (e) { log(`gmb ${site.domain}: ${e.message}`); }
+      } else if (g && g._debug) { logLine(`gmb ${site.domain} null: ${JSON.stringify(g._debug)}`); }
+    } catch (e) { logLine(`gmb ${site.domain} erro: ${e.message}`); }
     await client.request(updateItem('sites', site.id, patch)); // sempre escreve gmb_checked_at
     return 'ack';
   }
@@ -457,7 +457,7 @@ log(`conc auto (cores=${_CORES} RAM_free=${_RAM_FREE}MB rep=${_REP}): whois=${CO
 // --- Arranque ---------------------------------------------------------------
 // Marcador de versão do código — logado no arranque p/ confirmar (via Redis) que uma VM está mesmo
 // a correr o build mais recente (o laptop já teve builds stale). Bump a cada mudança relevante.
-const CODE_VERSION = 'gmb-feed-nav-v1';
+const CODE_VERSION = 'gmb-diag-redis-v2';
 
 async function main() {
   log(`a arrancar v=${CODE_VERSION} (roles=${WORKER_ROLES || 'todos'}, audit=${AUDIT_ENABLED ? 'on' : 'off'})`);

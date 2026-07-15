@@ -183,10 +183,10 @@ function makeHeavyFineHandlers(ctx, audit, js) {
   }
   async function gmb(job) {
     if (!GMB_ENABLED) return 'ack';
-    const site = await load(job, ['business_city', 'company.name']); if (!site) return 'ack';
+    const site = await load(job, ['business_city', 'business_address', 'company.name']); if (!site) return 'ack';
     const patch = { gmb_checked_at: new Date().toISOString() }; // marca "o job correu" (mesmo sem resultado)
     try {
-      const g = await audit.gmb.lookupGmb({ name: site.company?.name, city: site.business_city, domain: site.domain });
+      const g = await audit.gmb.lookupGmb({ domain: site.domain, address: site.business_address, city: site.business_city });
       if (g && g.name) {
         Object.assign(patch, { gmb: true, gmb_name: clip(g.name), gmb_category: clip(g.category, 120), gmb_rating: g.rating, gmb_reviews: g.reviews, gmb_phone: clip(g.phone, 60), gmb_url: clip(g.url), business_city: g.city ? clip(g.city, 120) : undefined, business_region: g.region ? clip(g.region, 120) : undefined, business_address: g.address ? clip(g.address) : undefined });
         await upsertReport(client, site.id, 'gmb', { summary: g, report: g });
@@ -292,7 +292,7 @@ function makeHandlers(ctx, audit, js) {
       m.working();
       patch.gmb_checked_at = new Date().toISOString(); // marca "o job correu" (mesmo sem resultado)
       try {
-        const g = await audit.gmb.lookupGmb({ name: bizName, city: site.business_city, domain: site.domain });
+        const g = await audit.gmb.lookupGmb({ domain: site.domain, address: site.business_address, city: site.business_city });
         if (g && g.name) {
           patch.gmb = true; patch.gmb_name = clip(g.name); patch.gmb_category = clip(g.category, 120);
           patch.gmb_rating = g.rating; patch.gmb_reviews = g.reviews; patch.gmb_phone = clip(g.phone, 60);
@@ -301,8 +301,8 @@ function makeHandlers(ctx, audit, js) {
           if (g.region) patch.business_region = clip(g.region, 120);
           if (g.address) patch.business_address = clip(g.address);
           await upsertReport(client, site.id, 'gmb', { summary: g, report: g });
-        }
-      } catch (e) { log(`gmb ${site.domain}: ${e.message}`); }
+        } else if (g && g._debug) { logLine(`gmb ${site.domain} null: ${JSON.stringify(g._debug)}`); }
+      } catch (e) { logLine(`gmb ${site.domain} erro: ${e.message}`); }
       }
 
       // WPScan — SÓ on-demand + WordPress (25/dia).
@@ -457,7 +457,7 @@ log(`conc auto (cores=${_CORES} RAM_free=${_RAM_FREE}MB rep=${_REP}): whois=${CO
 // --- Arranque ---------------------------------------------------------------
 // Marcador de versão do código — logado no arranque p/ confirmar (via Redis) que uma VM está mesmo
 // a correr o build mais recente (o laptop já teve builds stale). Bump a cada mudança relevante.
-const CODE_VERSION = 'gmb-desktop-v4';
+const CODE_VERSION = 'gmb-domain-search-v5';
 
 async function main() {
   log(`a arrancar v=${CODE_VERSION} (roles=${WORKER_ROLES || 'todos'}, audit=${AUDIT_ENABLED ? 'on' : 'off'})`);

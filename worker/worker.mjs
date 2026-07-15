@@ -457,7 +457,7 @@ log(`conc auto (cores=${_CORES} RAM_free=${_RAM_FREE}MB rep=${_REP}): whois=${CO
 // --- Arranque ---------------------------------------------------------------
 // Marcador de versão do código — logado no arranque p/ confirmar (via Redis) que uma VM está mesmo
 // a correr o build mais recente (o laptop já teve builds stale). Bump a cada mudança relevante.
-const CODE_VERSION = 'gmb-name-fix-v3';
+const CODE_VERSION = 'gmb-desktop-v4';
 
 async function main() {
   log(`a arrancar v=${CODE_VERSION} (roles=${WORKER_ROLES || 'todos'}, audit=${AUDIT_ENABLED ? 'on' : 'off'})`);

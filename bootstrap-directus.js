@@ -13,6 +13,7 @@ import {
   createCollection,
   readFieldsByCollection,
   createField,
+  updateField,
   readRelations,
   createRelation,
   readItems,
@@ -69,6 +70,18 @@ async function ensureField(collection, field, spec) {
   if (fields.some((f) => f.field === field)) return;
   await client.request(createField(collection, { field, ...spec }));
   console.log(`  + ${collection}.${field}`);
+}
+
+// Atualiza as choices de um campo select-dropdown JÁ existente (o ensureField ignora
+// campos que já existem). Idempotente: só faz PATCH se faltar alguma choice.
+async function ensureEnumChoices(collection, field, choices) {
+  const fields = await client.request(readFieldsByCollection(collection));
+  const f = fields.find((x) => x.field === field);
+  if (!f) { await ensureField(collection, field, enumS(choices)); return; }
+  const cur = new Set((f.meta?.options?.choices || []).map((c) => c.value));
+  if (choices.every((c) => cur.has(c))) return;
+  await client.request(updateField(collection, field, { meta: { options: { choices: choices.map((v) => ({ text: v, value: v })) } } }));
+  console.log(`  ~ ${collection}.${field} choices += ${choices.filter((c) => !cur.has(c)).join(',')}`);
 }
 
 async function ensureRelation(rel) {
@@ -181,6 +194,14 @@ async function main() {
   await ensureField('sites', 'social_instagram', bool(false));
   await ensureField('sites', 'social_linkedin', bool(false));
   await ensureField('sites', 'social_twitter', bool(false));
+  await ensureField('sites', 'social_youtube', bool(false));
+  await ensureField('sites', 'social_tiktok', bool(false));
+  await ensureField('sites', 'social_pinterest', bool(false));
+  await ensureField('sites', 'social_whatsapp', bool(false));   // sinal ALTA-prioridade (PMEs PT)
+  await ensureField('sites', 'whatsapp_number', str());
+  // Anti-bot / WAF / IP-bloqueado: o site tem de ser re-corrido a partir de IP residencial (laptop).
+  await ensureField('sites', 'blocked_datacenter', bool(false));
+  await ensureField('sites', 'blocked_at', ts());
   // Google My Business
   await ensureField('sites', 'gmb', bool(false));
   await ensureField('sites', 'gmb_signal', str());
@@ -310,6 +331,7 @@ async function main() {
   await ensureField('companies', 'website', str());
   await ensureField('companies', 'general_email', str());
   await ensureField('companies', 'general_phone', str());
+  await ensureField('companies', 'phones', json()); // todos os telefones da empresa (E.164), fixos+móveis
   await ensureField('companies', 'address', text());
   await ensureField('companies', 'country', str());
   await ensureField('companies', 'source', str());
@@ -338,7 +360,8 @@ async function main() {
   });
   await ensureField('contacts', 'source_detail', str());
   await ensureField('contacts', 'phone_country', str()); // ISO2 do telefone (E.164 normalizado em phone)
-  await ensureField('contacts', 'role_category', enumS(['decision_maker', 'manager', 'dpo', 'staff', 'unknown']));
+  await ensureField('contacts', 'role_category', enumS(['decision_maker', 'manager', 'dpo', 'staff', 'general', 'unknown']));
+  await ensureEnumChoices('contacts', 'role_category', ['decision_maker', 'manager', 'dpo', 'staff', 'general', 'unknown']); // 'general' = caixa da empresa (info@/geral@), não pessoa
   await ensureField('contacts', 'social_profiles', json());
   await ensureField('contacts', 'gdpr_basis', { type: 'string', meta: { interface: 'input' }, schema: { default_value: 'legitimate_interest' } });
   await ensureField('contacts', 'email_verified', bool(false));
@@ -351,7 +374,9 @@ async function main() {
   await ensureField('contacts', 'verified_at', ts());
   await ensureField('contacts', 'created_at', dateCreated());
   // Outreach Fase 2/3 — supressão + funil de resposta.
-  await ensureField('contacts', 'do_not_contact', bool(false)); // DNC (unsub/bounce/complaint)
+  await ensureField('contacts', 'do_not_contact', bool(false)); // DNC (unsub/bounce/complaint) + exclusão manual de audiência
+  await ensureField('contacts', 'reviewed', bool(false));       // correção manual general↔pessoa já feita (não re-tocar)
+  await ensureField('contacts', 'reviewed_at', ts());
   await ensureField('contacts', 'responded', bool(false));      // respondeu ao cold → candidato warm
   await ensureField('contacts', 'responded_at', ts());
   await ensureField('contacts', 'esp_engaged', bool(false));    // abriu/clicou no ESP (Fase 3)

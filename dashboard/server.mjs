@@ -307,7 +307,7 @@ app.get('/api/site', async (req, res) => {
     if (!site) return res.status(404).json({ error: 'não encontrado' });
     const companyId = site.company?.id ?? site.company;
     const contacts = companyId
-      ? await d(`/items/contacts?filter[company][_eq]=${companyId}&fields=name,role,email,phone,source,source_detail,email_status,email_verified,gdpr_basis&limit=50`)
+      ? await d(`/items/contacts?filter[company][_eq]=${companyId}&fields=id,name,role,role_category,email,phone,source,source_detail,email_status,email_verified,gdpr_basis,do_not_contact,reviewed&limit=50`)
       : [];
     // Relatórios de auditoria (Lighthouse/Nuclei/WPScan/GMB) — vazio na Fase 1.
     let reports = [];
@@ -386,6 +386,26 @@ app.get('/api/contacts', async (req, res) => {
   }
 });
 
+// Edição manual de um contacto — reclassificar general↔pessoa (name/role/role_category)
+// e/ou marcar "não contactar" (do_not_contact). Qualquer edição marca `reviewed`.
+const ROLE_CATS = ['decision_maker', 'manager', 'dpo', 'staff', 'general', 'unknown'];
+app.patch('/api/contacts/:id', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const b = req.body || {};
+    const patch = {};
+    if (typeof b.name === 'string') patch.name = b.name.slice(0, 255);
+    if (typeof b.role === 'string') patch.role = b.role.slice(0, 255);
+    if (typeof b.role_category === 'string' && ROLE_CATS.includes(b.role_category)) patch.role_category = b.role_category;
+    if (typeof b.do_not_contact === 'boolean') patch.do_not_contact = b.do_not_contact;
+    if (!Object.keys(patch).length) return res.status(400).json({ error: 'nada a atualizar' });
+    patch.reviewed = true; // um humano tocou neste contacto → revisto (não re-tocar automaticamente)
+    patch.reviewed_at = new Date().toISOString();
+    const updated = await dwrite('PATCH', `/items/contacts/${encodeURIComponent(id)}`, patch);
+    res.json({ ok: true, contact: updated });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
 // --- Segments (saved views) CRUD -------------------------------------------
 app.get('/api/segments', async (req, res) => {
   try {
@@ -428,7 +448,7 @@ async function natsPublish(subject, obj, msgId) {
 // Audiência de contactos (com email) a partir de um objeto de filtros de segmento,
 // via a relação `site`. É a mesma linguagem de filtros do diretório/segmentos.
 function contactAudienceParts(f = {}) {
-  const p = ['filter[email][_nnull]=true']; // campanhas: obrigatório ter email
+  const p = ['filter[email][_nnull]=true', 'filter[do_not_contact][_neq]=true']; // campanhas: com email e NÃO marcados "não contactar"
   if (f.qualified === 'true') p.push('filter[site][qualified][_eq]=true');
   else if (f.qualified === 'false') p.push('filter[site][qualified][_eq]=false');
   if (f.live === 'true') p.push('filter[site][is_live][_eq]=true');

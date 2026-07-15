@@ -578,6 +578,8 @@ window.openSite = async (domain) => {
     const scoreRows = [
       site.seo_score != null ? `<div class="k">SEO</div><div class="v"><b>${site.seo_score}</b>/100</div>` : '',
       site.mobile_score != null ? `<div class="k">Mobile</div><div class="v"><b>${site.mobile_score}</b>/100 ${site.mobile_friendly ? '<span class="np-badge ok" style="height:18px">friendly</span>' : '<span class="np-badge warn" style="height:18px">não</span>'}</div>` : '',
+      site.perf_mobile != null ? `<div class="k">Perf. mobile</div><div class="v"><b>${site.perf_mobile}</b>/100</div>` : '',
+      site.perf_desktop != null ? `<div class="k">Perf. desktop</div><div class="v"><b>${site.perf_desktop}</b>/100</div>` : '',
       site.security_findings != null ? `<div class="k">Segurança</div><div class="v"><b>${site.security_findings}</b> findings ${site.security_severity ? `<span class="np-badge ${['high', 'critical'].includes(site.security_severity) ? 'warn' : 'neutral'}" style="height:18px">${esc(site.security_severity)}</span>` : ''}</div>` : '',
       site.wp_vuln_count != null ? `<div class="k">WPScan</div><div class="v"><b>${site.wp_vuln_count}</b> vulns</div>` : '',
       site.ssl_grade ? `<div class="k">SSL</div><div class="v"><span class="np-badge ${site.ssl_grade === 'A' || site.ssl_grade === 'B' ? 'ok' : (site.ssl_grade === 'F' ? 'warn' : 'neutral')}" style="height:18px">${esc(site.ssl_grade)}</span>${site.ssl_days_left != null ? ` · expira em <b>${site.ssl_days_left}</b>d` : ''}${site.ssl_issuer ? ` · ${esc(site.ssl_issuer)}` : ''}</div>` : '',
@@ -596,7 +598,8 @@ window.openSite = async (domain) => {
         ${scoreRows ? `<div class="np-kv" style="margin-top:6px">${scoreRows}</div>` : ''}
         ${reportLinks ? `<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${reportLinks}</div>` : ''}`;
     const subs = (site.hostnames || []).slice(0, 40).map((h) => `<div class="np-mono" style="padding:3px 0;color:var(--np-text-2)">${esc(h)}</div>`).join('') || '<span class="muted">(não enumerado)</span>';
-    const people = contacts.map((c) => `<div class="np-contact"><span class="np-avatar" style="width:30px;height:30px;background:${CAT('info')}">${esc((c.name || '?').slice(0, 1))}</span><div style="flex:1"><div style="font-weight:700">${esc(c.name || '—')} ${c.role ? `<span class="np-badge ${DM.has(c.role) ? 'brand' : 'neutral'}" style="height:18px">${DM.has(c.role) ? ic('star', 11) : ''}${esc(c.role)}</span>` : ''}</div><div style="margin:3px 0">${verifBadge(c.email_status, c.email_verified)}</div><div class="muted" style="font-size:12px">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:var(--np-brand-ink)">${esc(c.email)}</a>` : ''} ${esc(c.phone || '')}</div></div></div>`).join('') || '<span class="muted">Sem contactos.</span>';
+    window._DC = {}; contacts.forEach((c) => { if (c.id != null) window._DC[c.id] = c; });
+    const people = contacts.map((c) => contactCardHtml(c)).join('') || '<span class="muted">Sem contactos.</span>';
     d.innerHTML = `
       <div class="np-drawer-h"><div style="display:flex;justify-content:space-between;align-items:start">
         <div><div style="font-size:18px;font-weight:800"><span class="np-dot" style="display:inline-block;background:${site.is_live ? 'var(--np-ok-mark)' : 'var(--np-neutral-mark)'}"></span> ${esc(site.domain)}</div><div class="muted" style="font-size:12.5px">${esc(site.company?.name || site.company?.org_domain || '')}</div></div>
@@ -663,7 +666,42 @@ window.auditNow = async (domain, only) => {
 
 // ========== CONTACTS ==========
 const ROLES = ['CEO', 'Founder', 'Owner', 'Partner', 'President', 'CTO', 'CFO', 'COO', 'CMO', 'DPO', 'VP', 'Head', 'Manager', 'Director', 'Lead', 'Sales', 'Marketing', 'HR', 'Support', 'Accountant', 'Legal', 'Consultant', 'Designer', 'Engineer'];
-const ROLECATS = [['decision_maker', 'Decisores'], ['manager', 'Gestão'], ['dpo', 'DPO'], ['staff', 'Staff'], ['unknown', 'Sem cargo']];
+const ROLECATS = [['decision_maker', 'Decisores'], ['manager', 'Gestão'], ['dpo', 'DPO'], ['staff', 'Staff'], ['general', 'Empresa'], ['unknown', 'Sem cargo']];
+// --- Edição de contacto (reclassificar general↔pessoa + "não contactar") ------
+function contactCardHtml(c) {
+  const dnc = !!c.do_not_contact;
+  const isGen = c.role_category === 'general' || c.role === 'general';
+  const roleBadge = (c.role && c.role !== 'general')
+    ? `<span class="np-badge ${DM.has(c.role) ? 'brand' : 'neutral'}" style="height:18px">${DM.has(c.role) ? ic('star', 11) : ''}${esc(c.role)}</span>`
+    : (isGen ? '<span class="np-badge info" style="height:18px">Empresa</span>' : '');
+  return `<div class="np-contact" id="np-c-${c.id}" style="${dnc ? 'opacity:.55' : ''}">
+    <span class="np-avatar" style="width:30px;height:30px;background:${isGen ? 'var(--np-neutral-mark)' : CAT('info')}">${esc((c.name || '?').slice(0, 1))}</span>
+    <div style="flex:1"><div style="font-weight:700">${esc(c.name || '—')} ${roleBadge} ${c.reviewed ? '<span class="np-badge neutral" style="height:18px" title="revisto manualmente">✓ revisto</span>' : ''} ${dnc ? '<span class="np-badge" style="height:18px;background:#c0392b;color:#fff">não contactar</span>' : ''}</div>
+      <div style="margin:3px 0">${verifBadge(c.email_status, c.email_verified)}</div>
+      <div class="muted" style="font-size:12px">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:var(--np-brand-ink)">${esc(c.email)}</a>` : ''} ${esc(c.phone || '')}</div></div>
+    ${c.id != null ? `<button class="np-iconbtn" style="border-color:var(--np-border)" title="Editar / reclassificar" onclick="editContact('${c.id}')">✎</button>` : ''}</div>`;
+}
+window.editContact = (id) => {
+  const c = window._DC[id]; const el = document.getElementById('np-c-' + id); if (!c || !el) return;
+  const cats = [['decision_maker', 'Decisor'], ['manager', 'Gestão'], ['dpo', 'DPO'], ['staff', 'Staff'], ['general', 'Empresa (não-pessoa)'], ['unknown', 'Sem cargo']];
+  el.innerHTML = `<div style="flex:1;display:flex;flex-direction:column;gap:6px">
+    <input class="np-input" id="ec-name-${id}" value="${esc(c.name || '')}" placeholder="Nome"/>
+    <div style="display:flex;gap:6px"><input class="np-input" id="ec-role-${id}" value="${esc(c.role && c.role !== 'general' ? c.role : '')}" placeholder="Cargo (ex.: CEO)" style="flex:1"/>
+      <select class="np-input" id="ec-cat-${id}" style="width:150px">${cats.map(([v, l]) => `<option value="${v}" ${c.role_category === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+    <label style="display:flex;gap:6px;align-items:center;font-size:12.5px;color:var(--np-text-2)"><input type="checkbox" id="ec-dnc-${id}" ${c.do_not_contact ? 'checked' : ''}/> Não contactar (excluir de audiências)</label>
+    <div style="display:flex;gap:6px"><button class="np-btn np-btn--sm np-btn--primary" onclick="saveContact('${id}')">Guardar</button><button class="np-btn np-btn--sm" onclick="cancelEditContact('${id}')">Cancelar</button></div></div>`;
+};
+window.cancelEditContact = (id) => { const el = document.getElementById('np-c-' + id); if (el) el.outerHTML = contactCardHtml(window._DC[id]); };
+window.saveContact = async (id) => {
+  const g = (s) => document.getElementById(s);
+  const body = { name: g('ec-name-' + id).value.trim(), role: g('ec-role-' + id).value.trim(), role_category: g('ec-cat-' + id).value, do_not_contact: g('ec-dnc-' + id).checked };
+  if (!body.role && body.role_category === 'general') body.role = 'general'; // coerência do modelo
+  try {
+    await api('/api/contacts/' + encodeURIComponent(id), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    Object.assign(window._DC[id], body, { reviewed: true });
+    const el = document.getElementById('np-c-' + id); if (el) el.outerHTML = contactCardHtml(window._DC[id]);
+  } catch (e) { alert('Erro ao guardar: ' + e.message); }
+};
 const CState = { q: '', roles: '', rolecat: '', verif: '', dm: '', lead_min: '', has_email: '', has_phone: '', city: '', cpanel: '', fb: '', ig: '', li: '', tw: '', gmb: '', load: '', spf: '', dmarc: '', traffic: '', industry: '', page: 1, openFacet: null };
 async function viewContacts() {
   const qp = parseHashQuery();

@@ -24,7 +24,7 @@ import { publishJob, SUBJECTS } from '../lib/jobs.js';
 import { putSnapshot, getSnapshot } from '../lib/artifacts.js';
 import { detectPlatforms, detectCDN, extractLang, extractContacts } from '../lib/fingerprints.js';
 import { orgDomain } from '../lib/company.js';
-import { tldToCountry } from '../lib/phone.js';
+import { tldToCountry, extractPhones } from '../lib/phone.js';
 import { qualify } from '../lib/qualify.js';
 import { scoreSite } from '../lib/lead-score.js';
 import { recordRun, metricsEnabled, capture } from '../lib/metrics.js';
@@ -119,6 +119,17 @@ export function makeFineHandlers(ctx, js) {
   }
   const siteRow = (id, fields) => client.request(readItems('sites', { filter: { id: { _eq: id } }, fields, limit: 1 })).then((r) => r[0]);
 
+  // Deteta páginas de anti-bot / WAF / IP-bloqueado (challenge, "just a moment", 403/429/503/415
+  // com corpo mínimo). Estes sites TÊM de ser re-corridos a partir de um IP RESIDENCIAL (laptop);
+  // processá-los daqui só envenenaria com o conteúdo da página-desafio.
+  function isBlockedPage(status, html) {
+    const h = html || '';
+    if ([403, 429, 503, 415].includes(status) && h.length < 6000) return true;
+    if (/just a moment|checking your browser|attention required|cf-browser-verification|__cf_chl|challenge-platform|enable javascript and cookies to continue|um momento, por favor|one moment, please|ddos-guard|access denied|request unsuccessful|verifying you are human/i.test(h)) return true;
+    if (h.length > 0 && h.length < 900 && /<title>[^<]*(moment|loader|please wait|blocked|denied|attention)/i.test(h)) return true;
+    return false;
+  }
+
   // ---- ROOT: fetch (DNS + HTTP + snapshot) ---------------------------------
   async function handleFetch(job) {
     const domain = domainToASCII(job.domain) || job.domain;
@@ -134,6 +145,11 @@ export function makeFineHandlers(ctx, js) {
     let resp = null;
     for (const u of [`https://${domain}/`, `https://www.${domain}/`, `http://${domain}/`]) { const r = await tryFetch(u); if (!r) continue; if (!resp) resp = r; if (r.status < 400) { resp = r; break; } }
     if (!resp) { await client.request(updateItem('sites', siteId, { is_live: false })); return 'ack'; }
+    // Anti-bot / WAF / IP-bloqueado → marca p/ re-correr de IP residencial (laptop) e NÃO processa.
+    if (isBlockedPage(resp.status, resp.html)) {
+      await client.request(updateItem('sites', siteId, { blocked_datacenter: true, blocked_at: new Date().toISOString(), http_status: resp.status, final_url: clip(resp.finalUrl), is_live: true }));
+      return 'ack';
+    }
     // Páginas de contacto (para o job contacts, sem re-fetch).
     const pages = [];
     if (resp.html) for (const link of findContactLinks(resp.html, resp.finalUrl).slice(0, 3)) { const p = await tryFetch(link); if (p?.html) pages.push({ url: p.finalUrl, html: p.html }); }
@@ -143,6 +159,7 @@ export function makeFineHandlers(ctx, js) {
       is_live: resp.status < 400, http_status: resp.status, final_url: clip(resp.finalUrl), redirects_www,
       language: clip(extractLang(resp.html), 30), load_ms: resp.elapsedMs, load_bucket: bucketLoad(resp.elapsedMs),
       is_cpanel: cp.isCpanel, cpanel_signal: clip(cp.signal), cdn: clip(detectCDN(resp.headers), 50),
+      blocked_datacenter: false, // fetch bom a partir do datacenter → limpa flag de bloqueio
     }));
     await putSnapshot(siteId, { finalUrl: resp.finalUrl, status: resp.status, headers: resp.headers, setCookies: resp.setCookies, html: resp.html, pages, fetchedAt: new Date().toISOString() });
     // Fan-out de análise (leem o snapshot).
@@ -199,16 +216,27 @@ export function makeFineHandlers(ctx, js) {
 
   async function handleSocial(job) {
     const snap = await getSnapshot(job.siteId); if (!snap?.html) return 'ack';
-    const social = extractSocial(snap.html); const f = socialFlags(social);
+    // Social vive muitas vezes na página de contactos, não na homepage → varrer tudo.
+    const allHtml = [snap.html, ...(snap.pages || []).map((p) => p.html)].filter(Boolean).join('\n');
+    const social = extractSocial(allHtml); const f = socialFlags(social);
     const g = detectGmb(snap.html);
-    await client.request(updateItem('sites', job.siteId, { social, social_facebook: f.facebook, social_instagram: f.instagram, social_linkedin: f.linkedin, social_twitter: f.twitter, gmb: g.gmb, gmb_signal: clip(g.signal, 60), gmb_url: clip(g.url), gmb_place_id: clip(g.placeId) }));
+    await client.request(updateItem('sites', job.siteId, { social, social_facebook: f.facebook, social_instagram: f.instagram, social_linkedin: f.linkedin, social_twitter: f.twitter, social_youtube: f.youtube, social_tiktok: f.tiktok, social_pinterest: f.pinterest, social_whatsapp: f.whatsapp, whatsapp_number: clip(social.whatsapp_number, 32), gmb: g.gmb, gmb_signal: clip(g.signal, 60), gmb_url: clip(g.url), gmb_place_id: clip(g.placeId) }));
     await pub(SUBJECTS.score, { domain: job.domain, siteId: job.siteId }, `score:${job.domain}`);
     return 'ack';
   }
 
   async function handleLocality(job) {
     const snap = await getSnapshot(job.siteId); if (!snap?.html) return 'ack';
-    const loc = extractBusinessLocation(snap.html);
+    // Morada vive muitas vezes na página de contactos → varrer homepage + páginas.
+    let loc = extractBusinessLocation(snap.html);
+    if (!loc.address || !loc.city) {
+      for (const p of (snap.pages || [])) {
+        if (!p?.html) continue;
+        const l = extractBusinessLocation(p.html);
+        loc = { city: loc.city || l.city, region: loc.region || l.region, address: loc.address || l.address, postalCode: loc.postalCode || l.postalCode };
+        if (loc.address && loc.city) break;
+      }
+    }
     await client.request(updateItem('sites', job.siteId, { business_city: clip(loc.city, 120), business_region: clip(loc.region, 120), business_address: clip(loc.address) }));
     return 'ack';
   }
@@ -250,8 +278,13 @@ export function makeFineHandlers(ctx, js) {
       if (!pg?.html) continue;
       for (const p of extractPeople(pg.html, pg.url, { defaultCountry })) { const k = p.email || `${p.name}|${p.role}`; if (!k || seen.has(k)) continue; seen.add(k); found.push(p); }
     }
+    // Telefones da empresa: TODOS os únicos (fixos+móveis) de TODAS as páginas — não só
+    // da homepage e não colados a uma pessoa. `general_phone` = 1.º; `phones` = lista.
+    const allHtml = [snap.html, ...(snap.pages || []).map((p) => p.html)].filter(Boolean).join('\n');
+    const phones = extractPhones(allHtml, { defaultCountry, limit: 6 }).map((p) => p.e164);
+    const generalEmail = gen.email || found.find((p) => p.email)?.email || null;
     // preenche emails/telefones gerais da empresa (só se vazios)
-    if (gen.email || gen.phone) { try { const c = (await client.request(readItems('companies', { filter: { id: { _eq: companyId } }, fields: ['general_email', 'general_phone'], limit: 1 })))[0]; const cp = {}; if (!c?.general_email && gen.email) cp.general_email = gen.email; if (!c?.general_phone && gen.phone) cp.general_phone = clip(gen.phone, 40); if (Object.keys(cp).length) await client.request(updateItem('companies', companyId, cp)); } catch { /* ignora */ } }
+    if (generalEmail || phones.length) { try { const c = (await client.request(readItems('companies', { filter: { id: { _eq: companyId } }, fields: ['general_email', 'general_phone'], limit: 1 })))[0]; const cp = {}; if (!c?.general_email && generalEmail) cp.general_email = generalEmail; if (!c?.general_phone && phones.length) cp.general_phone = clip(phones[0], 40); if (phones.length) cp.phones = phones; if (Object.keys(cp).length) await client.request(updateItem('companies', companyId, cp)); } catch { /* ignora */ } }
     const mkContact = (p) => ({ name: p.name, role: p.role, role_category: p.role_category || 'unknown', email: p.email, phone: p.phone, phone_country: p.phone_country || null, social_profiles: p.social_profiles || null, source: 'site', source_detail: p.source_detail, company: companyId, site: site.id, gdpr_basis: 'legitimate_interest' });
     if (found.length) {
       if (pgEnabled()) {
@@ -270,8 +303,8 @@ export function makeFineHandlers(ctx, js) {
       }
     }
     const patch = { company: companyId, contacts_checked_at: new Date().toISOString() };
-    patch.has_email = !!gen.email || found.some((p) => p.email);
-    patch.has_phone = !!gen.phone || found.some((p) => p.phone);
+    patch.has_email = !!generalEmail || found.some((p) => p.email);
+    patch.has_phone = phones.length > 0;
     if (found.some((p) => p.role_category === 'decision_maker')) patch.has_decision_maker = true;
     await client.request(updateItem('sites', site.id, patch));
     await pub(SUBJECTS.score, { domain: site.domain, siteId: site.id }, `score:${site.domain}`);

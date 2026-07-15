@@ -173,8 +173,9 @@ function makeHeavyFineHandlers(ctx, audit, js) {
       // Batch keyless (job.keyless) → SEM --api-token: enumera (plugins/temas/versão/users) mas
       // não traz o vuln-DB do WPScan (poupa a quota de 25/dia/key, que fica só p/ on-demand).
       // On-demand keyed → usa a WPSCAN_API_TOKEN do host (uma key por host).
-      const token = job.keyless ? null : process.env.WPSCAN_API_TOKEN;
-      const r = await audit.wpscan.runWpscan(site.final_url || `https://${site.domain}/`, { token });
+      const keyless = !!job.keyless;
+      const token = keyless ? null : process.env.WPSCAN_API_TOKEN;
+      const r = await audit.wpscan.runWpscan(site.final_url || `https://${site.domain}/`, { token, keyless });
       await client.request(updateItem('sites', site.id, { wp_vuln_count: r.vulnCount }));
       await upsertReport(client, site.id, 'wpscan', { score: r.vulnCount, summary: { vulnCount: r.vulnCount }, report: r.report });
     } catch (e) { if (/não instalado|not installed/i.test(e.message)) throw e; log(`wpscan ${site.domain}: ${e.message}`); }
@@ -305,7 +306,7 @@ function makeHandlers(ctx, audit, js) {
       if (want('wpscan') && tier === 'ondemand' && site.primary_platform?.slug === 'wordpress') {
         m.working();
         try {
-          const r = await audit.wpscan.runWpscan(url);
+          const r = await audit.wpscan.runWpscan(url, { keyless: false }); // on-demand → usa a API key (traz vulns)
           patch.wp_vuln_count = r.vulnCount;
           await upsertReport(client, site.id, 'wpscan', { score: r.vulnCount, summary: { vulnCount: r.vulnCount }, report: r.report });
         } catch (e) { if (/não instalado|not installed/i.test(e.message)) throw e; log(`wpscan ${site.domain}: ${e.message}`); }

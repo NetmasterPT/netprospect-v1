@@ -676,7 +676,7 @@ function contactCardHtml(c) {
     : (isGen ? '<span class="np-badge info" style="height:18px">Empresa</span>' : '');
   return `<div class="np-contact" id="np-c-${c.id}" style="${dnc ? 'opacity:.55' : ''}">
     <span class="np-avatar" style="width:30px;height:30px;background:${isGen ? 'var(--np-neutral-mark)' : CAT('info')}">${esc((c.name || '?').slice(0, 1))}</span>
-    <div style="flex:1"><div style="font-weight:700">${esc(c.name || '—')} ${roleBadge} ${c.reviewed ? '<span class="np-badge neutral" style="height:18px" title="revisto manualmente">✓ revisto</span>' : ''} ${dnc ? '<span class="np-badge" style="height:18px;background:#c0392b;color:#fff">não contactar</span>' : ''}</div>
+    <div style="flex:1"><div style="font-weight:700">${esc(c.name || '—')} ${roleBadge} ${c.maybe_person && !c.reviewed ? '<span class="np-badge" style="height:18px;background:#e67e22;color:#fff" title="local-part não-genérico ≠ marca → pode ser uma pessoa; clica ✎ para reclassificar">parece pessoa?</span>' : ''} ${c.reviewed ? '<span class="np-badge neutral" style="height:18px" title="revisto manualmente">✓ revisto</span>' : ''} ${dnc ? '<span class="np-badge" style="height:18px;background:#c0392b;color:#fff">não contactar</span>' : ''}</div>
       <div style="margin:3px 0">${verifBadge(c.email_status, c.email_verified)}</div>
       <div class="muted" style="font-size:12px">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:var(--np-brand-ink)">${esc(c.email)}</a>` : ''} ${esc(c.phone || '')}</div></div>
     ${c.id != null ? `<button class="np-iconbtn" style="border-color:var(--np-border)" title="Editar / reclassificar" onclick="editContact('${c.id}')">✎</button>` : ''}</div>`;

@@ -80,6 +80,18 @@ const count = async (collection, filter = '') => {
   const r = await d(`/items/${collection}?aggregate[count]=id${filter}`);
   return Number(r?.[0]?.count?.id || 0);
 };
+// Heurística DETERMINISTA: um contacto `general` que PARECE pessoa (para o agente/humano
+// decidir incluir numa audiência, sem auto-promover). Sinal: local-part de 1 só token, não
+// genérico (info/geral/…), só letras, ≠ marca/domínio. Ex.: sverre@, mirja@ → parece pessoa.
+const GENERIC_MAILBOX = new Set(['info', 'geral', 'general', 'contact', 'contacto', 'contactos', 'apoio', 'suporte', 'support', 'reservas', 'booking', 'noreply', 'newsletter', 'mail', 'email', 'webmaster', 'admin', 'rh', 'hr', 'marketing', 'comercial', 'vendas', 'sales', 'financeiro', 'loja', 'shop', 'encomendas', 'ola', 'hello', 'servico', 'servicos', 'office', 'post', 'team', 'equipa', 'dpo', 'rgpd', 'gdpr', 'privacy', 'legal', 'faturacao', 'billing', 'accounts', 'contabilidade', 'kontakt', 'kontor', 'firmapost']);
+function maybePersonGeneral(name, orgDomain) {
+  const n = String(name || '').toLowerCase().trim();
+  if (!n || /\s/.test(n) || n.length < 3 || n.length > 18) return false;
+  if (!/^[a-zà-ÿ]+$/i.test(n) || GENERIC_MAILBOX.has(n)) return false;
+  const root = String(orgDomain || '').toLowerCase().split('.')[0];
+  if (root && (n === root || root.includes(n) || n.includes(root))) return false; // = marca/domínio
+  return true;
+}
 async function dwrite(method, p, body) {
   const res = await fetch(`${DIRECTUS_URL}${p}`, {
     method,
@@ -314,6 +326,8 @@ app.get('/api/site', async (req, res) => {
     try {
       reports = await d(`/items/site_reports?filter[site][_eq]=${site.id}&fields=id,kind,score,summary,created_at&sort=-created_at&limit=20`);
     } catch { /* coleção ainda sem dados */ }
+    const orgDomain = site.company?.org_domain;
+    for (const c of contacts) c.maybe_person = c.role === 'general' && maybePersonGeneral(c.name, orgDomain);
     res.json({ site, contacts, reports, metricsEnabled: chEnabled(), directusPublicUrl: process.env.DIRECTUS_PUBLIC_URL || '' });
   } catch (e) {
     res.status(502).json({ error: e.message });
@@ -380,6 +394,7 @@ app.get('/api/contacts', async (req, res) => {
     const url = `/items/contacts?${fields}${filter}&sort[]=name&limit=${limit}&offset=${offset}&meta=filter_count`;
     const res2 = await fetch(`${DIRECTUS_URL}${url}`, { headers: { Authorization: `Bearer ${TOKEN}` } });
     const json = await res2.json();
+    for (const c of (json.data || [])) c.maybe_person = c.role === 'general' && maybePersonGeneral(c.name, c.company?.org_domain);
     res.json({ rows: json.data, total: json.meta?.filter_count ?? json.data.length, page, limit });
   } catch (e) {
     res.status(502).json({ error: e.message });

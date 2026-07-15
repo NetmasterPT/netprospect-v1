@@ -27,6 +27,9 @@ services:
       # SÓ o GMB por defeito. Para dar mais carga ao portátil quando estiver online e livre:
       #   WORKER_ROLES=residential,security,base   (no .env)
       WORKER_ROLES: ${WORKER_ROLES:-residential}
+      # Nome do server reportado ao dashboard (cards de Servidores). Sem isto cai no HOSTNAME =
+      # id-do-container → aparecia como "Outro". Override no .env se quiseres outro nome.
+      FLEET_HOST: ${FLEET_HOST:-gpedro-laptop}
       # O GMB está gated por trás disto — TEM de ser true aqui (é o host que o corre).
       GMB_ENABLED: 'true'
       AUDIT_ENABLED: 'true'     # os roles pesados (incl. residential/gmb) só ligam com isto

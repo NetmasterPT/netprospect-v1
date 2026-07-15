@@ -354,7 +354,7 @@ app.get('/api/directory', async (req, res) => {
       + ',ssl_days_left,ssl_grade,expiring_soon,cms_outdated,cms_version';
     // Ordenação: por omissão os melhores leads primeiro. ?sort=<col>&dir=asc|desc ordena por coluna
     // (whitelist). dir explícito ganha; senão lead_score default desc, restantes asc. Desempate por domain.
-    const SORTABLE = { domain: 'domain', lead_score: 'lead_score', seo: 'seo_score', country: 'ip_country', platform: 'primary_platform.slug', city: 'business_city', traffic: 'traffic_bucket', ssl: 'ssl_days_left' };
+    const SORTABLE = { domain: 'domain', lead_score: 'lead_score', seo: 'seo_score', country: 'ip_country', platform: 'primary_platform.slug', city: 'business_city', traffic: 'traffic_bucket', ssl: 'ssl_days_left', isp: 'isp', company: 'company.name', qualified: 'qualified' };
     const sf = SORTABLE[req.query.sort];
     const dir = req.query.dir === 'desc' ? '-' : req.query.dir === 'asc' ? '' : (req.query.sort === 'lead_score' ? '-' : '');
     const sort = sf ? `sort[]=${dir}${sf}&sort[]=domain` : 'sort[]=-lead_score&sort[]=domain';
@@ -462,7 +462,10 @@ app.get('/api/contacts', async (req, res) => {
     parts.push(...buildSiteFilters(req.query, 'site'));
     const filter = parts.length ? '&' + parts.join('&') : '';
     const fields = 'fields=name,role,role_category,email,phone,phone_country,social_profiles,source,source_detail,gdpr_basis,email_status,email_verified,company.name,company.org_domain,site.domain,site.primary_platform.slug,site.business_city,site.is_cpanel,site.gmb,site.lead_score';
-    const url = `/items/contacts?${fields}${filter}&sort[]=name&limit=${limit}&offset=${offset}&meta=filter_count`;
+    const C_SORTABLE = { name: 'name', role: 'role', email: 'email', phone: 'phone', company: 'company.name', source: 'source' };
+    const csf = C_SORTABLE[req.query.sort]; const csdir = req.query.dir === 'desc' ? '-' : '';
+    const csort = csf ? `sort[]=${csdir}${csf}&sort[]=name` : 'sort[]=name';
+    const url = `/items/contacts?${fields}${filter}&${csort}&limit=${limit}&offset=${offset}&meta=filter_count`;
     const res2 = await fetch(`${DIRECTUS_URL}${url}`, { headers: { Authorization: `Bearer ${TOKEN}` } });
     const json = await res2.json();
     for (const c of (json.data || [])) c.maybe_person = c.role === 'general' && maybePersonGeneral(c.name, c.company?.org_domain);
@@ -934,7 +937,11 @@ app.get('/api/isps', async (req, res) => {
         .filter((r) => r.sites > 0).sort((a, b) => b.sites - a.sites);
     }, 300); // ISPs mudam devagar → TTL 5 min
     const off = (page - 1) * limit;
-    res.json({ rows: all.slice(off, off + limit), total: all.length, page, limit, totalSites: all.reduce((a, r) => a + r.sites, 0) });
+    // sort por coluna (?sort=isp|sites|qualified|pct &dir=asc|desc). Default = sites desc (já ordenado).
+    const sc = req.query.sort, dir = req.query.dir === 'asc' ? 1 : -1;
+    const val = (r) => sc === 'isp' ? String(r.isp).toLowerCase() : sc === 'qualified' ? r.qualified : sc === 'pct' ? (r.sites ? r.qualified / r.sites : 0) : r.sites;
+    const sorted = sc ? [...all].sort((a, b) => { const x = val(a), y = val(b); return x < y ? -dir : x > y ? dir : 0; }) : all;
+    res.json({ rows: sorted.slice(off, off + limit), total: all.length, page, limit, totalSites: all.reduce((a, r) => a + r.sites, 0) });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 

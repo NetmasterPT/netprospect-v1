@@ -539,7 +539,7 @@ async function paintDirectory() {
       ${chips.length ? `<div class="np-chiprow"><span class="muted" style="font-size:12px">Filtros:</span>${chips.map(([k, l]) => `<span class="np-fchip">${esc(l)}<button onclick="dirSet('${k}','')">${ic('x', 12)}</button></span>`).join('')}<button class="np-btn np-btn--sm" onclick="dirClear()">Limpar tudo</button></div>` : ''}
     </section>
     <section class="np-card"><div class="np-tablewrap"><table class="np-table" style="min-width:1320px"><thead><tr>
-      ${sTh('Lead', 'lead_score')}${sTh('Domínio', 'domain')}<th>Empresa</th>${sTh('Plataforma', 'platform')}<th>ISP</th>${sTh('Local negócio', 'city')}<th>Sinais</th><th>Contactos</th><th>Qualif.</th></tr></thead>
+      ${sTh('Lead', 'lead_score')}${sTh('Domínio', 'domain')}${sTh('Empresa', 'company')}${sTh('Plataforma', 'platform')}${sTh('ISP', 'isp')}${sTh('Local negócio', 'city')}<th>Sinais</th><th>Contactos</th>${sTh('Qualif.', 'qualified')}</tr></thead>
       <tbody id="dbody"><tr><td colspan="9"><div class="np-empty">A carregar…</div></td></tr></tbody></table></div>
       <div class="np-pager" id="dpager"></div>
     </section>`;
@@ -747,7 +747,8 @@ window.saveContact = async (id) => {
     const el = document.getElementById('np-c-' + id); if (el) el.outerHTML = contactCardHtml(window._DC[id]);
   } catch (e) { alert('Erro ao guardar: ' + e.message); }
 };
-const CState = { q: '', roles: '', rolecat: '', verif: '', dm: '', lead_min: '', has_email: '', has_phone: '', city: '', cpanel: '', fb: '', ig: '', li: '', tw: '', gmb: '', load: '', spf: '', dmarc: '', traffic: '', industry: '', page: 1, openFacet: null };
+const CState = { q: '', roles: '', rolecat: '', verif: '', dm: '', lead_min: '', has_email: '', has_phone: '', city: '', cpanel: '', fb: '', ig: '', li: '', tw: '', gmb: '', load: '', spf: '', dmarc: '', traffic: '', industry: '', sort: '', dir: '', page: 1, openFacet: null };
+window.conSort = (col) => { if (CState.sort === col) CState.dir = CState.dir === 'asc' ? 'desc' : 'asc'; else { CState.sort = col; CState.dir = col === 'name' ? 'asc' : 'desc'; } CState.page = 1; paintContacts(); };
 async function viewContacts() {
   const qp = parseHashQuery();
   CState.q = qp.q || ''; CState.roles = qp.roles || ''; CState.rolecat = qp.rolecat || ''; CState.verif = qp.verif || ''; CState.page = +qp.page || 1;
@@ -758,7 +759,8 @@ async function viewContacts() {
 function conFilters() { const f = {}; for (const k of ['q', 'roles', 'rolecat', 'verif']) if (CState[k]) f[k] = CState[k]; for (const k of AUDIT_KEYS) if (CState[k]) f[k] = CState[k]; return f; }
 window.conExportCsv = () => { window.location = '/api/contacts.csv?' + new URLSearchParams(conFilters()); };
 async function paintContacts() {
-  const p = new URLSearchParams({ page: CState.page, limit: 25, ...conFilters() });
+  const p = new URLSearchParams({ page: CState.page, limit: 25, ...conFilters(), ...(CState.sort ? { sort: CState.sort, dir: CState.dir } : {}) });
+  const cTh = (col, label) => { const a = CState.sort === col; const ar = a ? (CState.dir === 'asc' ? ' ↑' : ' ↓') : '<span style="opacity:.35"> ⇅</span>'; return `<th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="window.conSort('${col}')">${label}${ar}</th>`; };
   const chk = (on) => on ? ic('check', 14) : SP14;
   const chips = auditChips(CState);
   if (CState.roles) CState.roles.split(',').forEach((r) => chips.unshift(['roles:' + r, 'Cargo: ' + r]));
@@ -777,7 +779,7 @@ async function paintContacts() {
     ${chips.length ? `<div class="np-chiprow"><span class="muted" style="font-size:12px">Filtros:</span>${chips.map(([k, l]) => `<span class="np-fchip">${esc(l)}<button onclick="conChipX('${k}')">${ic('x', 12)}</button></span>`).join('')}<button class="np-btn np-btn--sm" onclick="conClear()">Limpar tudo</button></div>` : ''}
     </section>
     <section class="np-card"><div class="np-tablewrap"><table class="np-table" style="min-width:1040px"><thead><tr>
-      <th>Nome</th><th>Cargo</th><th>E-mail</th><th>Telefone</th><th>Empresa</th><th>Fonte</th></tr></thead>
+      ${cTh('name', 'Nome')}${cTh('role', 'Cargo')}${cTh('email', 'E-mail')}${cTh('phone', 'Telefone')}${cTh('company', 'Empresa')}${cTh('source', 'Fonte')}</tr></thead>
       <tbody id="cbody"><tr><td colspan="6"><div class="np-empty">A carregar…</div></td></tr></tbody></table></div><div class="np-pager" id="cpager"></div></section>`;
   const cq = $('#cq'); let ct; cq.oninput = () => { clearTimeout(ct); ct = setTimeout(() => { CState.q = cq.value.trim(); CState.page = 1; paintContacts(); }, 400); };
   const ccity = $('#ccity'); let cct; if (ccity) ccity.oninput = () => { clearTimeout(cct); cct = setTimeout(() => { CState.city = ccity.value.trim(); CState.page = 1; paintContacts(); }, 450); };
@@ -1070,7 +1072,7 @@ async function viewServers() {
           : `<span class="np-badge" style="height:15px;font-size:9px;background:var(--np-warn)" title="VERSÕES MISTURADAS — há workers com código diferente">⚠ ${v.versions.map(esc).join(' / ')}</span>`;
         const jobs = Object.keys(v.conc || {}).sort();
         const cfg = jobs.length ? `<details style="margin-top:2px"><summary style="cursor:pointer;font-size:10px;color:var(--np-text-2)">config · ${v.replicas}w</summary><table style="width:100%;font-size:10px;margin:3px 0;border-collapse:collapse">${jobs.map((j) => `<tr><td style="padding:1px 4px">${esc(j)}</td><td class="tnum" style="text-align:right;padding:1px 6px">conc ${v.conc[j]}</td><td class="tnum" style="text-align:right;padding:1px 4px;color:var(--np-text-2)">maxack ${(v.maxacks || {})[j] ?? '—'}</td></tr>`).join('')}</table></details>` : '';
-        return `<div style="padding:4px 0;border-top:1px solid var(--np-border)"><div style="display:flex;justify-content:space-between;font-size:12px;gap:6px"><span onclick="location.hash='#/vms'" style="cursor:pointer;min-width:0">${esc(v.host)} <span class="muted">${esc(v.roles.join('/'))}</span> ${ver}</span><span class="tnum muted" style="white-space:nowrap">${v.load != null ? v.load + '/' + v.cores + 'c' : '—'}</span></div>${cfg}</div>`;
+        return `<div style="padding:5px 0;border-top:1px solid var(--np-border)"><div style="display:flex;justify-content:space-between;font-size:12px;gap:6px"><span onclick="location.hash='#/vms'" style="cursor:pointer;min-width:0">${esc(v.host)} <span class="muted">${esc(v.roles.join('/'))}</span></span><span class="tnum muted" style="white-space:nowrap">${v.load != null ? v.load + '/' + v.cores + 'c' : '—'}</span></div><div style="margin-top:3px">${ver}</div>${cfg}</div>`;
       }).join('')}</div>
     </div></section>`;
   };
@@ -1118,6 +1120,32 @@ function covSum(cov, thresh) {
   return out;
 }
 window.covSet = (t) => { COV_THRESH = t; viewCoverage(); };
+// Sort client-side partilhado pelas 2 tabelas de cobertura (jobs/dados). rows=[{label,cat,n,total,pct}].
+let COV_SORT = { page: '', col: '', dir: 'desc' };
+window.covSortBy = (page, col) => {
+  if (COV_SORT.page === page && COV_SORT.col === col) COV_SORT.dir = COV_SORT.dir === 'asc' ? 'desc' : 'asc';
+  else { COV_SORT.page = page; COV_SORT.col = col; COV_SORT.dir = col === 'label' ? 'asc' : 'desc'; }
+  (page === 'data' ? viewDataCoverage : viewCoverage)();
+};
+function covSortRows(rows, page) {
+  if (COV_SORT.page !== page || !COV_SORT.col) return { rows, grouped: true };
+  const c = COV_SORT.col, d = COV_SORT.dir === 'asc' ? 1 : -1;
+  const val = (r) => c === 'label' ? r.label.toLowerCase() : c === 'total' ? r.total : c === 'pct' ? r.pct : r.n;
+  return { rows: [...rows].sort((a, b) => { const x = val(a), y = val(b); return x < y ? -d : x > y ? d : 0; }), grouped: false };
+}
+function covTh(page, col, label, align) {
+  const active = COV_SORT.page === page && COV_SORT.col === col;
+  const ar = active ? (COV_SORT.dir === 'asc' ? ' ↑' : ' ↓') : '<span style="opacity:.35"> ⇅</span>';
+  return `<th style="padding:6px 10px;cursor:pointer;user-select:none;white-space:nowrap;text-align:${align || 'left'}" onclick="window.covSortBy('${page}','${col}')">${label}${ar}</th>`;
+}
+function covBar(pct) { const col = pct >= 90 ? 'var(--np-ok-mark,#16a34a)' : pct >= 40 ? 'var(--np-warn,#d97706)' : 'var(--np-brand,#e11d48)'; return `<div style="height:8px;background:var(--np-border,#e5e7eb);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.min(100, pct)}%;background:${col}"></div></div>`; }
+function covRowHtml(r, badge) {
+  return `<tr><td style="padding:8px 10px"><b>${esc(r.label)}</b>${badge ? ` <span class="np-badge ${r.cat === 'audit' ? 'info' : ''}" style="height:16px;font-size:9px">${r.cat}</span>` : ''}</td>
+    <td class="tnum" style="text-align:right;padding:8px 10px">${fmt(r.n)}</td>
+    <td class="tnum" style="text-align:right;padding:8px 10px;color:var(--np-text-2)">${fmt(r.total)}</td>
+    <td style="padding:8px 10px;min-width:160px">${covBar(r.pct)}</td>
+    <td class="tnum" style="text-align:right;padding:8px 10px;font-weight:800">${r.pct}%</td></tr>`;
+}
 async function viewCoverage() {
   renderNav('coverage');
   const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Cobertura de jobs</h1><div class="np-sub">Fração de sites onde o job <b>já correu</b> (não “tem resultado” — um job que correu e não achou nada conta como coberto) · filtra por lead score · via np-db</div></div></div>`;
@@ -1126,23 +1154,15 @@ async function viewCoverage() {
   const THS = [['gt70', '&gt;70'], ['gt60', '&gt;60'], ['gt50', '&gt;50'], ['gt40', '&gt;40'], ['lt40', '&lt;40'], ['all', 'Todos']];
   const seg = THS.map(([k, l]) => `<button class="np-btn np-btn--sm ${COV_THRESH === k ? 'np-btn--primary' : ''}" onclick="window.covSet('${k}')">${l}</button>`).join(' ');
   const s = covSum(cov, COV_THRESH); const total = s.total || 1;
-  const bar = (pct, col) => `<div style="height:8px;background:var(--np-border,#e5e7eb);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.min(100, pct)}%;background:${col}"></div></div>`;
-  const row = ([k, label, kind]) => {
-    const n = s[k] || 0; const pct = Math.round(1000 * n / total) / 10;
-    const col = pct >= 90 ? 'var(--np-ok-mark,#16a34a)' : pct >= 40 ? 'var(--np-warn,#d97706)' : 'var(--np-brand,#e11d48)';
-    return `<tr><td style="padding:8px 10px"><b>${esc(label)}</b> <span class="np-badge ${kind === 'audit' ? 'info' : ''}" style="height:16px;font-size:9px">${kind}</span></td>
-      <td class="tnum" style="text-align:right;padding:8px 10px">${fmt(n)}</td>
-      <td class="tnum" style="text-align:right;padding:8px 10px;color:var(--np-text-2)">${fmt(total)}</td>
-      <td style="padding:8px 10px;min-width:160px">${bar(pct, col)}</td>
-      <td class="tnum" style="text-align:right;padding:8px 10px;font-weight:800">${pct}%</td></tr>`;
-  };
+  const rows = COV_JOBS.map(([k, label, kind]) => ({ label, cat: kind, n: s[k] || 0, total, pct: Math.round(1000 * (s[k] || 0) / total) / 10 }));
+  const sorted = covSortRows(rows, 'jobs');
   const v = cov.verify || {};
   $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center"><span class="muted" style="font-size:12px">Lead score:</span> ${seg}
       <span class="muted" style="margin-left:auto;font-size:11.5px">${fmt(s.total)} sites neste filtro</span></div>
     <div class="np-tablewrap"><table style="min-width:520px;width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr style="text-align:left;color:var(--np-text-2);font-size:11px"><th style="padding:6px 10px">Job</th><th style="text-align:right;padding:6px 10px">Coberto</th><th style="text-align:right;padding:6px 10px">Total</th><th style="padding:6px 10px">Progresso</th><th style="text-align:right;padding:6px 10px">%</th></tr></thead>
-      <tbody>${(() => { let g = null; return COV_JOBS.map((j) => { const hdr = j[2] !== g ? (g = j[2], `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${j[2] === 'audit' ? 'Auditoria' : 'Pipeline base'}</td></tr>`) : ''; return hdr + row(j); }).join(''); })()}</tbody></table></div>
+      <thead><tr style="color:var(--np-text-2);font-size:11px">${covTh('jobs', 'label', 'Job')}${covTh('jobs', 'coberto', 'Coberto', 'right')}${covTh('jobs', 'total', 'Total', 'right')}<th style="padding:6px 10px">Progresso</th>${covTh('jobs', 'pct', '%', 'right')}</tr></thead>
+      <tbody>${sorted.grouped ? (() => { let g = null; return sorted.rows.map((r) => { const hdr = r.cat !== g ? (g = r.cat, `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${r.cat === 'audit' ? 'Auditoria' : 'Pipeline base'}</td></tr>`) : ''; return hdr + covRowHtml(r, true); }).join(''); })() : sorted.rows.map((r) => covRowHtml(r, true)).join('')}</tbody></table></div>
     <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email): ${fmt(v.verified || 0)} verificados de ${fmt(v.with_email || 0)} com email — nível-contacto, não filtrado por score · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
     <br>Filas sem métrica de cobertura (dispatchers/internas, não medem dados por site): <code>discover</code> (cria sites), <code>audit_ondemand/qualified/rest</code> (despacham as finas → contam em "Auditoria coarse"), <code>result_site</code> (writer PG), <code>campaign_generate/send</code> (tabela de campanhas).</div>
   </div></div>`;
@@ -1179,23 +1199,15 @@ async function viewDataCoverage() {
   const THS = [['gt70', '&gt;70'], ['gt60', '&gt;60'], ['gt50', '&gt;50'], ['gt40', '&gt;40'], ['lt40', '&lt;40'], ['all', 'Todos']];
   const seg = THS.map(([k, l]) => `<button class="np-btn np-btn--sm ${DCOV_THRESH === k ? 'np-btn--primary' : ''}" onclick="window.dcovSet('${k}')">${l}</button>`).join(' ');
   const s = dcovSum(cov, DCOV_THRESH); const total = s.total || 1;
-  const bar = (pct, col) => `<div style="height:8px;background:var(--np-border,#e5e7eb);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.min(100, pct)}%;background:${col}"></div></div>`;
-  const row = ([k, label, cat]) => {
-    const n = s[k] || 0; const pct = Math.round(1000 * n / total) / 10;
-    const col = pct >= 90 ? 'var(--np-ok-mark,#16a34a)' : pct >= 40 ? 'var(--np-warn,#d97706)' : 'var(--np-brand,#e11d48)';
-    return `<tr><td style="padding:8px 10px"><b>${esc(label)}</b></td>
-      <td class="tnum" style="text-align:right;padding:8px 10px">${fmt(n)}</td>
-      <td class="tnum" style="text-align:right;padding:8px 10px;color:var(--np-text-2)">${fmt(total)}</td>
-      <td style="padding:8px 10px;min-width:160px">${bar(pct, col)}</td>
-      <td class="tnum" style="text-align:right;padding:8px 10px;font-weight:800">${pct}%</td></tr>`;
-  };
+  const rows = DCOV_FIELDS.map(([k, label, cat]) => ({ label, cat, n: s[k] || 0, total, pct: Math.round(1000 * (s[k] || 0) / total) / 10 }));
+  const sorted = covSortRows(rows, 'data');
   const v = cov.verify || {};
   $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center"><span class="muted" style="font-size:12px">Lead score:</span> ${seg}
       <span class="muted" style="margin-left:auto;font-size:11.5px">${fmt(s.total)} sites neste filtro</span></div>
     <div class="np-tablewrap"><table style="min-width:520px;width:100%;border-collapse:collapse;font-size:13px">
-      <thead><tr style="text-align:left;color:var(--np-text-2);font-size:11px"><th style="padding:6px 10px">Dado</th><th style="text-align:right;padding:6px 10px">Com dados</th><th style="text-align:right;padding:6px 10px">Total</th><th style="padding:6px 10px">Progresso</th><th style="text-align:right;padding:6px 10px">%</th></tr></thead>
-      <tbody>${(() => { let g = null; return DCOV_FIELDS.map((j) => { const hdr = j[2] !== g ? (g = j[2], `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${esc(j[2])}</td></tr>`) : ''; return hdr + row(j); }).join(''); })()}</tbody></table></div>
+      <thead><tr style="color:var(--np-text-2);font-size:11px">${covTh('data', 'label', 'Dado')}${covTh('data', 'coberto', 'Com dados', 'right')}${covTh('data', 'total', 'Total', 'right')}<th style="padding:6px 10px">Progresso</th>${covTh('data', 'pct', '%', 'right')}</tr></thead>
+      <tbody>${sorted.grouped ? (() => { let g = null; return sorted.rows.map((r) => { const hdr = r.cat !== g ? (g = r.cat, `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${esc(r.cat)}</td></tr>`) : ''; return hdr + covRowHtml(r, false); }).join(''); })() : sorted.rows.map((r) => covRowHtml(r, false)).join('')}</tbody></table></div>
     <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email): ${fmt(v.verified || 0)} verificados de ${fmt(v.with_email || 0)} com email · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
     <br>Compara com a <a href="#/coverage" style="color:var(--np-brand)">Cobertura de jobs</a>: se o job correu a ~100% mas o dado está baixo, é porque esse dado <b>não existe</b> para a maioria (não é trabalho em falta). <b>security</b>/<b>social</b> contam só quando há resultado real (não vazio).</div>
   </div></div>`;
@@ -1288,12 +1300,18 @@ window.purgeQueue = async (name) => {
 };
 
 // ========== ISPs / ALOJAMENTO (B3) ==========
+window.ispSort = (col) => {
+  const qp = parseHashQuery();
+  const nd = (qp.sort === col && qp.dir === 'desc') ? 'asc' : (qp.sort === col && qp.dir === 'asc') ? 'desc' : (col === 'isp' ? 'asc' : 'desc');
+  location.hash = '#/isps?page=1&sort=' + col + '&dir=' + nd;
+};
 async function viewIsps() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
   renderNav('isps');
   if (!REFRESHING) $('#view').innerHTML = `<div class="np-empty">A carregar…</div>`;
-  const page = +parseHashQuery().page || 1;
-  const d = await api('/api/isps?page=' + page + '&limit=30');
+  const qp = parseHashQuery(); const page = +qp.page || 1; const sC = qp.sort || '', sD = qp.dir || '';
+  const d = await api('/api/isps?page=' + page + '&limit=30' + (sC ? '&sort=' + sC + '&dir=' + sD : ''));
+  const iTh = (col, label, align) => { const a = sC === col; const ar = a ? (sD === 'asc' ? ' ↑' : ' ↓') : '<span style="opacity:.35"> ⇅</span>'; return `<th style="cursor:pointer;user-select:none;white-space:nowrap;text-align:${align || 'left'}" onclick="window.ispSort('${col}')">${label}${ar}</th>`; };
   const max = Math.max(1, ...d.rows.map((r) => r.sites));
   const totalPages = Math.max(1, Math.ceil(d.total / d.limit));
   const row = (r) => `<tr onclick="location.hash='#/directory?isp=${encodeURIComponent(r.isp)}&qualified=true'" title="Ver sites qualificados neste ISP">
@@ -1304,7 +1322,7 @@ async function viewIsps() {
     <td style="text-align:right"><span class="np-badge ${r.qualified / r.sites >= 0.4 ? 'ok' : 'neutral'}" style="height:20px">${pct(r.qualified, r.sites).toFixed(0)}%</span></td></tr>`;
   const pBtn = (p, l, dis) => `<button ${dis ? 'disabled' : ''} onclick="location.hash='#/isps?page=${p}'">${l}</button>`;
   $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Onde os prospetos estão alojados</div><h1 class="np-h1">ISPs / Alojamento</h1><div class="np-sub"><b>${fmt(d.total)}</b> ISPs · ${fmt(d.totalSites)} sites — clica num ISP para ver os seus sites qualificados</div></div></div>
-    <section class="np-card"><div class="np-tablewrap"><table class="np-table"><thead><tr><th>ISP / alojamento</th><th>Distribuição</th><th style="text-align:right">Sites</th><th style="text-align:right">Qualif.</th><th style="text-align:right">%</th></tr></thead><tbody>${d.rows.map(row).join('')}</tbody></table></div>
+    <section class="np-card"><div class="np-tablewrap"><table class="np-table"><thead><tr>${iTh('isp', 'ISP / alojamento')}<th>Distribuição</th>${iTh('sites', 'Sites', 'right')}${iTh('qualified', 'Qualif.', 'right')}${iTh('pct', '%', 'right')}</tr></thead><tbody>${d.rows.map(row).join('')}</tbody></table></div>
     <div class="np-pager">${pBtn(1, '«', page <= 1)}${pBtn(page - 1, '‹', page <= 1)}<span>Página ${page} de ${fmt(totalPages)}</span>${pBtn(page + 1, '›', page >= totalPages)}${pBtn(totalPages, '»', page >= totalPages)}</div></section>`;
 }
 

@@ -184,13 +184,15 @@ function makeHeavyFineHandlers(ctx, audit, js) {
   async function gmb(job) {
     if (!GMB_ENABLED) return 'ack';
     const site = await load(job, ['business_city', 'company.name']); if (!site) return 'ack';
+    const patch = { gmb_checked_at: new Date().toISOString() }; // marca "o job correu" (mesmo sem resultado)
     try {
       const g = await audit.gmb.lookupGmb({ name: site.company?.name, city: site.business_city, domain: site.domain });
       if (g && g.name) {
-        await client.request(updateItem('sites', site.id, { gmb: true, gmb_name: clip(g.name), gmb_category: clip(g.category, 120), gmb_rating: g.rating, gmb_reviews: g.reviews, gmb_phone: clip(g.phone, 60), gmb_url: clip(g.url), business_city: g.city ? clip(g.city, 120) : undefined, business_region: g.region ? clip(g.region, 120) : undefined, business_address: g.address ? clip(g.address) : undefined }));
+        Object.assign(patch, { gmb: true, gmb_name: clip(g.name), gmb_category: clip(g.category, 120), gmb_rating: g.rating, gmb_reviews: g.reviews, gmb_phone: clip(g.phone, 60), gmb_url: clip(g.url), business_city: g.city ? clip(g.city, 120) : undefined, business_region: g.region ? clip(g.region, 120) : undefined, business_address: g.address ? clip(g.address) : undefined });
         await upsertReport(client, site.id, 'gmb', { summary: g, report: g });
       }
     } catch (e) { log(`gmb ${site.domain}: ${e.message}`); }
+    await client.request(updateItem('sites', site.id, patch)); // sempre escreve gmb_checked_at
     return 'ack';
   }
   return {
@@ -288,6 +290,7 @@ function makeHandlers(ctx, audit, js) {
       // Google bloqueia IPs de datacenter; por omissão fica desligado no batch.
       if (want('gmb') && GMB_ENABLED && tier === 'ondemand') {
       m.working();
+      patch.gmb_checked_at = new Date().toISOString(); // marca "o job correu" (mesmo sem resultado)
       try {
         const g = await audit.gmb.lookupGmb({ name: bizName, city: site.business_city, domain: site.domain });
         if (g && g.name) {

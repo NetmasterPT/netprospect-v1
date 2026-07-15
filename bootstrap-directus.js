@@ -204,6 +204,7 @@ async function main() {
   await ensureField('sites', 'blocked_at', ts());
   // Google My Business
   await ensureField('sites', 'gmb', bool(false));
+  await ensureField('sites', 'gmb_checked_at', ts()); // marca "o job gmb correu" (mesmo sem resultado) — cobertura
   await ensureField('sites', 'gmb_signal', str());
   await ensureField('sites', 'gmb_place_id', str());
   await ensureField('sites', 'gmb_name', str());

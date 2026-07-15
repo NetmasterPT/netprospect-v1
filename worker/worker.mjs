@@ -455,8 +455,12 @@ const CONC = {
 log(`conc auto (cores=${_CORES} RAM_free=${_RAM_FREE}MB rep=${_REP}): whois=${CONC.whois} nuclei=${CONC.nuclei} wpscan=${CONC.wpscan} lh=${CONC.lighthouse_mobile} fingerprint=${CONC.fingerprint} contacts=${CONC.contacts} gmb=${CONC.gmb}`);
 
 // --- Arranque ---------------------------------------------------------------
+// Marcador de versão do código — logado no arranque p/ confirmar (via Redis) que uma VM está mesmo
+// a correr o build mais recente (o laptop já teve builds stale). Bump a cada mudança relevante.
+const CODE_VERSION = 'gmb-feed-nav-v1';
+
 async function main() {
-  log(`a arrancar (roles=${WORKER_ROLES || 'todos'}, audit=${AUDIT_ENABLED ? 'on' : 'off'})`);
+  log(`a arrancar v=${CODE_VERSION} (roles=${WORKER_ROLES || 'todos'}, audit=${AUDIT_ENABLED ? 'on' : 'off'})`);
   await initEgress(); // egresso externo via EGRESS_PROXY (exit node), se definido
   const nc = await connectJobs();
   log(`ligado ao NATS: ${nc.getServer()}`);

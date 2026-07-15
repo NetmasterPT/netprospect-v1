@@ -35,6 +35,7 @@
     "nats": "^2.29.3",
     "nodemailer": "^9.0.3",
     "pg": "^8.22.0",
+    "posthog-js": "^1.402.0",
     "puppeteer-core": "^25.3.0",
     "redis": "^6.1.0",
     "simple-wappalyzer": "^1.1.100",

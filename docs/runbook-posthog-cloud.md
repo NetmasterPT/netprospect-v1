@@ -17,40 +17,37 @@ projeto** PostHog (mesma `phc_…` key) para os eventos caírem juntos.
 
 ## Estado atual (o que JÁ está tratado)
 
-- ✅ **Projeto criado** no PostHog Cloud EU (tens acesso ao dashboard).
-- ✅ **Integração A** (workers `np_*`): `POSTHOG_HOST/KEY` definidos em **`docker/.env`** (HEL1). `lib/metrics.js`
-  ativo. *(Falta confirmar DE1 — ver passo 4.)*
-- ✅ **Integração B — server-side**: `POSTHOG_PUBLIC_HOST/KEY` no `.env` (raiz), endpoint `/api/posthog-config`,
-  e os eventos server-side (`campaign_created`, `audit_requested`, `report_viewed`, …) via `fetch` ao `/capture/`.
-  **Já funcionam** assim que o container servir o código (já serve).
-- ✅ **Integração B — bugs de client-side CORRIGIDOS no código** (Claude):
-  1. `posthog-js` estava só no `package.json` da **raiz**, mas o dashboard faz build isolado de `dashboard/` →
-     **adicionado a `dashboard/package.json`**.
-  2. O mount `/vendor` usava `path.join(__dirname, '../node_modules')` → no container resolvia `/node_modules`
-     (errado; deps em `/app/node_modules`) → **corrigido para `path.join(__dirname, 'node_modules')`**.
+- ✅ **Projeto criado** no PostHog Cloud EU.
+- ✅ **Integração A** (workers `np_*`): `POSTHOG_HOST/KEY` em **`docker/.env`** (HEL1). `lib/metrics.js` ativo.
+  *(Falta confirmar DE1 — ver "fechar pontas".)*
+- ✅ **Integração B — dashboard ATIVA** (client SDK + server-side). Os 3 bloqueios foram resolvidos (Claude):
+  1. `posthog-js` só estava no `package.json` da **raiz** → **adicionado a `dashboard/package.json`**.
+  2. mount `/vendor` usava `../node_modules` (resolvia `/node_modules` no container) → **corrigido p/ `node_modules`**.
+  3. as env `POSTHOG_PUBLIC_KEY/HOST` não eram passadas ao container → **forwarded no `docker-compose.yml` + `docker/.env`**.
+  - Confirmado: `/api/posthog-config` → `enabled:true`; `/vendor/posthog-js/...` → `200`. Container rebuilt+up.
 
 ---
 
-## O que FALTA (ordenado) — **começa no Passo 1**
+## O que FALTA — **começa no Passo 1**
 
-### ▶ Passo 1 — Rebuild do container do dashboard (ativa o client-side) — **Claude faz / tu confirmas**
+### ▶ Passo 1 — Gerar os primeiros eventos (finaliza o onboarding) — **TU fazes**
 
-Sem isto, o `posthog-js` não é instalado no container e o `/vendor/posthog-js` dá 404 → **nenhum** evento
-client, session replay ou error-tracking client. Depois dos 2 fixes acima:
+O código está ativo; o PostHog só mostra "não configurado / sem dados" até chegar o 1.º evento. **Abre o
+dashboard e usa-o** (pesquisa, abre um site, troca o tema, cria uma campanha) → em segundos aparecem em
+PostHog → Activity/Events e o onboarding finaliza sozinho.
 
-```bash
-cd docker
-docker compose build dashboard && docker compose up -d dashboard
-# (dev, se correres o dashboard fora de container: cd dashboard && npm install)
-```
+### Passo 2 — O que cada produto que ativaste precisa
 
-### Passo 2 — Terminar o onboarding no PostHog — **TU fazes**
-
-Em **"Which products would you like to use?"**, escolhe:
-- ✅ **Product Analytics** (já instrumentado — os 14 eventos)
-- ✅ **Session Replay** (grava por default; enorme valor num tool interno)
-- ✅ **Error Tracking** (já ligado no `posthog-init.js`)
-- *(opcional)* Web Analytics. **Saltar:** Data Warehouse, Experiments, Surveys, MCP, Logs, Workflows, Support.
+| Produto | Estado | Falta |
+|---|---|---|
+| Product Analytics | ✅ funciona | nada — os 14 eventos fluem ao usar o dashboard |
+| Session Replay | ✅ funciona | nada — grava após o init |
+| Error Tracking | ✅ funciona | nada — `window.error`/`unhandledrejection` ligados |
+| **Web Analytics** | ⚠️ sem dados | precisa de `$pageview`; o init tem `capture_pageview:false` → **Claude captura na mudança de rota** (~15 min) |
+| **AI observability** | ⚠️ sem dados | instrumentar as chamadas LLM (Ollama: indústria + geração de campanhas) → **Claude faz** (~1h; sem custo de API, dá latência/qualidade) |
+| **Feature Flags** | ⚙️ config PostHog | criar flags na **UI do PostHog** (TU) → depois Claude liga o `isFeatureEnabled()` onde quiseres |
+| **Workflows** | ⚙️ config PostHog | 100% na **UI do PostHog** (TU) — automações, não é código nosso |
+| **Logs** | 🚫 saltar | duplicaria os nossos (Redis + worker-telemetry). Recomendo desativar |
 
 ### Passo 3 — Verificar que os eventos chegam
 

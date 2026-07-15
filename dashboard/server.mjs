@@ -14,6 +14,8 @@ const PORT = process.env.PORT || 3000;
 const DIRECTUS_URL = (process.env.DIRECTUS_URL || 'http://localhost:8056').replace(/\/$/, '');
 const TOKEN = process.env.DIRECTUS_TOKEN || '';
 const NATS_URL = process.env.NATS_URL || 'nats://nats:4222';
+const POSTHOG_PUBLIC_KEY = process.env.POSTHOG_PUBLIC_KEY || '';
+const POSTHOG_PUBLIC_HOST = (process.env.POSTHOG_PUBLIC_HOST || '').replace(/\/$/, '');
 // --- Cache (Redis, fail-soft) — REDIS_URL vazio = desligado (tudo live, sem cache).
 const REDIS_URL = process.env.REDIS_URL || '';
 const CACHE_TTL = Math.max(5, parseInt(process.env.CACHE_TTL || '60', 10)); // segundos
@@ -211,8 +213,42 @@ function siteFilterParts(f = {}) {
   return parts.join('&');
 }
 
+const posthogEnabled = () => !!(POSTHOG_PUBLIC_KEY && POSTHOG_PUBLIC_HOST);
+const posthogDistinctId = (req, fallback = 'dashboard-server') => req.get('X-POSTHOG-DISTINCT-ID') || fallback;
+const posthogSessionId = (req) => req.get('X-POSTHOG-SESSION-ID') || undefined;
+async function captureServerEvent(req, event, distinctId, properties = {}) {
+  if (!posthogEnabled()) return;
+  const sessionId = posthogSessionId(req);
+  const payload = {
+    api_key: POSTHOG_PUBLIC_KEY,
+    event,
+    distinct_id: String(distinctId || 'dashboard-server'),
+    properties: {
+      ...properties,
+      source: 'dashboard-server',
+      $current_url: req.originalUrl,
+      ...(sessionId ? { $session_id: sessionId } : {}),
+    },
+  };
+  try {
+    await fetch(`${POSTHOG_PUBLIC_HOST}/capture/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+  } catch { /* fail-soft */ }
+}
+
 const app = express();
 app.use(express.json());
+app.use('/vendor', express.static(path.join(__dirname, 'node_modules')));
+app.get('/api/posthog-config', (req, res) => {
+  res.json({
+    enabled: posthogEnabled(),
+    key: POSTHOG_PUBLIC_KEY || null,
+    host: POSTHOG_PUBLIC_HOST || null,
+  });
+});
 app.use(express.static(path.join(__dirname, 'public')));
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } }); // import CSV até 25 MB
 
@@ -503,6 +539,11 @@ app.post('/api/campaigns', async (req, res) => {
       total: 0, generated: 0, sent: 0, opened: 0, clicked: 0,
     };
     const created = await dwrite('POST', '/items/campaigns', row);
+    void captureServerEvent(req, 'campaign_created', posthogDistinctId(req, `campaign:${created.id}`), {
+      campaign_id: created.id,
+      angle: row.angle,
+      has_segment: !!row.segment,
+    });
     res.json({ ok: true, campaign: created });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
@@ -548,6 +589,11 @@ app.post('/api/campaigns/:id/generate', async (req, res) => {
     }
     await dwrite('PATCH', `/items/campaigns/${encodeURIComponent(id)}`, { status: 'generating', total: ids.length });
     for (const emailId of ids) await natsPublish('jobs.campaign.generate', { emailId }, `campgen:${emailId}`);
+    void captureServerEvent(req, 'campaign_generation_queued', posthogDistinctId(req, `campaign:${id}`), {
+      campaign_id: id,
+      queued_count: ids.length,
+      reused_existing_emails: existing.length > 0,
+    });
     res.json({ ok: true, queued: ids.length });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
@@ -558,6 +604,10 @@ app.post('/api/campaigns/:id/send', async (req, res) => {
     const ready = await d(`/items/emails?filter[campaign][_eq]=${encodeURIComponent(id)}&filter[status][_in]=ready,failed&fields=id&limit=-1`);
     for (const e of ready) await natsPublish('jobs.campaign.send', { emailId: e.id }, `campsend:${e.id}`);
     await dwrite('PATCH', `/items/campaigns/${encodeURIComponent(id)}`, { status: ready.length ? 'sending' : 'sent', sent_at: new Date().toISOString() });
+    void captureServerEvent(req, 'campaign_send_queued', posthogDistinctId(req, `campaign:${id}`), {
+      campaign_id: id,
+      queued_count: ready.length,
+    });
     res.json({ ok: true, queued: ready.length });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
@@ -633,6 +683,11 @@ app.post('/api/audit/:domain', async (req, res) => {
       const rows = await d(`/items/sites?filter[domain][_eq]=${encodeURIComponent(domain)}&fields=id&limit=1`);
       if (rows[0]) await dwrite('PATCH', `/items/sites/${rows[0].id}`, { audit_status: 'queued' });
     } catch { /* ignora */ }
+    void captureServerEvent(req, 'audit_requested', posthogDistinctId(req, `site:${domain}`), {
+      domain,
+      scope: 'single_site',
+      requested_steps: only.join(',') || 'all',
+    });
     res.json({ ok: true, queued: domain, only });
   } catch (e) {
     res.status(502).json({ error: `fila indisponível: ${e.message}` });
@@ -657,6 +712,12 @@ app.post('/api/audit/segment', async (req, res) => {
       await js.publish('jobs.audit.qualified', new TextEncoder().encode(JSON.stringify({ domain: r.domain, only: only.length ? only : undefined })), { headers: h });
       n++;
     }
+    void captureServerEvent(req, 'audit_requested', posthogDistinctId(req, 'segment-audit'), {
+      scope: 'segment',
+      enqueued_count: n,
+      requested_steps: only.join(',') || 'all',
+      capped: rows.length >= cap,
+    });
     res.json({ ok: true, enqueued: n, capped: rows.length >= cap });
   } catch (e) {
     res.status(502).json({ error: `fila indisponível: ${e.message}` });
@@ -871,6 +932,12 @@ app.post('/api/clients/:companyId', async (req, res) => {
     if (b.client_mrr !== undefined) patch.client_mrr = b.client_mrr === '' || b.client_mrr == null ? null : Number(b.client_mrr);
     if (b.client_notes !== undefined) patch.client_notes = b.client_notes || null;
     const company = await dwrite('PATCH', `/items/companies/${encodeURIComponent(req.params.companyId)}`, patch);
+    void captureServerEvent(req, 'client_status_updated', posthogDistinctId(req, `company:${req.params.companyId}`), {
+      company_id: req.params.companyId,
+      is_client: patch.is_client,
+      has_mrr: patch.client_mrr != null,
+      has_notes: !!patch.client_notes,
+    });
     res.json({ ok: true, company });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
@@ -989,6 +1056,15 @@ app.post('/api/import', upload.single('file'), async (req, res) => {
       }
     }
     if (!dryRun) await cacheDrop('stats:');
+    void captureServerEvent(req, 'csv_import_submitted', posthogDistinctId(req, `import:${target}`), {
+      target,
+      dry_run: dryRun,
+      total_rows: stat.total,
+      created_count: stat.created,
+      updated_count: stat.updated,
+      skipped_count: stat.skipped,
+      error_count: stat.errors,
+    });
     res.json({ ...stat, dryRun });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
@@ -996,19 +1072,40 @@ app.post('/api/import', upload.single('file'), async (req, res) => {
 // --- Agentes IA (B4) — Ollama on-prem via /api/agents/* ---------------------
 const OLLAMA_URL = (process.env.OLLAMA_URL || '').replace(/\/$/, '');
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma3:4b';
-async function ollamaJson(prompt, format, { timeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS) || 60000, options = {} } = {}) {
+// AI observability (PostHog): 1 evento `$ai_generation` por chamada LLM — modelo, latência, tokens
+// REAIS do Ollama (prompt_eval_count/eval_count), sucesso/erro. Fail-soft; atribuído por agente (label).
+function captureAi({ label, model, latencyMs, ok, promptTokens, outputTokens, inputText, outputText, httpStatus, error }) {
+  if (!posthogEnabled()) return;
+  const props = {
+    $ai_provider: 'ollama', $ai_model: model, $ai_span_name: label, agent: label, source: 'dashboard-server',
+    $ai_latency: latencyMs != null ? +(latencyMs / 1000).toFixed(3) : undefined, $ai_is_error: !ok,
+  };
+  if (promptTokens != null) props.$ai_input_tokens = promptTokens;
+  if (outputTokens != null) props.$ai_output_tokens = outputTokens;
+  if (httpStatus) props.$ai_http_status = httpStatus;
+  if (error) props.$ai_error = String(error).slice(0, 200);
+  if (inputText) props.$ai_input = String(inputText).slice(0, 2000);
+  if (outputText) props.$ai_output_choices = [String(outputText).slice(0, 2000)];
+  fetch(`${POSTHOG_PUBLIC_HOST}/capture/`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: POSTHOG_PUBLIC_KEY, event: '$ai_generation', distinct_id: `ai:${label || 'ollama'}`, properties: props }),
+  }).catch(() => { /* fail-soft */ });
+}
+async function ollamaJson(prompt, format, { timeoutMs = Number(process.env.OLLAMA_TIMEOUT_MS) || 60000, options = {}, label = 'ollama' } = {}) {
   if (!OLLAMA_URL) return { ok: false, error: 'Ollama desligado. Corre `docker compose --profile audit up -d ollama ollama-init` (e define OLLAMA_URL no .env).' };
   const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), timeoutMs);
+  const started = Date.now();
   try {
     const body = { model: OLLAMA_MODEL, prompt, stream: false, keep_alive: '30m', options };
     if (format) body.format = format;
     const r = await fetch(`${OLLAMA_URL}/api/generate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal });
-    if (!r.ok) return { ok: false, error: `Ollama HTTP ${r.status}` };
+    if (!r.ok) { captureAi({ label, model: OLLAMA_MODEL, latencyMs: Date.now() - started, ok: false, httpStatus: r.status }); return { ok: false, error: `Ollama HTTP ${r.status}` }; }
     const j = await r.json();
     const text = String(j.response ?? '');
     let json = null; if (format) { try { json = JSON.parse(text); } catch { /* não-JSON */ } }
+    captureAi({ label, model: OLLAMA_MODEL, latencyMs: Date.now() - started, ok: true, promptTokens: j.prompt_eval_count, outputTokens: j.eval_count, inputText: prompt, outputText: text });
     return { ok: true, text, json };
-  } catch (e) { return { ok: false, error: e.name === 'AbortError' ? 'Ollama timeout (CPU ocupado com enrich/extract?)' : e.message }; }
+  } catch (e) { captureAi({ label, model: OLLAMA_MODEL, latencyMs: Date.now() - started, ok: false, error: e.name }); return { ok: false, error: e.name === 'AbortError' ? 'Ollama timeout (CPU ocupado com enrich/extract?)' : e.message }; }
   finally { clearTimeout(to); }
 }
 const AGENT_TAXONOMY = ['restauracao', 'retalho', 'saude', 'construcao', 'imobiliario', 'turismo', 'juridico', 'contabilidade', 'automovel', 'beleza', 'educacao', 'ti', 'marketing', 'industria', 'agricultura', 'transportes', 'desporto', 'moda', 'casa', 'financeiro', 'associacao', 'outros'];
@@ -1035,7 +1132,7 @@ ${FILTER_DOC}
 
 Pedido do utilizador: "${q}"`;
   const format = { type: 'object', properties: { name: { type: 'string' }, explanation: { type: 'string' }, filters: { type: 'object' } }, required: ['name', 'filters'] };
-  const r = await ollamaJson(prompt, format, { options: { temperature: 0.2 } });
+  const r = await ollamaJson(prompt, format, { options: { temperature: 0.2 }, label: 'audience' });
   if (!r.ok) return { error: r.error };
   if (!r.json) return { error: 'A IA devolveu uma resposta inválida.' };
   const filters = {};
@@ -1058,7 +1155,7 @@ Responde só em JSON: { "ideas":[ { "title":"", "audience":"", "angle":"", "why"
 ${summary}
 ${extra ? 'Foco pedido: ' + extra : ''}`;
   const format = { type: 'object', properties: { ideas: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, audience: { type: 'string' }, angle: { type: 'string' }, why: { type: 'string' } }, required: ['title', 'audience', 'angle'] } } }, required: ['ideas'] };
-  const r = await ollamaJson(prompt, format, { timeoutMs: 90000, options: { temperature: 0.5 } });
+  const r = await ollamaJson(prompt, format, { timeoutMs: 90000, options: { temperature: 0.5 }, label: 'planner' });
   if (!r.ok) return { error: r.error };
   return { ideas: (r.json?.ideas || []).slice(0, 6), summary };
 }
@@ -1078,7 +1175,7 @@ Usa {{report_url}} para o link do relatório e {{name}}/{{domain}} para personal
 Ângulo de venda: ${angle || 'geral'}. ${audience ? 'Público: ' + audience + '.' : ''} ${message ? 'Instruções extra: ' + message : ''}
 Responde só em JSON: { "subjects":["<2-3 assuntos curtos, menos de 60 chars>"], "preview_text":"<pré-visualização 1 linha>", "body":"<corpo do email com as variáveis>", "variables":["<variáveis efetivamente usadas>"] }`;
   const format = { type: 'object', properties: { subjects: { type: 'array', items: { type: 'string' } }, preview_text: { type: 'string' }, body: { type: 'string' }, variables: { type: 'array', items: { type: 'string' } } }, required: ['subjects', 'body'] };
-  const r = await ollamaJson(prompt, format, { timeoutMs: 90000, options: { temperature: 0.6 } });
+  const r = await ollamaJson(prompt, format, { timeoutMs: 90000, options: { temperature: 0.6 }, label: 'campaign' });
   if (!r.ok) return { error: r.error };
   if (!r.json) return { error: 'A IA devolveu uma resposta inválida.' };
   return { subjects: (r.json.subjects || []).slice(0, 3), preview_text: r.json.preview_text || '', body: r.json.body || '', variables: (r.json.variables || []).slice(0, 12), angle: angle || 'geral' };
@@ -1099,7 +1196,7 @@ app.post('/api/agents/chat', async (req, res) => {
 - "general": pergunta geral → responde tu próprio no campo "reply" (PT de Portugal, curto e útil).
 Mensagem: "${msg}"
 Responde só em JSON {intent, reply}.`;
-    const r = await ollamaJson(routePrompt, routeFmt, { options: { temperature: 0.2 } });
+    const r = await ollamaJson(routePrompt, routeFmt, { options: { temperature: 0.2 }, label: 'orchestrator' });
     if (!r.ok) return res.status(502).json({ error: r.error });
     const intent = r.json?.intent || 'general';
     if (intent === 'audience') { const a = await agentAudience(msg); if (a.error) return res.status(502).json(a); return res.json({ kind: 'audience', intent, ...a }); }
@@ -1321,6 +1418,11 @@ app.get('/r/:token', async (req, res) => {
     const em = rows[0];
     if (!em || !em.site) return res.status(404).type('html').send('<h1 style="font-family:sans-serif;text-align:center;margin-top:60px">Relatório não encontrado</h1>');
     if (!em.opened_at) fetch(`${DIRECTUS_URL}/items/emails/${em.id}`, { method: 'PATCH', headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ opened_at: new Date().toISOString() }) }).catch(() => {});
+    void captureServerEvent(req, 'report_viewed', posthogDistinctId(req, `report:${req.params.token}`), {
+      report_mode: req.query.full === '1' ? 'full' : 'summary',
+      domain: em.site.domain,
+      campaign_angle: em.campaign?.angle || null,
+    });
     res.type('html').send(renderReport(em, req.query.full === '1'));
   } catch (e) {
     res.status(500).type('html').send('<h1>Erro a gerar o relatório</h1>');

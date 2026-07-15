@@ -302,6 +302,9 @@ services:
       PG_WRITE_PASSWORD: ${POSTGRES_PASSWORD}
       PG_WRITE_DB: ${POSTGRES_DB}
     volumes:
+      # Código montado do repo → deploy = git pull && docker compose restart worker (sem rebuild).
+      - ../lib:/app/lib:ro
+      - ../worker:/app/worker:ro
       - ../data/geoip:/app/data/geoip:ro
       - ../data/tranco:/app/data/tranco:ro
       - ../config:/app/config:ro   # verify-providers.json (role verify)
@@ -380,6 +383,8 @@ services:
       WHOISXML_API_KEYS: ${WHOISXML_API_KEYS:-}
       RDAP_RATE_PER_SEC: ${RDAP_RATE_PER_SEC:-5}
     volumes:
+      - ../lib:/app/lib:ro
+      - ../worker:/app/worker:ro
       - ../data/geoip:/app/data/geoip:ro
       - ../data/tranco:/app/data/tranco:ro
     deploy:

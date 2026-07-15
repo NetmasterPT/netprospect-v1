@@ -1,10 +1,36 @@
-# Worker genérico da frota. O ROLE define-se por WORKER_ROLES no .env (base|security|browser|ai).
-# Imagem: worker-base (leve, roles base) OU worker (pesada, browser/security/ai) via WORKER_IMAGE.
+# Compose UNIFICADO dos workers da frota (hel1, de1, Oracle) — igual em todas as máquinas.
+#
+# PRINCÍPIO (git-managed, sem sistemas de deploy por-máquina): cada host tem o REPO INTEIRO git-clonado
+# e corre ESTE compose. O CÓDIGO (lib/ + worker/) é MONTADO do repo → um deploy é:
+#     git pull && docker compose -f deploy/worker/docker-compose.yml up -d       (recreate)
+#   ou, para só recarregar código já montado:
+#     git pull && docker compose -f deploy/worker/docker-compose.yml restart
+# SEM rebuild (usa a imagem existente que já traz Chromium/Nuclei/node_modules; só é preciso rebuild
+# quando MUDAM as dependências, não o código). O setup de cada máquina fica no git: o que varia por host
+# (roles, réplicas, concorrência, IPs do control-plane, segredos) vive no `.env` LOCAL a este dir.
+#
+# .env por host (exemplos):
+#   WORKER_IMAGE=netprospect-worker:latest   # pesada (browser/security/ai/gmb) · base: worker-base:latest
+#   WORKER_ROLES=security,ai,browser         # de1 heavy · Oracle: base · hel1 usa o docker/ (control-plane)
+#   WORKER_REPLICAS=1 · AUDIT_ENABLED=true
+#   NATS_URL=nats://<tailscale-hel1>:4222 · DIRECTUS_URL=… REDIS_URL=… MINIO_URL=… DIRECTUS_ADMIN_TOKEN=…
+#   POSTGRES_USER/PASSWORD/DB=… · LIGHTHOUSE_CONC=… NUCLEI_JOB_CONC=…   (afinação de load)
+# (a hel1 mantém NATS/Directus/Redis/MinIO no docker/docker-compose.yml; aqui só correm os WORKERS.)
 services:
   worker:
     image: ${WORKER_IMAGE:-netprospect-worker-base:latest}
     restart: unless-stopped
-    init: true
+    init: true                 # tini = PID 1, reap dos zombies do Chromium (Lighthouse/GMB)
     env_file: [.env]
+    environment:
+      CHROME_PATH: /usr/bin/chromium
+    volumes:
+      # CÓDIGO montado do repo → git pull + restart chega (sem rebuild).
+      - ../../lib:/app/lib:ro
+      - ../../worker:/app/worker:ro
+      # dados de referência (read-only) — presentes no repo.
+      - ../../data/geoip:/app/data/geoip:ro
+      - ../../data/tranco:/app/data/tranco:ro
+      - ../../config:/app/config:ro
     deploy:
       replicas: ${WORKER_REPLICAS:-2}

@@ -342,7 +342,8 @@ async function renderNav(active) {
     ${item('vms', 'server', 'VMs')}
     ${item('workers', 'sparkles', 'Workers')}
     ${item('queues', 'activity', 'Filas')}
-    ${item('coverage', 'check', 'Cobertura')}
+    ${item('coverage', 'check', 'Cobertura jobs')}
+    ${item('data-coverage', 'check', 'Cobertura dados')}
     ${item('logs', 'clock', 'Logs')}
     ${item('agents', 'sparkles', 'Agentes IA')}
       ${item('chat', 'sparkles', 'Chat IA')}
@@ -1118,6 +1119,59 @@ async function viewCoverage() {
     <br>Filas sem métrica de cobertura (dispatchers/internas, não medem dados por site): <code>discover</code> (cria sites), <code>audit_ondemand/qualified/rest</code> (despacham as finas → contam em "Auditoria coarse"), <code>result_site</code> (writer PG), <code>campaign_generate/send</code> (tabela de campanhas).</div>
   </div></div>`;
 }
+// ---------- Cobertura de DADOS (tem valor no campo, ≠ "job correu") ----------
+let DCOV_THRESH = 'all';
+const DCOV_FIELDS = [
+  ['email', 'Email', 'Contactos'], ['phone', 'Telefone', 'Contactos'], ['decision_maker', 'Decisor', 'Contactos'],
+  ['social', 'Redes sociais', 'Social'], ['whatsapp', 'WhatsApp', 'Social'],
+  ['city', 'Cidade', 'Localização'], ['address', 'Morada (rua)', 'Localização'],
+  ['gmb', 'Google Business', 'Negócio'], ['industry', 'Indústria', 'Negócio'],
+  ['geoip', 'País / GeoIP', 'Infra'], ['ssl', 'Grau SSL', 'Infra'], ['tech', 'Tecnologias', 'Infra'],
+  ['cms_version', 'Versão do CMS', 'Infra'], ['dns_provider', 'DNS provider', 'Infra'],
+  ['spf', 'SPF', 'Email auth'], ['dmarc', 'DMARC', 'Email auth'],
+  ['traffic', 'Tráfego (ranked)', 'Tráfego'],
+  ['lighthouse_mobile', 'Performance mobile', 'Auditoria'], ['lighthouse_desktop', 'Performance desktop', 'Auditoria'],
+  ['seo', 'SEO', 'Auditoria'], ['security', 'Vulnerabilidades', 'Auditoria'], ['wpscan', 'WPScan (contagem)', 'Auditoria'],
+  ['whois', 'Expiração domínio', 'Auditoria'],
+];
+function dcovSum(cov, thresh) {
+  const keys = COV_BUCKETS[thresh] || COV_BUCKETS.all;
+  const rows = (cov.buckets || []).filter((b) => keys.includes(b.bucket));
+  const sum = (f) => rows.reduce((a, b) => a + (+b[f] || 0), 0);
+  const out = { total: sum('total') };
+  for (const [k] of DCOV_FIELDS) out[k] = sum(k);
+  return out;
+}
+window.dcovSet = (t) => { DCOV_THRESH = t; viewDataCoverage(); };
+async function viewDataCoverage() {
+  renderNav('data-coverage');
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Cobertura de dados</h1><div class="np-sub">Fração de sites que <b>têm cada dado</b> (o campo tem valor) — não é “o job correu”. Um dado em falta pode ser porque o job ainda não correu <i>ou</i> porque simplesmente não existe · filtra por lead score · via np-db</div></div></div>`;
+  let cov; try { cov = await api('/api/data-coverage'); } catch (e) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
+  if (!cov.ok) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Indisponível:</b> ${esc(cov.error || '—')} <span class="muted">(precisa do PG_HOST/creds no dashboard).</span></div></div>`; return; }
+  const THS = [['gt70', '&gt;70'], ['gt60', '&gt;60'], ['gt50', '&gt;50'], ['gt40', '&gt;40'], ['lt40', '&lt;40'], ['all', 'Todos']];
+  const seg = THS.map(([k, l]) => `<button class="np-btn np-btn--sm ${DCOV_THRESH === k ? 'np-btn--primary' : ''}" onclick="window.dcovSet('${k}')">${l}</button>`).join(' ');
+  const s = dcovSum(cov, DCOV_THRESH); const total = s.total || 1;
+  const bar = (pct, col) => `<div style="height:8px;background:var(--np-border,#e5e7eb);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.min(100, pct)}%;background:${col}"></div></div>`;
+  const row = ([k, label, cat]) => {
+    const n = s[k] || 0; const pct = Math.round(1000 * n / total) / 10;
+    const col = pct >= 90 ? 'var(--np-ok-mark,#16a34a)' : pct >= 40 ? 'var(--np-warn,#d97706)' : 'var(--np-brand,#e11d48)';
+    return `<tr><td style="padding:8px 10px"><b>${esc(label)}</b></td>
+      <td class="tnum" style="text-align:right;padding:8px 10px">${fmt(n)}</td>
+      <td class="tnum" style="text-align:right;padding:8px 10px;color:var(--np-text-2)">${fmt(total)}</td>
+      <td style="padding:8px 10px;min-width:160px">${bar(pct, col)}</td>
+      <td class="tnum" style="text-align:right;padding:8px 10px;font-weight:800">${pct}%</td></tr>`;
+  };
+  const v = cov.verify || {};
+  $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center"><span class="muted" style="font-size:12px">Lead score:</span> ${seg}
+      <span class="muted" style="margin-left:auto;font-size:11.5px">${fmt(s.total)} sites neste filtro</span></div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="text-align:left;color:var(--np-text-2);font-size:11px"><th style="padding:6px 10px">Dado</th><th style="text-align:right;padding:6px 10px">Com dados</th><th style="text-align:right;padding:6px 10px">Total</th><th style="padding:6px 10px">Progresso</th><th style="text-align:right;padding:6px 10px">%</th></tr></thead>
+      <tbody>${(() => { let g = null; return DCOV_FIELDS.map((j) => { const hdr = j[2] !== g ? (g = j[2], `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${esc(j[2])}</td></tr>`) : ''; return hdr + row(j); }).join(''); })()}</tbody></table>
+    <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email): ${fmt(v.verified || 0)} verificados de ${fmt(v.with_email || 0)} com email · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
+    <br>Compara com a <a href="#/coverage" style="color:var(--np-brand)">Cobertura de jobs</a>: se o job correu a ~100% mas o dado está baixo, é porque esse dado <b>não existe</b> para a maioria (não é trabalho em falta). <b>security</b>/<b>social</b> contam só quando há resultado real (não vazio).</div>
+  </div></div>`;
+}
 async function viewWorkers() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
   renderNav('workers');
@@ -1586,6 +1640,7 @@ async function route() {
     else if (h === 'workers') await viewWorkers();
     else if (h === 'queues') await viewQueues();
     else if (h === 'coverage') await viewCoverage();
+    else if (h === 'data-coverage') await viewDataCoverage();
     else if (h === 'report') await viewReport();
     else if (h === 'logs') await viewLogs();
     else if (h === 'config') await viewConfig();
@@ -1597,7 +1652,7 @@ async function route() {
 // Auto-refresh global (10s) das páginas de dados. NÃO refresca ferramentas (import/agents/
 // settings), nem enquanto se edita um campo, nem com um drawer aberto; preserva o scroll.
 let REFRESHING = false;
-  const NO_AUTOREFRESH = new Set(['import', 'agents', 'chat', 'settings', 'coverage', 'logs']);
+  const NO_AUTOREFRESH = new Set(['import', 'agents', 'chat', 'settings', 'coverage', 'data-coverage', 'logs']);
 window.addEventListener('hashchange', route);
 route();
 setInterval(() => {

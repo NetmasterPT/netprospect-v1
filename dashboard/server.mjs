@@ -1309,6 +1309,53 @@ app.get('/api/coverage', async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// --- Cobertura de DADOS por bucket de lead_score (≠ jobs: aqui mede-se se o CAMPO TEM VALOR, não se
+//     o job correu). Ajuda a ver que dados temos sobre as leads — um job pode ter corrido e não achar
+//     nada (o dado simplesmente não existe). np-db direto; cache 2min. Antes do catch-all. ---
+const DATA_COVERAGE_SQL = `
+SELECT
+  CASE WHEN lead_score>70 THEN 'gt70' WHEN lead_score>60 THEN 'b60' WHEN lead_score>50 THEN 'b50'
+       WHEN lead_score>40 THEN 'b40' ELSE 'lt40' END AS bucket,
+  count(*)::int AS total,
+  count(*) FILTER (WHERE has_email)::int AS email,
+  count(*) FILTER (WHERE has_phone)::int AS phone,
+  count(*) FILTER (WHERE has_decision_maker)::int AS decision_maker,
+  count(*) FILTER (WHERE social IS NOT NULL AND social::text NOT IN ('null','{}','[]'))::int AS social,
+  count(*) FILTER (WHERE whatsapp_number IS NOT NULL OR social_whatsapp IS TRUE)::int AS whatsapp,
+  count(*) FILTER (WHERE business_city IS NOT NULL)::int AS city,
+  count(*) FILTER (WHERE business_address IS NOT NULL)::int AS address,
+  count(*) FILTER (WHERE gmb_name IS NOT NULL)::int AS gmb,
+  count(*) FILTER (WHERE industry IS NOT NULL)::int AS industry,
+  count(*) FILTER (WHERE ip_country IS NOT NULL)::int AS geoip,
+  count(*) FILTER (WHERE ssl_grade IS NOT NULL)::int AS ssl,
+  count(*) FILTER (WHERE tech_detected IS NOT NULL)::int AS tech,
+  count(*) FILTER (WHERE cms_version IS NOT NULL)::int AS cms_version,
+  count(*) FILTER (WHERE dns_provider IS NOT NULL)::int AS dns_provider,
+  count(*) FILTER (WHERE spf_status IS NOT NULL)::int AS spf,
+  count(*) FILTER (WHERE dmarc_status IS NOT NULL)::int AS dmarc,
+  count(*) FILTER (WHERE traffic_bucket IS NOT NULL AND traffic_bucket <> 'unranked')::int AS traffic,
+  count(*) FILTER (WHERE mobile_score IS NOT NULL)::int AS lighthouse_mobile,
+  count(*) FILTER (WHERE perf_desktop IS NOT NULL)::int AS lighthouse_desktop,
+  count(*) FILTER (WHERE seo_score IS NOT NULL)::int AS seo,
+  count(*) FILTER (WHERE security_findings IS NOT NULL AND security_findings::text NOT IN ('null','[]','{}'))::int AS security,
+  count(*) FILTER (WHERE wp_vuln_count IS NOT NULL)::int AS wpscan,
+  count(*) FILTER (WHERE domain_expiry IS NOT NULL)::int AS whois
+FROM sites GROUP BY bucket`;
+app.get('/api/data-coverage', async (req, res) => {
+  try {
+    const data = await cached('np:datacoverage:v1', async () => {
+      const p = await pgPool();
+      if (!p) return { ok: false, error: 'PG desligado (falta PG_HOST/creds)' };
+      const [sites, ver] = await Promise.all([
+        p.query(DATA_COVERAGE_SQL),
+        p.query("SELECT count(*) FILTER (WHERE email_status IS NOT NULL)::int verified, count(*) FILTER (WHERE email IS NOT NULL)::int with_email FROM contacts"),
+      ]);
+      return { ok: true, buckets: sites.rows, verify: ver.rows[0], ts: Date.now() };
+    }, 120);
+    res.json(data);
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // Logs agregados da frota (merge dos np:wk:<id>:log de todos os workers vivos). Antes do catch-all.
 app.get('/api/logs', async (req, res) => {
   try {

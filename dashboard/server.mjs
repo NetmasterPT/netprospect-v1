@@ -1216,7 +1216,7 @@ app.get('/api/coverage', async (req, res) => {
         p.query("SELECT count(*) FILTER (WHERE email_status IS NOT NULL)::int verified, count(*) FILTER (WHERE email IS NOT NULL)::int with_email FROM contacts"),
       ]);
       return { ok: true, buckets: sites.rows, verify: ver.rows[0], ts: Date.now() };
-    }, 600);
+    }, 120);
     res.json(data);
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });

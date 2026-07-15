@@ -170,20 +170,28 @@ function buildSiteFilters(f = {}, pfx = '') {
   }
   if (on(f.dm)) F('has_decision_maker', '_eq', 'true'); // tem contacto decisor
   if (f.lead_min) F('lead_score', '_gte', String(parseInt(f.lead_min, 10) || 0));
+  if (f.lead_max) F('lead_score', '_lt', String(parseInt(f.lead_max, 10) || 0)); // combina c/ lead_min = intervalo
   if (f.city) F('business_city', '_icontains', f.city);
   if (f.industry) F('industry', '_eq', f.industry);
   if (f.traffic) F('traffic_bucket', '_in', f.traffic);
   if (on(f.cpanel)) F('is_cpanel', '_eq', 'true');
+  if (on(f.notcpanel)) F('is_cpanel', '_neq', 'true'); // alojamento sem cPanel
   if (on(f.fb)) F('social_facebook', '_eq', 'true');
   if (on(f.ig)) F('social_instagram', '_eq', 'true');
   if (on(f.li)) F('social_linkedin', '_eq', 'true');
   if (on(f.tw)) F('social_twitter', '_eq', 'true');
   if (on(f.gmb)) F('gmb', '_eq', 'true');
+  if (on(f.wa)) F('social_whatsapp', '_eq', 'true');
+  if (on(f.pin)) F('social_pinterest', '_eq', 'true');
+  if (on(f.yt)) F('social_youtube', '_eq', 'true');
+  if (on(f.tk)) F('social_tiktok', '_eq', 'true');
   if (f.load) F('load_bucket', '_in', f.load);
   if (f.spf) F('spf_status', '_in', f.spf);       // UI envia missing,weak,invalid p/ "problemas"
   if (f.dmarc) F('dmarc_status', '_in', f.dmarc);
+  if (f.authboth === 'both') { F('spf_status', '_in', 'missing,weak,invalid'); F('dmarc_status', '_in', 'missing,weak,invalid'); } // ambos com problemas
   if (f.seo_max) F('seo_score', '_lte', String(parseInt(f.seo_max, 10) || 0));
   if (f.mobile === 'bad') F('mobile_friendly', '_eq', 'false');
+  if (f.desktop === 'bad') F('perf_desktop', '_lt', '50'); // proxy: sem coluna desktop_friendly, usa perf desktop <50
   if (on(f.security)) F('security_findings', '_gt', '0');
   if (f.sev) F('security_severity', '_in', f.sev);
   if (on(f.wpvuln)) F('wp_vuln_count', '_gt', '0');
@@ -321,8 +329,12 @@ app.get('/api/directory', async (req, res) => {
       + ',has_email,has_phone,has_decision_maker,lead_score,is_cpanel,gmb,social_facebook,social_instagram,social_linkedin,social_twitter,load_bucket,spf_status,dmarc_status,business_city'
       + ',industry,traffic_bucket,seo_score,mobile_friendly,security_findings,security_severity,wp_vuln_count,audit_status'
       + ',ssl_days_left,ssl_grade,expiring_soon,cms_outdated,cms_version';
-    // Ordenação: por omissão os melhores leads primeiro; ?sort=domain força alfabética.
-    const sort = req.query.sort === 'domain' ? 'sort[]=domain' : 'sort[]=-lead_score&sort[]=domain';
+    // Ordenação: por omissão os melhores leads primeiro. ?sort=<col>&dir=asc|desc ordena por coluna
+    // (whitelist). dir explícito ganha; senão lead_score default desc, restantes asc. Desempate por domain.
+    const SORTABLE = { domain: 'domain', lead_score: 'lead_score', seo: 'seo_score', country: 'ip_country', platform: 'primary_platform.slug', city: 'business_city', traffic: 'traffic_bucket', ssl: 'ssl_days_left' };
+    const sf = SORTABLE[req.query.sort];
+    const dir = req.query.dir === 'desc' ? '-' : req.query.dir === 'asc' ? '' : (req.query.sort === 'lead_score' ? '-' : '');
+    const sort = sf ? `sort[]=${dir}${sf}&sort[]=domain` : 'sort[]=-lead_score&sort[]=domain';
     const url = `/items/sites?${fields}${filter}&${sort}&limit=${limit}&offset=${offset}&meta=filter_count`;
     const res2 = await fetch(`${DIRECTUS_URL}${url}`, { headers: { Authorization: `Bearer ${TOKEN}` } });
     const json = await res2.json();

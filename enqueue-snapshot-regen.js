@@ -34,13 +34,21 @@ async function main() {
   if (MIN_SCORE != null) base.lead_score = { _gte: MIN_SCORE };
   console.log(`Snapshot-regen (fetch snapshotOnly → industry)${QUALIFIED ? ' | qualificados' : ''}${MIN_SCORE != null ? ` | score >= ${MIN_SCORE}` : ' | TODOS os live'}${LIMIT ? ` | limite ${LIMIT}` : ''}`);
 
+  // Directus sob carga pesada devolve "fetch failed"/503 transitórios → retry com backoff (senão o
+  // enqueue crasha a meio de 1,44M páginas).
+  const readRetry = async (opts, tries = 6) => {
+    for (let i = 0; ; i++) {
+      try { return await client.request(readItems('sites', opts)); }
+      catch (e) { if (i >= tries) throw e; await new Promise((r) => setTimeout(r, 2000 * (i + 1))); }
+    }
+  };
   let lastId = 0, n = 0;
   for (;;) {
     if (LIMIT && n >= LIMIT) break;
     const pageSize = LIMIT ? Math.min(PAGE, LIMIT - n) : PAGE;
-    const rows = await client.request(readItems('sites', {
+    const rows = await readRetry({
       filter: { ...base, id: { _gt: lastId } }, fields: ['id', 'domain'], sort: ['id'], limit: pageSize,
-    }));
+    });
     if (!rows.length) break;
     lastId = rows[rows.length - 1].id;
     for (const s of rows) {

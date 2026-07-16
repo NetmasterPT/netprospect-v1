@@ -204,6 +204,8 @@ function buildSiteFilters(f = {}, pfx = '') {
   // sinal de venda (empresa que investiu). Nota: Sectigo (87k) inclui muito cPanel AutoSSL grátis —
   // fica marcado como "pago" (não há como distinguir só pelo emissor); afinável se o utilizador quiser.
   if (on(f.ssl_paid)) F('ssl_issuer', '_nin', "Let's Encrypt,Google Trust Services,ZeroSSL GmbH,Amazon,Certainly");
+  if (on(f.ssl_ov)) F('ssl_validation', '_eq', 'OV');   // OV/EV = validação de EMPRESA (pago) — distingue Sectigo pago do cPanel DV grátis
+  if (on(f.ssl_wildcard)) F('ssl_wildcard', '_eq', 'true'); // certificado wildcard (*.dominio)
   if (on(f.domain_expiring)) F('expiring_soon', '_eq', 'true');    // domínio a expirar ≤90d (flag)
   // Renovação de domínio graduada: expira entre agora e agora+N dias (usa $NOW dinâmico do Directus).
   if (f.domain_renew) { const n = parseInt(f.domain_renew, 10); if ([30, 60, 90, 180].includes(n)) crit.push([['domain_expiry', '_gte', '$NOW'], ['domain_expiry', '_lte', `$NOW(+${n} days)`]]); }

@@ -352,9 +352,17 @@ export function makeFineHandlers(ctx, js) {
     if (cert) {
       const notAfter = new Date(cert.valid_to);
       const daysLeft = Math.round((notAfter - Date.now()) / 86400000);
+      // Tipo de validação: OV/EV se o subject tem Organização (paga-se p/ validar a empresa);
+      // DV se só tem CN (grátis: Let's Encrypt, ZeroSSL, cPanel AutoSSL-Sectigo…). Distingue o
+      // Sectigo "pago" (OV) do Sectigo cPanel (DV). EV é raro/depreciado → dobrado em OV.
+      const sslValidation = (cert.subject?.O && String(cert.subject.O).trim()) ? 'OV' : 'DV';
+      // Wildcard: CN ou algum SAN começa por "*." (ex.: *.dominio.pt).
+      const san = String(cert.subjectaltname || '');
+      const sslWildcard = /(^|[\s:])\*\./.test(san) || String(cert.subject?.CN || '').startsWith('*.');
       await client.request(updateItem('sites', job.siteId, {
         ssl_issuer: clip(cert.issuer?.O || cert.issuer?.CN || null, 120),
         ssl_not_after: notAfter.toISOString(), ssl_days_left: daysLeft, ssl_grade: sslGrade(daysLeft, cert.authorized),
+        ssl_validation: sslValidation, ssl_wildcard: sslWildcard,
       }));
       if (!SKIP_DH_SCORE) await pub(SUBJECTS.score, { domain: job.domain, siteId: job.siteId }, `score:${job.domain}`);
     } else {

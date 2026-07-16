@@ -595,6 +595,56 @@ app.delete('/api/subscriptions/:id', async (req, res) => {
   try { await dwrite('DELETE', `/items/subscriptions/${encodeURIComponent(req.params.id)}`); res.json({ ok: true }); }
   catch (e) { res.status(502).json({ error: e.message }); }
 });
+// Variáveis p/ os templates ({{name}}, {{company}}, …). Espelha lib/campaign-ai.js (a imagem do
+// dashboard não tem lib/); cobre os campos comuns dos templates escritos à mão.
+const PLATFORM_WORD_S = { wordpress: 'WordPress', woocommerce: 'WooCommerce', prestashop: 'PrestaShop', wix: 'Wix', shopify: 'Shopify', joomla: 'Joomla', drupal: 'Drupal' };
+function subVars(c, s) {
+  const co = s?.company?.name || s?.domain || 'a vossa empresa';
+  const fn = (c?.name || '').trim().split(/\s+/)[0] || '';
+  const slug = s?.primary_platform?.slug || '';
+  return {
+    name: c?.name || '', first_name: fn, greeting: fn ? `Olá ${fn}` : 'Olá', company: co, domain: s?.domain || '',
+    city: s?.business_city || '', industry: s?.industry || '', seo_score: s?.seo_score ?? '', ssl_days_left: s?.ssl_days_left ?? '',
+    cms_version: s?.cms_version || '', platform: slug, platform_word: PLATFORM_WORD_S[slug] || slug || '', dns_provider: s?.dns_provider || '',
+  };
+}
+const subRender = (tpl, vars) => String(tpl || '').replace(/\{\{\s*([a-z_]+)\s*\}\}/gi, (_, k) => { const v = vars[k.toLowerCase()]; return v == null ? '' : String(v); });
+// Cria uma campanha a partir de um pacote: usa os filtros de um segmento do pacote como audiência.
+// { segmentId, templateIndex?, name?, from_name?, from_email?, reply_to?, angle? }. Com template →
+// preenche os e-mails com o template (variáveis substituídas, status=ready). Sem → draft p/ gerar por IA.
+app.post('/api/subscriptions/:id/campaign', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const subs = await d(`/items/subscriptions?filter[id][_eq]=${encodeURIComponent(req.params.id)}&limit=1&fields=${SUB_FIELDS}`);
+    const sub = subs[0]; if (!sub) return res.status(404).json({ error: 'pacote não encontrado' });
+    if (!b.segmentId) return res.status(400).json({ error: 'segmentId obrigatório' });
+    const segRows = await d(`/items/segments?filter[id][_eq]=${encodeURIComponent(b.segmentId)}&limit=1&fields=id,name,filters`);
+    const seg = segRows[0]; if (!seg) return res.status(404).json({ error: 'segmento não encontrado' });
+    const tpl = (b.templateIndex != null && Array.isArray(sub.email_templates)) ? sub.email_templates[b.templateIndex] : null;
+    const campRow = {
+      name: String(b.name || `${sub.name} — ${seg.name}`).slice(0, 255), angle: b.angle || 'general', status: 'draft',
+      audience_filters: seg.filters || {}, segment: seg.id, from_name: (b.from_name || '').slice(0, 255),
+      from_email: (b.from_email || '').slice(0, 255), reply_to: (b.reply_to || '').slice(0, 255),
+      subject_hint: (tpl?.subject || '').slice(0, 255), total: 0, generated: 0, sent: 0, opened: 0, clicked: 0,
+    };
+    const camp = await dwrite('POST', '/items/campaigns', campRow);
+    let filled = 0;
+    if (tpl) {
+      const parts = contactAudienceParts(seg.filters || {});
+      const contacts = await d(`/items/contacts?${parts}&fields=id,name,email,site.id,site.domain,site.business_city,site.industry,site.seo_score,site.ssl_days_left,site.cms_version,site.dns_provider,site.primary_platform.slug,site.company.name&limit=5000`);
+      const seen = new Set(); const toCreate = [];
+      for (const c of contacts) {
+        const em = (c.email || '').toLowerCase(); if (!em || seen.has(em)) continue; seen.add(em);
+        const vars = subVars(c, c.site || {});
+        toCreate.push({ campaign: camp.id, contact: c.id, site: c.site?.id || null, to_email: em, to_name: (c.name || '').slice(0, 255), subject: subRender(tpl.subject, vars).slice(0, 255), body: subRender(tpl.body, vars), ai_generated: false, status: 'ready', token: newToken() });
+      }
+      for (let i = 0; i < toCreate.length; i += 100) await dwrite('POST', '/items/emails', toCreate.slice(i, i + 100));
+      filled = toCreate.length;
+      await dwrite('PATCH', `/items/campaigns/${camp.id}`, { status: filled ? 'ready' : 'draft', total: filled, generated: filled });
+    }
+    res.json({ ok: true, campaignId: camp.id, mode: tpl ? 'template' : 'ai', filled });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
 
 // --- Campanhas (Fase F) ------------------------------------------------------
 const newToken = () => crypto.randomBytes(16).toString('hex');

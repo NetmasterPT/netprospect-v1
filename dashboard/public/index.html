@@ -360,7 +360,7 @@ async function renderNav(active) {
 // ========== SUBSCRIÇÕES (produtos Netmaster) ==========
 const SUB_FREQ = [['one_off', 'One-Off'], ['monthly', 'Mensal'], ['quarterly', 'Trimestral'], ['semiannual', 'Semestral'], ['annual', 'Anual']];
 const SUB_CATS = ['alojamento', 'manutenção', 'ssl', 'segurança', 'seo', 'desktop', 'mobile', 'outro'];
-let SUB = { edit: null, refs: { segments: [], campaigns: [], clients: [] } };
+let SUB = { edit: null, list: [], refs: { segments: [], campaigns: [], clients: [] } };
 const eur = (n) => (n == null || n === '' ? '—' : '€ ' + Number(n).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const subFreqLabel = (f) => (SUB_FREQ.find((x) => x[0] === f) || [f, f])[1];
 async function viewSubscriptions() {
@@ -371,6 +371,7 @@ async function viewSubscriptions() {
   SUB.refs = data.refs || { segments: [], campaigns: [], clients: [] };
   if (SUB.edit) { $('#view').innerHTML = head + `<div id="sub-editor">${subEditorHtml()}</div>`; return; }
   const subs = data.subscriptions || [];
+  SUB.list = subs;
   if (!subs.length) { $('#view').innerHTML = head + `<div class="np-empty">Ainda não há pacotes. Cria o primeiro com “+ Novo pacote”.</div>`; return; }
   $('#view').innerHTML = head + `<div class="np-grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${subs.map(subCardHtml).join('')}</div>`;
 }
@@ -382,7 +383,7 @@ function subCardHtml(s) {
       <span style="text-align:right"><div style="font-weight:800">${eur(s.price_ex_vat)}</div><div class="muted" style="font-size:10.5px">${eur(s.price_inc_vat)} c/IVA</div></span></div>
     ${feats.length ? `<ul style="margin:10px 0 0;padding-left:16px;font-size:12px;color:var(--np-text-2)">${feats.map((f) => `<li>${esc(f)}</li>`).join('')}${(s.features || []).length > 5 ? `<li class="muted">+${s.features.length - 5}…</li>` : ''}</ul>` : ''}
     <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:10px">${rel(s.icps, 'ICP')}${rel(s.segment_ids, 'seg')}${rel(s.client_ids, 'clientes')}${rel(s.campaign_ids, 'camp')}${rel(s.email_templates, 'templates')}</div>
-    <div style="display:flex;gap:6px;margin-top:12px"><button class="np-btn np-btn--sm" onclick="subEdit(${s.id})">Editar</button><button class="np-btn np-btn--sm" onclick="subDelete(${s.id},'${esc((s.name || '').replace(/'/g, ''))}')">Apagar</button></div>
+    <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap"><button class="np-btn np-btn--sm" onclick="subEdit(${s.id})">Editar</button>${(s.segment_ids || []).length ? `<button class="np-btn np-btn--sm np-btn--primary" onclick="subCampaign(${s.id})">${ic('send', 12)} Criar campanha</button>` : ''}<button class="np-btn np-btn--sm" onclick="subDelete(${s.id},'${esc((s.name || '').replace(/'/g, ''))}')">Apagar</button></div>
   </div></section>`;
 }
 function subEditorHtml() {
@@ -453,6 +454,45 @@ window.subSave = async () => {
   } catch (e) { if (msg) msg.textContent = 'erro: ' + e.message; }
 };
 window.subDelete = async (id, name) => { if (!confirm('Apagar o pacote “' + name + '”?')) return; await api('/api/subscriptions/' + id, { method: 'DELETE' }); viewSubscriptions(); };
+// Criar campanha a partir de um pacote: escolhe um segmento (audiência) + conteúdo (IA por ângulo,
+// ou um dos templates do pacote → preenche os e-mails com variáveis substituídas).
+window.subCampaign = (id) => {
+  const s = (SUB.list || []).find((x) => x.id === id); if (!s) return;
+  const segs = (SUB.refs.segments || []).filter((seg) => (s.segment_ids || []).map(Number).includes(Number(seg.id)));
+  const tpls = s.email_templates || [];
+  const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
+  const hd = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">Criar campanha</div><div class="muted" style="font-size:12px">${esc(s.name)}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>`;
+  if (!segs.length) { dw.innerHTML = hd + `<div class="np-empty">Este pacote não tem segmentos. Adiciona segmentos ao pacote (Editar) primeiro.</div>`; return; }
+  const lab = (t) => `<label class="muted" style="font-size:11px;display:block;margin:10px 0 3px">${t}</label>`;
+  dw.innerHTML = hd + `<div style="padding:14px 16px">
+    ${lab('Segmento (audiência) — os filtros do directório desse segmento')}
+    <select id="sc-seg" class="np-input" style="width:100%">${segs.map((seg) => `<option value="${seg.id}">${esc(seg.name)}</option>`).join('')}</select>
+    ${lab('Conteúdo do email')}
+    <select id="sc-tpl" class="np-input" style="width:100%">
+      <option value="ai">Gerar por IA (ângulo — refinas na campanha)</option>
+      ${tpls.map((t, i) => `<option value="${i}">Template: ${esc(t.name || ('#' + (i + 1)))}</option>`).join('')}
+    </select>
+    ${tpls.length ? `<div class="muted" style="font-size:11px;margin-top:4px">Com template, os e-mails são preenchidos já (variáveis {{name}}, {{company}}, {{domain}}, {{city}}, {{industry}}, {{seo_score}}… substituídas por contacto) e ficam prontos a enviar.</div>` : ''}
+    ${lab('Remetente')}
+    <input id="sc-from-name" class="np-input" style="width:100%;margin-bottom:6px" placeholder="Nome (ex.: Equipa Netmaster)">
+    <input id="sc-from-email" class="np-input" style="width:100%;margin-bottom:6px" placeholder="Email de envio (ex.: ola@netmaster.pt)">
+    <input id="sc-reply" class="np-input" style="width:100%" placeholder="Reply-to (opcional)">
+    <div style="display:flex;gap:8px;margin-top:16px"><button class="np-btn np-btn--primary" onclick="subCampaignSubmit(${id})">Criar campanha</button><button class="np-btn" onclick="closeDrawer()">Cancelar</button><span id="sc-msg" class="muted" style="font-size:12px;align-self:center"></span></div>
+    <div class="muted" style="font-size:11px;margin-top:12px">A campanha abre a seguir para reveres, gerares (se IA) e enviares.</div>
+  </div>`;
+};
+window.subCampaignSubmit = async (id) => {
+  const g = (x) => document.getElementById(x); const msg = g('sc-msg');
+  const tplVal = g('sc-tpl').value;
+  const body = { segmentId: g('sc-seg').value, from_name: g('sc-from-name').value.trim(), from_email: g('sc-from-email').value.trim(), reply_to: g('sc-reply').value.trim() };
+  if (tplVal !== 'ai') body.templateIndex = parseInt(tplVal, 10);
+  msg.textContent = 'a criar…';
+  try {
+    const r = await api('/api/subscriptions/' + id + '/campaign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    captureEvent('subscription_campaign_created', { subscription_id: id, mode: r.mode, filled: r.filled });
+    closeDrawer(); location.hash = '#/campaigns?id=' + r.campaignId;
+  } catch (e) { msg.textContent = 'erro: ' + e.message; }
+};
 
 // ---------- bars ----------
 function barRows(items, colorFn, showPct = true) {

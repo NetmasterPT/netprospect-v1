@@ -1104,12 +1104,35 @@ async function viewServers() {
           : `<span class="np-badge" style="height:15px;font-size:9px;background:var(--np-warn)" title="VERSÕES MISTURADAS — há workers com código diferente">⚠ ${v.versions.map(esc).join(' / ')}</span>`;
         const jobs = Object.keys(v.conc || {}).sort();
         const cfg = jobs.length ? `<details style="margin-top:2px"><summary style="cursor:pointer;font-size:10px;color:var(--np-text-2)">config · ${v.replicas}w</summary><table style="width:100%;font-size:10px;margin:3px 0;border-collapse:collapse">${jobs.map((j) => `<tr><td style="padding:1px 4px">${esc(j)}</td><td class="tnum" style="text-align:right;padding:1px 6px">conc ${v.conc[j]}</td><td class="tnum" style="text-align:right;padding:1px 4px;color:var(--np-text-2)">maxack ${(v.maxacks || {})[j] ?? '—'}</td></tr>`).join('')}</table></details>` : '';
-        return `<div style="padding:5px 0;border-top:1px solid var(--np-border)"><div style="display:flex;justify-content:space-between;font-size:12px;gap:6px"><span onclick="location.hash='#/vms'" style="cursor:pointer;min-width:0">${esc(v.host)} <span class="muted">${esc(v.roles.join('/'))}</span></span><span class="tnum muted" style="white-space:nowrap">${v.load != null ? v.load + '/' + v.cores + 'c' : '—'}</span></div><div style="margin-top:3px">${ver}</div>${cfg}</div>`;
+        return `<div style="padding:5px 0;border-top:1px solid var(--np-border)"><div style="display:flex;justify-content:space-between;font-size:12px;gap:6px"><span onclick="location.hash='#/vms'" style="cursor:pointer;min-width:0">${esc(v.host)} <span class="muted">${esc(v.roles.join('/'))}</span></span><span class="tnum muted" style="white-space:nowrap">${v.load != null ? v.load + '/' + v.cores + 'c' : '—'}</span></div><div style="margin-top:3px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">${ver}<button class="np-btn np-btn--sm" style="font-size:9px;padding:1px 6px" title="Editar o .env deste host (auto-deploy por pull)" onclick="event.stopPropagation();editHostEnv('${esc(v.host)}')">⚙ .env</button></div>${cfg}</div>`;
       }).join('')}</div>
     </div></section>`;
   };
   $('#view').innerHTML = head + `<div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">${Object.entries(dcs).map(card).join('')}</div>`;
 }
+// Editor do .env de um host (auto-deploy por pull). Grava no store central do np-server; o agente
+// do host puxa e recria só se mudou. Ver docs/runbook-laptop-autodeploy.md.
+window.editHostEnv = async (host) => {
+  const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
+  dw.innerHTML = `<div class="np-empty">A carregar .env…</div>`;
+  try {
+    const r = await api('/api/fleet/env/' + encodeURIComponent(host));
+    dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">.env · ${esc(host)}</div><div class="muted" style="font-size:12px">${r.exists ? 'guardado no np-server (hash ' + esc(r.hash) + ')' : 'ainda sem .env no store — cola o atual deste host'}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+      <div style="padding:14px 16px">
+        <textarea id="envta" spellcheck="false" style="width:100%;height:58vh;font-family:ui-monospace,monospace;font-size:12px;padding:10px;border:1px solid var(--np-border);border-radius:8px;background:var(--np-surface);color:var(--np-text);white-space:pre;overflow:auto" placeholder="VAR=valor (uma por linha)">${esc(r.env || '')}</textarea>
+        <div style="display:flex;gap:8px;margin-top:10px;align-items:center"><button class="np-btn np-btn--primary" onclick="saveHostEnv('${esc(host)}')">Guardar</button><button class="np-btn" onclick="closeDrawer()">Cancelar</button><span id="envmsg" class="muted" style="font-size:12px"></span></div>
+        <div class="muted" style="font-size:11px;margin-top:10px">⚠️ Contém segredos. Guardar escreve no store central; o host puxa e recria só se o conteúdo mudou (≤ intervalo do agente).</div>
+      </div>`;
+  } catch (e) { dw.innerHTML = `<div class="np-empty">Erro: ${esc(e.message)} <button class="np-btn np-btn--sm" style="margin-top:10px" onclick="closeDrawer()">Fechar</button></div>`; }
+};
+window.saveHostEnv = async (host) => {
+  const ta = document.getElementById('envta'); const msg = document.getElementById('envmsg'); if (!ta) return;
+  msg.textContent = 'a guardar…';
+  try {
+    const r = await api('/api/fleet/env/' + encodeURIComponent(host), { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ env: ta.value }) });
+    msg.textContent = '✓ guardado (hash ' + r.hash + ') — o host aplica no próximo ciclo';
+  } catch (e) { msg.textContent = 'erro: ' + e.message; }
+};
 async function viewLogs() {
   renderNav('logs');
   const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Logs da frota</h1><div class="np-sub">Atividade recente dos workers (todos os hosts) · filtra por texto</div></div></div>`;

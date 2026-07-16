@@ -1,0 +1,9 @@
+[Unit]
+Description=NetProspect pull-deploy agent (git pull + .env + recreate se mudou)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Ajusta o caminho ao repo deste host (frota: /root/netprospect-v1 ; hel1: /root/Github/netprospect-v1).
+ExecStart=/root/netprospect-v1/deploy/agent/pull-deploy.sh

@@ -1,0 +1,10 @@
+[Unit]
+Description=NetProspect pull-deploy — verifica o np-server a cada 5 min
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

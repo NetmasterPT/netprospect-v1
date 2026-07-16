@@ -88,12 +88,16 @@ services:
       # server-side. Vazio = desligado (fail-soft). Valores no .env deste host (deploy/server/.env).
       POSTHOG_PUBLIC_KEY: ${POSTHOG_PUBLIC_KEY:-}
       POSTHOG_PUBLIC_HOST: ${POSTHOG_PUBLIC_HOST:-}
+      # Token dos agentes de pull (auto-deploy por host). Vazio = só tailnet-gated. Ver runbook.
+      FLEET_PULL_TOKEN: ${FLEET_PULL_TOKEN:-}
     ports:
       - '${LAN_IP}:3001:3000'
       - '${TAILNET_IP}:3001:3000'
       - '127.0.0.1:3001:3000'
     volumes:
       - ../../config:/app/config:ro
+      # Store dos .env por host (auto-deploy por pull). RW — o dashboard edita, os agentes puxam.
+      - ../../fleet-env:/app/fleet-env
 
   # A workqueue. O /data é o ÚNICO estado a migrar do monólito (rsync com o NATS parado
   # dos dois lados — preserva streams, consumers e o backlog). Ver docs/runbook-server-hel1.md §4.

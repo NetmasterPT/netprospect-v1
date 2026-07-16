@@ -1556,6 +1556,59 @@ app.get('/api/report/:id', async (req, res) => {
     res.json({ ok: true, report: r });
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
+// ──────────────────────────────────────────────────────────────────────────
+// FLEET ENV STORE + PULL — controlo de env vars por host + auto-deploy por PULL.
+// Modelo (sem SSH/ACL): o np-server guarda o .env de cada host; cada host corre um
+// agente que puxa o .env + faz git pull e recria SÓ se algo mudou. Ver deploy/agent/ +
+// docs/runbook-laptop-autodeploy.md. Store em /app/fleet-env (volume rw) — ficheiros
+// <host>.env (segredos → gitignored). Editor no dashboard (tailnet-gated); os agentes
+// usam /api/fleet/pull/:host com FLEET_PULL_TOKEN (podem vir de qualquer nó da tailnet).
+const FLEET_ENV_DIR = path.join(__dirname, 'fleet-env');
+const FLEET_PULL_TOKEN = process.env.FLEET_PULL_TOKEN || '';
+const HOST_RE = /^[a-z0-9][a-z0-9._-]{0,60}$/i; // valida :host → nome de ficheiro seguro
+const envPath = (host) => path.join(FLEET_ENV_DIR, `${host}.env`);
+const readFleetEnv = (host) => { try { return fs.readFileSync(envPath(host), 'utf8'); } catch { return ''; } };
+const hashEnv = (s) => crypto.createHash('sha256').update(s || '', 'utf8').digest('hex').slice(0, 16);
+function ensureFleetDir() { try { fs.mkdirSync(FLEET_ENV_DIR, { recursive: true }); } catch { /* já existe */ } }
+
+// Editor (browser, tailnet-gated como o resto do dashboard): lê/grava o .env de um host.
+app.get('/api/fleet/env/:host', (req, res) => {
+  const host = req.params.host;
+  if (!HOST_RE.test(host)) return res.status(400).json({ error: 'host inválido' });
+  const env = readFleetEnv(host);
+  res.json({ host, env, hash: hashEnv(env), exists: !!env });
+});
+app.put('/api/fleet/env/:host', (req, res) => {
+  const host = req.params.host;
+  if (!HOST_RE.test(host)) return res.status(400).json({ error: 'host inválido' });
+  const env = String((req.body || {}).env ?? '');
+  if (env.length > 65536) return res.status(413).json({ error: '.env demasiado grande' });
+  try { ensureFleetDir(); fs.writeFileSync(envPath(host), env, { mode: 0o600 }); }
+  catch (e) { return res.status(500).json({ error: e.message }); }
+  res.json({ ok: true, host, hash: hashEnv(env) });
+});
+// Lista os hosts com .env guardado (para a Servers page saber quais têm store).
+app.get('/api/fleet/env', (req, res) => {
+  ensureFleetDir();
+  let hosts = [];
+  try { hosts = fs.readdirSync(FLEET_ENV_DIR).filter((f) => f.endsWith('.env')).map((f) => f.replace(/\.env$/, '')); } catch { /* vazio */ }
+  res.json({ hosts, token_set: !!FLEET_PULL_TOKEN });
+});
+// PULL (agente máquina-a-máquina): devolve o .env + hash. Protegido por FLEET_PULL_TOKEN
+// (os agentes correm em qualquer nó da tailnet). Sem token configurado → tailnet-gated.
+app.get('/api/fleet/pull/:host', (req, res) => {
+  const host = req.params.host;
+  if (!HOST_RE.test(host)) return res.status(400).json({ error: 'host inválido' });
+  if (FLEET_PULL_TOKEN) {
+    const tok = (req.get('authorization') || '').replace(/^Bearer\s+/i, '') || req.query.token || '';
+    if (tok !== FLEET_PULL_TOKEN) return res.status(401).json({ error: 'não autorizado' });
+  }
+  const env = readFleetEnv(host);
+  // Por defeito raw (text/plain) → os agentes comparam ficheiros com `cmp`, sem parser JSON.
+  res.set('X-Env-Hash', hashEnv(env));
+  res.type('text/plain').send(env);
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
-app.listen(PORT, () => console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`));
+app.listen(PORT, () => { ensureFleetDir(); console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`); });

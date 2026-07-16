@@ -16,3 +16,12 @@ data/
 docker/docker-compose.yml.bak.premigrate
 docker/.env.bak.premigrate
 docker/docker-compose.repoint.yml
+
+# Credenciais de acesso das VMs Oracle (chaves SSH privadas + IPs) — NUNCA no git
+deploy/E2-micro-*/
+
+# Auto-deploy por PULL — store de .env por host (segredos) + config/logs dos agentes
+fleet-env/
+deploy/agent/agent.env
+deploy/agent/agent.env.ps1
+deploy/agent/*.log

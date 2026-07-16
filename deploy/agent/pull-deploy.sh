@@ -20,8 +20,11 @@ log() { printf '%s %s\n' "$(date -Is)" "$*" >> "$LOG"; }
 ENV_TARGET="${ENV_TARGET:-$REPO/$(dirname "$COMPOSE_FILE")/.env}"
 changed=0
 
-# 1) CÓDIGO — git fetch + fast-forward se atrasado.
-if git -C "$REPO" fetch --quiet origin main 2>>"$LOG"; then
+# 1) CÓDIGO — git fetch + fast-forward se atrasado. SKIP_GIT=1 salta (ex.: hel1, que é onde se
+# committa e tem sempre o working tree à frente → não faz sentido puxar).
+if [ "${SKIP_GIT:-0}" = 1 ]; then
+  log "git: saltado (SKIP_GIT=1)"
+elif git -C "$REPO" fetch --quiet origin main 2>>"$LOG"; then
   L=$(git -C "$REPO" rev-parse HEAD); R=$(git -C "$REPO" rev-parse origin/main)
   if [ "$L" != "$R" ]; then
     if git -C "$REPO" pull --ff-only --quiet 2>>"$LOG"; then changed=1; log "git ${L:0:7} -> ${R:0:7}"

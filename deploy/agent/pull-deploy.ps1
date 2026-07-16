@@ -15,15 +15,17 @@ function NormLF([string]$s) { if ($null -eq $s) { return "" } return ($s -replac
 $changed = $false
 Set-Location $REPO
 
-# 1) CÓDIGO — git fetch + fast-forward.
-try {
-  git fetch --quiet origin main 2>&1 | Out-Null
-  $L = (git rev-parse HEAD).Trim(); $R = (git rev-parse origin/main).Trim()
-  if ($L -ne $R) {
-    git pull --ff-only --quiet 2>&1 | Out-Null
-    $changed = $true; Log "git $($L.Substring(0,7)) -> $($R.Substring(0,7))"
-  }
-} catch { Log "AVISO git: $_" }
+# 1) CÓDIGO — git fetch + fast-forward. $SKIP_GIT=$true salta (ex.: host onde se committa).
+if (-not (Get-Variable -Name SKIP_GIT -ErrorAction SilentlyContinue) -or -not $SKIP_GIT) {
+  try {
+    git fetch --quiet origin main 2>&1 | Out-Null
+    $L = (git rev-parse HEAD).Trim(); $R = (git rev-parse origin/main).Trim()
+    if ($L -ne $R) {
+      git pull --ff-only --quiet 2>&1 | Out-Null
+      $changed = $true; Log "git $($L.Substring(0,7)) -> $($R.Substring(0,7))"
+    }
+  } catch { Log "AVISO git: $_" }
+} else { Log "git: saltado (SKIP_GIT)" }
 
 # 2) .ENV — puxa do store central; substitui só se diferente (normaliza CRLF/LF p/ não churnar).
 try {

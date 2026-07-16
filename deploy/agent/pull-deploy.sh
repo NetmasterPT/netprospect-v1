@@ -27,7 +27,12 @@ if [ "${SKIP_GIT:-0}" = 1 ]; then
 elif git -C "$REPO" fetch --quiet origin main 2>>"$LOG"; then
   L=$(git -C "$REPO" rev-parse HEAD); R=$(git -C "$REPO" rev-parse origin/main)
   if [ "$L" != "$R" ]; then
-    if git -C "$REPO" pull --ff-only --quiet 2>>"$LOG"; then changed=1; log "git ${L:0:7} -> ${R:0:7}"
+    # Guarda docs-only: se TODOS os ficheiros alterados forem .md (docs/, raiz, …), faz o pull na
+    # mesma mas NÃO recria (documentação nunca é carregada pelos workers → recreate seria churn inútil).
+    FILES=$(git -C "$REPO" diff --name-only "$L" "$R" 2>>"$LOG")
+    if git -C "$REPO" pull --ff-only --quiet 2>>"$LOG"; then
+      if printf '%s\n' "$FILES" | grep -qvE '\.md$'; then changed=1; log "git ${L:0:7} -> ${R:0:7}"
+      else log "git ${L:0:7} -> ${R:0:7} (só docs .md — sem recreate)"; fi
     else log "AVISO git pull falhou (working tree suja?) — a saltar"; fi
   fi
 else log "AVISO git fetch falhou (offline?) — a saltar código"; fi

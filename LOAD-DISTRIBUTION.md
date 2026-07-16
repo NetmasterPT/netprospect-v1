@@ -352,6 +352,8 @@ estado do np-server e recria **só se algo mudou**. Zero SSH, zero ACL, zero cha
   `git fetch`+ff-only, puxa o `.env`, e **recria só se o git avançou OU o `.env` mudou** (compara SHA e
   conteúdo; senão → "sem alterações", não toca nos containers). Config em `agent.env`(`.ps1`).
   **`COMPOSE_PROJECT` é OBRIGATÓRIO** (sem ele o compose usa o nome da pasta e DUPLICA os containers).
+  **Guarda docs-only**: commits que só tocam `.md` fazem pull mas NÃO recriam (sem churn por documentação).
+  Os `.ps1` estão gravados **UTF-8 com BOM** (o Windows PowerShell 5.1 lê sem-BOM como ANSI e parte o parse).
 
 **Estado por host (2026-07-16):**
 

@@ -1,4 +1,4 @@
-# NetProspect — agente de AUTO-DEPLOY por PULL (Windows 10 / Docker Desktop).
+﻿# NetProspect — agente de AUTO-DEPLOY por PULL (Windows 10 / Docker Desktop).
 #
 # Corre via Tarefa Agendada. NÃO precisa de SSH nem de inbound no laptop: é o laptop que PUXA
 # o estado do np-server. git pull + puxa o .env do store central e recria os containers SÓ SE
@@ -21,8 +21,13 @@ if (-not (Get-Variable -Name SKIP_GIT -ErrorAction SilentlyContinue) -or -not $S
     git fetch --quiet origin main 2>&1 | Out-Null
     $L = (git rev-parse HEAD).Trim(); $R = (git rev-parse origin/main).Trim()
     if ($L -ne $R) {
+      # Guarda docs-only: se TODOS os ficheiros alterados forem .md, faz o pull mas NAO recria
+      # (documentacao nunca e carregada pelos workers -> recreate seria churn inutil).
+      $files = git diff --name-only $L $R
       git pull --ff-only --quiet 2>&1 | Out-Null
-      $changed = $true; Log "git $($L.Substring(0,7)) -> $($R.Substring(0,7))"
+      $codeChanged = @($files | Where-Object { $_ -notmatch '\.md$' }).Count -gt 0
+      if ($codeChanged) { $changed = $true; Log "git $($L.Substring(0,7)) -> $($R.Substring(0,7))" }
+      else { Log "git $($L.Substring(0,7)) -> $($R.Substring(0,7)) (so docs .md - sem recreate)" }
     }
   } catch { Log "AVISO git: $_" }
 } else { Log "git: saltado (SKIP_GIT)" }
@@ -41,7 +46,7 @@ try {
 
 # 3) RECREATE — só se algo mudou.
 if ($changed) {
-  if (-not $COMPOSE_PROJECT) { Log "ERRO COMPOSE_PROJECT em falta — abortado (evita duplicar containers)"; exit 1 }
+  if (-not $COMPOSE_PROJECT) { Log "ERRO COMPOSE_PROJECT em falta -- abortado (evita duplicar containers)"; exit 1 }
   try { docker compose -p $COMPOSE_PROJECT -f "$REPO\$COMPOSE_FILE" up -d --force-recreate 2>&1 | Out-Null; Log "recreate OK ($COMPOSE_PROJECT)" }
   catch { Log "ERRO recreate: $_" }
 } else { Log "sem alteracoes" }

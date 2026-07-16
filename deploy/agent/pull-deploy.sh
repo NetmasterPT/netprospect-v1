@@ -42,8 +42,11 @@ rm -f "$TMP"
 # 3) RECREATE — só se algo mudou.
 if [ "$changed" = 1 ]; then
   BUILD=""; [ "${COMPOSE_BUILD:-0}" = 1 ] && BUILD="--build"
+  # COMPOSE_PROJECT é OBRIGATÓRIO para atingir os containers certos (sem ele o compose usa o nome
+  # da pasta como projeto → cria um SEGUNDO conjunto duplicado). Ver o nome com `docker ps`.
+  [ -z "${COMPOSE_PROJECT:-}" ] && { log "ERRO COMPOSE_PROJECT em falta — abortado (evita duplicar containers)"; exit 1; }
   # shellcheck disable=SC2086
-  if docker compose -f "$REPO/$COMPOSE_FILE" up -d $BUILD --force-recreate ${COMPOSE_SERVICES:-} >>"$LOG" 2>&1; then
-    log "recreate OK ($COMPOSE_FILE)"
+  if docker compose -p "$COMPOSE_PROJECT" -f "$REPO/$COMPOSE_FILE" up -d $BUILD --force-recreate ${COMPOSE_SERVICES:-} >>"$LOG" 2>&1; then
+    log "recreate OK ($COMPOSE_PROJECT / $COMPOSE_FILE)"
   else log "ERRO recreate falhou — ver acima"; fi
 else log "sem alterações"; fi

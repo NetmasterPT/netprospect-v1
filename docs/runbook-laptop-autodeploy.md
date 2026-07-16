@@ -81,9 +81,10 @@ No host (repo em `/root/netprospect-v1`; no hel1 é `/root/Github/netprospect-v1
 ```bash
 cd /root/netprospect-v1
 cp deploy/agent/agent.env.example deploy/agent/agent.env
-# edita deploy/agent/agent.env: FLEET_HOST, SERVER_URL, FLEET_PULL_TOKEN, COMPOSE_FILE
-#   de1/oracle: COMPOSE_FILE=deploy/worker/docker-compose.yml
-#   hel1:       COMPOSE_FILE=docker/docker-compose.yml
+# edita deploy/agent/agent.env: FLEET_HOST, SERVER_URL, FLEET_PULL_TOKEN, COMPOSE_FILE, COMPOSE_PROJECT
+#   de1/oracle: COMPOSE_FILE=deploy/worker/docker-compose.yml   COMPOSE_PROJECT=npworker
+#   hel1:       COMPOSE_FILE=docker/docker-compose.yml          COMPOSE_PROJECT=netprospect
+# (COMPOSE_PROJECT = prefixo dos containers em `docker ps`; obrigatório, senão duplica containers)
 sudo cp deploy/agent/netprospect-pull.service deploy/agent/netprospect-pull.timer /etc/systemd/system/
 # (ajusta o ExecStart no .service se o repo não for /root/netprospect-v1)
 sudo systemctl daemon-reload

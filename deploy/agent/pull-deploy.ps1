@@ -39,6 +39,7 @@ try {
 
 # 3) RECREATE — só se algo mudou.
 if ($changed) {
-  try { docker compose -f "$REPO\$COMPOSE_FILE" up -d --force-recreate 2>&1 | Out-Null; Log "recreate OK" }
+  if (-not $COMPOSE_PROJECT) { Log "ERRO COMPOSE_PROJECT em falta — abortado (evita duplicar containers)"; exit 1 }
+  try { docker compose -p $COMPOSE_PROJECT -f "$REPO\$COMPOSE_FILE" up -d --force-recreate 2>&1 | Out-Null; Log "recreate OK ($COMPOSE_PROJECT)" }
   catch { Log "ERRO recreate: $_" }
 } else { Log "sem alteracoes" }

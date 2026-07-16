@@ -559,7 +559,7 @@ function subClean(b) {
   if (typeof b.name === 'string') o.name = b.name.slice(0, 255);
   if (SUB_FREQ.includes(b.frequency)) o.frequency = b.frequency;
   if (typeof b.category === 'string') o.category = b.category.slice(0, 120);
-  for (const k of ['features', 'icps', 'segment_ids', 'client_ids', 'campaign_ids', 'email_templates']) if (Array.isArray(b[k])) o[k] = b[k];
+  for (const k of ['features', 'icps', 'segment_ids', 'client_ids', 'campaign_ids', 'email_templates', 'icp_ids', 'template_ids']) if (Array.isArray(b[k])) o[k] = b[k];
   if (typeof b.active === 'boolean') o.active = b.active;
   if (typeof b.notes === 'string') o.notes = b.notes;
   if (b.sort != null) o.sort = parseInt(b.sort, 10) || null;
@@ -623,7 +623,10 @@ app.post('/api/subscriptions/:id/campaign', async (req, res) => {
     if (!b.segmentId) return res.status(400).json({ error: 'segmentId obrigatório' });
     const segRows = await d(`/items/segments?filter[id][_eq]=${encodeURIComponent(b.segmentId)}&limit=1&fields=id,name,filters`);
     const seg = segRows[0]; if (!seg) return res.status(404).json({ error: 'segmento não encontrado' });
-    const tpl = (b.templateIndex != null && Array.isArray(sub.email_templates)) ? sub.email_templates[b.templateIndex] : null;
+    // Template: da colecção (templateId) ou, retro-compat, do array inline (templateIndex).
+    let tpl = null;
+    if (b.templateId) tpl = (await d(`/items/email_templates?filter[id][_eq]=${encodeURIComponent(b.templateId)}&limit=1&fields=id,name,subject,body`))[0] || null;
+    else if (b.templateIndex != null && Array.isArray(sub.email_templates)) tpl = sub.email_templates[b.templateIndex];
     const campRow = {
       name: String(b.name || `${sub.name} — ${seg.name}`).slice(0, 255), angle: b.angle || 'general', status: 'draft',
       audience_filters: seg.filters || {}, segment: seg.id, from_name: (b.from_name || '').slice(0, 255),

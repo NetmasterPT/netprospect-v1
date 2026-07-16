@@ -22,6 +22,7 @@ import { readItems, createItem } from '@directus/sdk';
 import { updateItemMaybePg as updateItem, wrapClientPg, pgEnabled, pgCompanyContactKeys, pgInsertContacts, contactKey } from '../lib/pgwrite.js';
 import { publishJob, SUBJECTS } from '../lib/jobs.js';
 import { putSnapshot, getSnapshot } from '../lib/artifacts.js';
+import { analyzeSslLabs } from '../lib/audit/ssllabs.js';
 import { detectPlatforms, detectCDN, extractLang, extractContacts } from '../lib/fingerprints.js';
 import { orgDomain } from '../lib/company.js';
 import { tldToCountry, extractPhones } from '../lib/phone.js';
@@ -376,6 +377,25 @@ export function makeFineHandlers(ctx, js) {
     }
     return 'ack';
   }
+  // SSL Labs — análise profunda da configuração TLS (nota A+..F + avisos). Lento/rate-limited:
+  // on-demand (botão) ou batch pequeno. job.fresh → força re-análise (senão usa cache <24h).
+  async function handleSsllabs(job) {
+    const domain = domainToASCII(job.domain) || job.domain;
+    let siteId = job.siteId; // o path on-demand (/api/audit?only=ssllabs) não envia siteId → resolve
+    if (!siteId) { const rows = await client.request(readItems('sites', { filter: { domain: { _eq: job.domain } }, fields: ['id'], limit: 1 })).catch(() => []); siteId = rows[0]?.id; }
+    if (!siteId) return 'ack';
+    const r = await analyzeSslLabs(domain, { fromCache: !job.fresh, maxAgeH: 24, timeoutMs: 300000 });
+    if (r.status === 'READY') {
+      await client.request(updateItem('sites', siteId, {
+        ssllabs_grade: clip(r.grade, 6), ssllabs_checked_at: new Date().toISOString(),
+        ssllabs_report: { grade: r.grade, hasWarnings: r.hasWarnings, gradeTrustIgnored: r.gradeTrustIgnored, endpoints: r.endpoints, testTime: r.testTime },
+      })).catch(() => {});
+    } else {
+      // TIMEOUT/ERROR → marca checked_at p/ não repetir em loop (sem grade).
+      await client.request(updateItem('sites', siteId, { ssllabs_checked_at: new Date().toISOString() })).catch(() => {});
+    }
+    return 'ack';
+  }
   async function handleDnsprovider(job) {
     const domain = getDomain(job.domain) || job.domain;
     try { const ns = (await dns.resolveNs(domain)).map((n) => n.toLowerCase()); const provider = ns[0]?.split('.').slice(-2).join('.') || null; await client.request(updateItem('sites', job.siteId, { dns_provider: clip(provider, 120) })).catch(() => {}); } catch { /* sem NS */ }
@@ -467,5 +487,5 @@ export function makeFineHandlers(ctx, js) {
     return 'ack';
   }
 
-  return { handleFetch, handleDns, handleGeoip, handleFingerprint, handleSocial, handleLocality, handleEmailauth, handleTraffic, handleContacts, handleScore, handleSsl, handleDnsprovider, handleWhois, handleSubdomains, handleDiscover, handleVerify, handleCampaignGenerate, handleCampaignSend };
+  return { handleFetch, handleDns, handleGeoip, handleFingerprint, handleSocial, handleLocality, handleEmailauth, handleTraffic, handleContacts, handleScore, handleSsl, handleSsllabs, handleDnsprovider, handleWhois, handleSubdomains, handleDiscover, handleVerify, handleCampaignGenerate, handleCampaignSend };
 }

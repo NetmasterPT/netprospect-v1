@@ -734,7 +734,7 @@ app.post('/api/audit/:domain', async (req, res) => {
   if (!domain) return res.status(400).json({ error: 'domain em falta' });
   const only = (req.query.only || '').split(',').map((s) => s.trim()).filter(Boolean);
   // Uma só ferramenta → subject FINO dedicado (Fase B); senão → coarse ondemand.
-  const FINE = { wpscan: 'jobs.wpscan', nuclei: 'jobs.nuclei', lighthouse: 'jobs.lighthouse.mobile', gmb: 'jobs.gmb', industry: 'jobs.industry', ssl: 'jobs.ssl', whois: 'jobs.whois', dnsprovider: 'jobs.dnsprovider' };
+  const FINE = { wpscan: 'jobs.wpscan', nuclei: 'jobs.nuclei', lighthouse: 'jobs.lighthouse.mobile', gmb: 'jobs.gmb', industry: 'jobs.industry', ssl: 'jobs.ssl', ssllabs: 'jobs.ssllabs', whois: 'jobs.whois', dnsprovider: 'jobs.dnsprovider' };
   const subject = (only.length === 1 && FINE[only[0]]) ? FINE[only[0]] : 'jobs.audit.ondemand';
   try {
     const { js, headers } = await natsJs();

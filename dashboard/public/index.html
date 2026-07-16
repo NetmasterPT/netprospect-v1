@@ -631,7 +631,8 @@ window.openSite = async (domain) => {
       site.perf_desktop != null ? `<div class="k">Perf. desktop</div><div class="v"><b>${site.perf_desktop}</b>/100</div>` : '',
       site.security_findings != null ? `<div class="k">Segurança</div><div class="v"><b>${site.security_findings}</b> findings ${site.security_severity ? `<span class="np-badge ${['high', 'critical'].includes(site.security_severity) ? 'warn' : 'neutral'}" style="height:18px">${esc(site.security_severity)}</span>` : ''}</div>` : '',
       site.wp_vuln_count != null ? `<div class="k">WPScan</div><div class="v"><b>${site.wp_vuln_count}</b> vulns</div>` : '',
-      site.ssl_grade ? `<div class="k">SSL</div><div class="v"><span class="np-badge ${site.ssl_grade === 'A' || site.ssl_grade === 'B' ? 'ok' : (site.ssl_grade === 'F' ? 'warn' : 'neutral')}" style="height:18px">${esc(site.ssl_grade)}</span>${site.ssl_days_left != null ? ` · expira em <b>${site.ssl_days_left}</b>d` : ''}${site.ssl_issuer ? ` · ${esc(site.ssl_issuer)}` : ''}</div>` : '',
+      site.ssl_grade ? `<div class="k">SSL</div><div class="v"><span class="np-badge ${site.ssl_grade === 'A' || site.ssl_grade === 'B' ? 'ok' : (site.ssl_grade === 'F' ? 'warn' : 'neutral')}" style="height:18px">${esc(site.ssl_grade)}</span>${site.ssl_validation ? ` <span class="np-badge ${site.ssl_validation === 'OV' ? 'info' : 'neutral'}" style="height:18px" title="${site.ssl_validation === 'OV' ? 'empresa validada (pago)' : 'domínio validado (grátis)'}">${esc(site.ssl_validation)}</span>` : ''}${site.ssl_wildcard ? ' <span class="np-badge neutral" style="height:18px">wildcard</span>' : ''}${site.ssl_days_left != null ? ` · expira em <b>${site.ssl_days_left}</b>d` : ''}${site.ssl_issuer ? ` · ${esc(site.ssl_issuer)}` : ''}</div>` : '',
+      site.ssllabs_grade ? `<div class="k">SSL Labs</div><div class="v"><span class="np-badge ${/^A/.test(site.ssllabs_grade) ? 'ok' : (/^[EF]/.test(site.ssllabs_grade) ? 'warn' : 'neutral')}" style="height:18px">${esc(site.ssllabs_grade)}</span>${site.ssllabs_report && site.ssllabs_report.hasWarnings ? ' <span class="np-badge warn" style="height:18px">avisos</span>' : ''}</div>` : '',
       site.cms_version ? `<div class="k">CMS</div><div class="v"><b>${esc(site.cms_version)}</b> ${site.cms_outdated ? '<span class="np-badge warn" style="height:18px">desatualizado</span>' : '<span class="np-badge ok" style="height:18px">atual</span>'}</div>` : '',
       (site.domain_expiry || site.domain_age_days != null) ? `<div class="k">Domínio</div><div class="v">${site.domain_age_days != null ? `<b>${site.domain_age_days}</b>d de idade` : ''}${site.domain_expiry ? ` · expira ${esc(String(site.domain_expiry).slice(0, 10))}` : ''} ${site.expiring_soon ? '<span class="np-badge warn" style="height:18px">a expirar</span>' : ''}${site.whois_registrar ? `<div class="muted" style="font-size:11px">${esc(site.whois_registrar)}</div>` : ''}</div>` : '',
       site.dns_provider ? `<div class="k">DNS</div><div class="v">${esc(site.dns_provider)}</div>` : '',
@@ -640,7 +641,7 @@ window.openSite = async (domain) => {
     const isWp = (site.primary_platform?.slug || site.primary_platform?.name || '').toLowerCase().includes('wordpress');
     const auditSection = `
         <div class="np-sec-t" style="display:flex;justify-content:space-between;align-items:center;gap:6px">Auditoria &amp; prospeção
-          <span style="display:flex;gap:6px">${isWp ? `<button class="np-btn np-btn--sm" onclick="auditNow('${esc(site.domain)}','wpscan')" id="wpscanbtn" title="WPScan (on-demand, 25/dia)">${ic('shield', 13)} WPScan</button>` : ''}<button class="np-btn np-btn--sm" onclick="auditNow('${esc(site.domain)}')" id="auditbtn">${ic('shield', 13)} Auditar agora</button></span></div>
+          <span style="display:flex;gap:6px;flex-wrap:wrap">${isWp ? `<button class="np-btn np-btn--sm" onclick="auditNow('${esc(site.domain)}','wpscan')" id="wpscanbtn" title="WPScan (on-demand, 25/dia)">${ic('shield', 13)} WPScan</button>` : ''}<button class="np-btn np-btn--sm" onclick="auditNow('${esc(site.domain)}','ssllabs')" id="ssllabsbtn" title="Análise profunda SSL Labs (~1-3 min)">${ic('shield', 13)} SSL Labs</button><button class="np-btn np-btn--sm" onclick="auditNow('${esc(site.domain)}')" id="auditbtn">${ic('shield', 13)} Auditar agora</button></span></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${auditBadges}</div>
         ${industryRow(site)}
         ${socLinks ? `<div style="margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap">${socLinks}</div>` : ''}
@@ -704,7 +705,8 @@ async function loadTimeline(domain) {
 }
 // Auditoria pesada on-demand. `only` (ex.: 'wpscan') corre só esse passo.
 window.auditNow = async (domain, only) => {
-  const id = only === 'wpscan' ? 'wpscanbtn' : 'auditbtn';
+  const id = only ? only + 'btn' : 'auditbtn';
+  const LBL = { wpscan: 'WPScan', ssllabs: 'SSL Labs' };
   const btn = $('#' + id); if (btn) { btn.disabled = true; btn.textContent = 'A enfileirar…'; }
   try {
     await api('/api/audit/' + encodeURIComponent(domain) + (only ? '?only=' + encodeURIComponent(only) : ''), { method: 'POST' });
@@ -712,7 +714,7 @@ window.auditNow = async (domain, only) => {
     if (btn) btn.textContent = 'Em fila ✓';
   } catch (e) {
     captureFrontendError(e, { action: 'single_audit_request', route: currentRouteName(), requested_steps: only || 'all' });
-    if (btn) { btn.disabled = false; btn.textContent = only === 'wpscan' ? 'WPScan' : 'Auditar agora'; }
+    if (btn) { btn.disabled = false; btn.textContent = LBL[only] || 'Auditar agora'; }
   }
 };
 

@@ -61,7 +61,10 @@ async function main() {
 
   // O resume usa o campo do PRIMEIRO job pedido (os jobs são independentes: para um resume
   // exato por-ferramenta, correr um `--only` de cada vez).
-  const base = { qualified: { _eq: true }, is_live: { _eq: true } };
+  // Por defeito só qualificados; --all abrange TODOS os sites live (ex.: re-classificar indústria
+  // em toda a base, não só nos qualificados).
+  const ALL = argv.includes('--all');
+  const base = ALL ? { is_live: { _eq: true } } : { qualified: { _eq: true }, is_live: { _eq: true } };
   if (MIN_SCORE != null) base.lead_score = { _gte: MIN_SCORE };
   const resumeField = JOBS[ONLY[0]].resume;
   if (!FORCE) base[resumeField] = { _null: true };

@@ -442,7 +442,7 @@ const DRAIN = new Set(['audit_ondemand', 'audit_qualified', 'audit_rest']);
 const _CORES = os.cpus().length;
 const _RAM_FREE = Math.max(256, Math.round(os.totalmem() / 1048576) - 550); // MB livres (reserva OS+Node)
 const _REP = Math.max(1, parseInt(process.env.WORKER_REPLICAS || '1', 10));
-const _PER_CORE = { enrich: 3, contacts: 5, fingerprint: 5, fetch: 1.5, dns: 2, geoip: 2, ssl: 2, dnsprovider: 2, emailauth: 2, traffic: 3, social: 1.5, locality: 1.5, subdomains: 0.5, whois: 0.5, verify: 0.75, gmb: 0.5, score: 0.3, campaign_generate: 0.5, campaign_send: 0.75, discover: 0.3, nuclei: 1.5, wpscan: 0.5, lighthouse: 0.4, industry: 0.2 };
+const _PER_CORE = { enrich: 3, contacts: 5, fingerprint: 5, fetch: 1.5, dns: 2, geoip: 2, ssl: 2, dnsprovider: 2, emailauth: 2, traffic: 3, social: 1.5, locality: 1.5, subdomains: 0.5, whois: 0.5, verify: 0.75, gmb: 0.5, score: 0.3, campaign_generate: 0.5, campaign_send: 0.75, discover: 0.3, nuclei: 1.5, wpscan: 0.5, lighthouse: 0.4, industry: 1.5 };
 const _RAM_PER = { nuclei: 250, wpscan: 450, lighthouse: 550, industry: 300, gmb: 400 }; // MB por instância
 const _CAP = { fingerprint: 64, contacts: 128, enrich: 128, traffic: 64, dns: 48, geoip: 48, emailauth: 48 };
 function _auto(job) {

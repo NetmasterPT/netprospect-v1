@@ -408,7 +408,7 @@ window.dirSort = (col) => {
 function parseHashQuery() { const h = location.hash.split('?')[1] || ''; return Object.fromEntries(new URLSearchParams(h)); }
 
 // --- Facetas de auditoria (partilhadas por Negócios e Contactos) ---
-const AUDIT_KEYS = ['has_email', 'has_phone', 'dm', 'lead_min', 'lead_max', 'city', 'cpanel', 'notcpanel', 'fb', 'ig', 'li', 'tw', 'gmb', 'wa', 'pin', 'yt', 'tk', 'load', 'spf', 'dmarc', 'authboth', 'traffic', 'industry', 'seo_max', 'mobile', 'desktop', 'security', 'sev', 'wpvuln', 'ssl_expiring', 'ssl_expired', 'ssl_paid', 'domain_expiring', 'cms_outdated', 'isp', 'client', 'match'];
+const AUDIT_KEYS = ['has_email', 'has_phone', 'dm', 'lead_min', 'lead_max', 'city', 'cpanel', 'notcpanel', 'fb', 'ig', 'li', 'tw', 'gmb', 'wa', 'pin', 'yt', 'tk', 'load', 'spf', 'dmarc', 'authboth', 'traffic', 'industry', 'seo_max', 'mobile', 'desktop', 'security', 'sev', 'wpvuln', 'ssl_expiring', 'ssl_expired', 'ssl_paid', 'domain_expiring', 'domain_renew', 'cms_outdated', 'isp', 'client', 'match'];
 const INDUSTRIES = [['restauracao', 'Restauração'], ['retalho', 'Retalho'], ['saude', 'Saúde'], ['construcao', 'Construção'], ['imobiliario', 'Imobiliário'], ['turismo', 'Turismo'], ['juridico', 'Jurídico'], ['contabilidade', 'Contabilidade'], ['automovel', 'Automóvel'], ['beleza', 'Beleza'], ['educacao', 'Educação'], ['ti', 'TI'], ['marketing', 'Marketing'], ['industria', 'Indústria'], ['agricultura', 'Agricultura'], ['transportes', 'Transportes'], ['desporto', 'Desporto'], ['moda', 'Moda'], ['casa', 'Casa'], ['financeiro', 'Financeiro'], ['associacao', 'Associação'], ['outros', 'Outros']];
 const SP14 = '<span style="width:14px;display:inline-block"></span>';
 function auditParse(st, qp) { for (const k of AUDIT_KEYS) st[k] = qp[k] || ''; }
@@ -433,7 +433,7 @@ function auditFacetsHtml(st, px) {
     + dd('social', 'Social', (st.fb || st.ig || st.li || st.tw || st.gmb || st.wa || st.pin || st.yt || st.tk), bOpt('fb', 'Facebook') + bOpt('ig', 'Instagram') + bOpt('li', 'LinkedIn') + bOpt('tw', 'Twitter / X') + bOpt('gmb', 'Google Business') + bOpt('wa', 'WhatsApp') + bOpt('pin', 'Pinterest') + bOpt('yt', 'YouTube') + bOpt('tk', 'TikTok'))
     + dd('infra', 'Infra / Perf', (st.cpanel || st.notcpanel || st.load), bOpt('cpanel', 'cPanel') + bOpt('notcpanel', 'Sem cPanel') + sub('Velocidade') + cOpt('load', 'fast', 'Rápido') + cOpt('load', 'medium', 'Médio') + cOpt('load', 'slow', 'Lento') + cOpt('load', 'very_slow', 'Muito lento'))
     + dd('emailauth', 'Email auth', (st.spf || st.dmarc || st.authboth), vOpt('spf', 'missing,weak,invalid', 'SPF com problemas') + vOpt('dmarc', 'missing,weak,invalid', 'DMARC com problemas') + vOpt('authboth', 'both', 'SPF e DMARC (ambos)'))
-    + dd('dominio', 'Domínio / SSL', (st.ssl_expiring || st.ssl_expired || st.ssl_paid || st.domain_expiring || st.cms_outdated), bOpt('ssl_expiring', 'Certificado a expirar (≤30d)') + bOpt('ssl_expired', 'Certificado EXPIRADO') + bOpt('ssl_paid', 'SSL pago (não-grátis)') + bOpt('domain_expiring', 'Domínio a expirar (≤90d)') + bOpt('cms_outdated', 'CMS desatualizado'))
+    + dd('dominio', 'Domínio / SSL', (st.ssl_expiring || st.ssl_expired || st.ssl_paid || st.domain_expiring || st.domain_renew || st.cms_outdated), bOpt('ssl_expiring', 'Certificado a expirar (≤30d)') + bOpt('ssl_expired', 'Certificado EXPIRADO') + bOpt('ssl_paid', 'SSL pago (não-grátis)') + bOpt('domain_expiring', 'Domínio a expirar (≤90d)') + sub('Renovação de domínio em') + vOpt('domain_renew', '30', '≤ 30 dias') + vOpt('domain_renew', '60', '≤ 60 dias') + vOpt('domain_renew', '90', '≤ 90 dias') + vOpt('domain_renew', '180', '≤ 180 dias') + bOpt('cms_outdated', 'CMS desatualizado'))
     + dd('traffic', 'Tráfego', trafficActive, cOpt('traffic', 'top10k', 'Top 10k') + cOpt('traffic', 'top100k', 'Top 100k') + cOpt('traffic', 'top1m', 'Top 1M') + cOpt('traffic', 'unranked', 'Sem ranking'))
     + dd('industry', 'Atividade', !!st.industry, INDUSTRIES.map(([v, l]) => vOpt('industry', v, l)).join(''))
     + dd('audit', 'Auditoria', auditActive, vOpt('seo_max', '60', 'SEO fraco (<60)') + vOpt('mobile', 'bad', 'Mobile não-friendly') + vOpt('desktop', 'bad', 'Desktop não-friendly') + vOpt('security', 'true', 'Com problemas de segurança') + sub('Severidade (Nuclei)') + cOpt('sev', 'high', 'Alta') + cOpt('sev', 'critical', 'Crítica') + vOpt('wpvuln', 'true', 'WordPress com vulns'))
@@ -460,6 +460,7 @@ function auditChips(st) {
   if (st.ssl_expired) out.push(['ssl_expired', 'Certificado expirado']);
   if (st.ssl_paid) out.push(['ssl_paid', 'SSL pago']);
   if (st.domain_expiring) out.push(['domain_expiring', 'Domínio a expirar']);
+  if (st.domain_renew) out.push(['domain_renew', 'Renova ≤ ' + st.domain_renew + 'd']);
   if (st.cms_outdated) out.push(['cms_outdated', 'CMS desatualizado']);
   if (st.isp) out.push(['isp', 'ISP: ' + st.isp]);
   if (st.client) out.push(['client', st.client === 'true' ? 'É cliente' : 'Não é cliente']);

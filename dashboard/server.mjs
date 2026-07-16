@@ -204,7 +204,9 @@ function buildSiteFilters(f = {}, pfx = '') {
   // sinal de venda (empresa que investiu). Nota: Sectigo (87k) inclui muito cPanel AutoSSL grátis —
   // fica marcado como "pago" (não há como distinguir só pelo emissor); afinável se o utilizador quiser.
   if (on(f.ssl_paid)) F('ssl_issuer', '_nin', "Let's Encrypt,Google Trust Services,ZeroSSL GmbH,Amazon,Certainly");
-  if (on(f.domain_expiring)) F('expiring_soon', '_eq', 'true');    // domínio a expirar ≤90d
+  if (on(f.domain_expiring)) F('expiring_soon', '_eq', 'true');    // domínio a expirar ≤90d (flag)
+  // Renovação de domínio graduada: expira entre agora e agora+N dias (usa $NOW dinâmico do Directus).
+  if (f.domain_renew) { const n = parseInt(f.domain_renew, 10); if ([30, 60, 90, 180].includes(n)) crit.push([['domain_expiry', '_gte', '$NOW'], ['domain_expiry', '_lte', `$NOW(+${n} days)`]]); }
   if (on(f.cms_outdated)) F('cms_outdated', '_eq', 'true');        // CMS desatualizado
   if (f.dns) F('dns_provider', '_icontains', f.dns);
   // MODO OU (só no diretório): base AND (crit1 OU crit2 …). Aninhado em _and[0][_or] para NÃO colidir
@@ -1328,7 +1330,10 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 // --- Cobertura de jobs por bucket de lead_score (np-db direto; cache 30min) ---
 // TEM de ficar ANTES do catch-all `app.get('*')`, senão a SPA engole /api/coverage.
 const COVERAGE_SQL = `
-WITH unv AS (SELECT DISTINCT site FROM contacts WHERE email IS NOT NULL AND email_status IS NULL)
+-- unv = sites com contactos AINDA por processar (email_status NULL). Inclui os deixados a meio
+-- quando a quota do verify esgotou (esses ficam email=NULL,status=NULL — antes escapavam à métrica
+-- porque exigia email IS NOT NULL → o site contava como "verificado" sem o job ter terminado).
+WITH unv AS (SELECT DISTINCT site FROM contacts WHERE email_status IS NULL)
 SELECT
   CASE WHEN lead_score>70 THEN 'gt70' WHEN lead_score>60 THEN 'b60' WHEN lead_score>50 THEN 'b50'
        WHEN lead_score>40 THEN 'b40' ELSE 'lt40' END AS bucket,

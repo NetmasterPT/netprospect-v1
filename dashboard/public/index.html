@@ -351,6 +351,8 @@ async function renderNav(active) {
     ${item('isps', 'globe', 'ISPs / alojamento')}
     ${item('triggers', 'activity', 'Gatilhos')}
     ${item('subscriptions', 'briefcase', 'Subscrições')}
+    ${item('icps', 'contacts', 'Públicos-alvo')}
+    ${item('templates', 'send', 'Templates email')}
     ${item('campaigns', 'send', 'Campanhas')}
       ${item('outreach', 'send', 'Outreach')}
     ${item('segments', 'segments', 'Segmentos')}
@@ -393,15 +395,11 @@ function subEditorHtml() {
   const price = `<div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
     <div><label class="muted" style="font-size:11px">Preço s/ IVA (€)</label><br><input class="np-input" id="sub-ex" type="number" step="0.01" value="${s.price_ex_vat ?? ''}" oninput="subCalcVat(false)" style="width:130px"></div>
     <div><label class="muted" style="font-size:11px">Preço c/ IVA 23% (€)</label><br><input class="np-input" id="sub-inc" type="number" step="0.01" value="${s.price_inc_vat ?? ''}" oninput="subCalcVat(true)" style="width:130px"></div></div>`;
-  const icps = `<div id="sub-icps">${(s.icps || []).map((v, i) => `<div style="display:flex;gap:6px;margin-bottom:6px"><textarea class="np-input sub-icp" rows="2" placeholder="Descrição do público-alvo / ICP…" style="flex:1;font-size:12.5px">${esc(v)}</textarea><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="subDelIcp(${i})" title="remover">×</button></div>`).join('')}</div><button class="np-btn np-btn--sm" onclick="subAddIcp()">+ ICP</button>`;
-  const multi = (kind, items, sel, label, fmtItem) => `<div><div class="muted" style="font-size:11px;margin-bottom:4px">${label}</div><div style="max-height:160px;overflow:auto;border:1px solid var(--np-border);border-radius:8px;padding:6px">${items.length ? items.map((it) => `<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;padding:2px 0"><input type="checkbox" ${sel.map(Number).includes(Number(it.id)) ? 'checked' : ''} onchange="subToggle('${kind}',${it.id})"> ${fmtItem(it)}</label>`).join('') : '<span class="muted" style="font-size:12px">nenhum</span>'}</div></div>`;
-  const segs = multi('segment_ids', SUB.refs.segments || [], s.segment_ids || [], 'Segmentos (filtros do directório)', (it) => esc(it.name));
-  const cls = multi('client_ids', SUB.refs.clients || [], s.client_ids || [], 'Clientes', (it) => esc(it.name || it.org_domain || ('#' + it.id)));
-  const camps = multi('campaign_ids', SUB.refs.campaigns || [], s.campaign_ids || [], 'Campanhas', (it) => esc(it.name) + (it.angle ? ` <span class="muted">(${esc(it.angle)})</span>` : ''));
-  const tpls = `<div id="sub-tpls">${(s.email_templates || []).map((t, i) => `<div style="border:1px solid var(--np-border);border-radius:8px;padding:8px;margin-bottom:8px">
-      <div style="display:flex;gap:6px;margin-bottom:6px"><input class="np-input sub-tpl-name" value="${esc(t.name || '')}" placeholder="Nome do template" style="flex:1"><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="subDelTpl(${i})" title="remover">×</button></div>
-      <input class="np-input sub-tpl-subject" value="${esc(t.subject || '')}" placeholder="Assunto" style="width:100%;margin-bottom:6px">
-      <textarea class="np-input sub-tpl-body" rows="3" placeholder="Corpo do email…" style="width:100%;font-size:12.5px">${esc(t.body || '')}</textarea></div>`).join('')}</div><button class="np-btn np-btn--sm" onclick="subAddTpl()">+ Template</button>`;
+  const segs = relBox('Segmentos (filtros do directório)', SUB.refs.segments || [], s.segment_ids || [], 'segment_ids', (it) => esc(it.name), 'subToggle');
+  const icpSel = relBox('Públicos-alvo / ICPs (da colecção)', SUB.refs.icps || [], s.icp_ids || [], 'icp_ids', (it) => esc(it.name), 'subToggle');
+  const cls = relBox('Clientes', SUB.refs.clients || [], s.client_ids || [], 'client_ids', (it) => esc(it.name || it.org_domain || ('#' + it.id)), 'subToggle');
+  const camps = relBox('Campanhas', SUB.refs.campaigns || [], s.campaign_ids || [], 'campaign_ids', (it) => esc(it.name) + (it.angle ? ` <span class="muted">(${esc(it.angle)})</span>` : ''), 'subToggle');
+  const tplSel = relBox('Templates de email (da colecção)', SUB.refs.templates || [], s.template_ids || [], 'template_ids', (it) => esc(it.name), 'subToggle');
   const sec = (t, inner) => `<div style="margin-top:16px"><div class="np-sec-t" style="margin:0 0 8px">${t}</div>${inner}</div>`;
   return `<div class="np-card"><div class="np-card-b" style="max-width:840px">
     <div style="display:grid;grid-template-columns:1fr 150px 190px;gap:10px">
@@ -411,15 +409,13 @@ function subEditorHtml() {
     </div>
     ${sec('Preço', price)}
     ${sec('Pontos / funcionalidades', `<textarea class="np-input" id="sub-features" rows="5" placeholder="Um ponto por linha…" style="width:100%;font-size:12.5px">${esc((s.features || []).join('\n'))}</textarea>`)}
-    ${sec('Públicos-alvo / ICPs', icps)}
-    ${sec('Relações', `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${segs}${cls}${camps}</div>`)}
-    ${sec('Templates de email', tpls)}
+    ${sec('Relações', `<div class="muted" style="font-size:11px;margin-bottom:8px">ICPs e templates vêm das <a href="#/icps" style="color:var(--np-brand-ink)">páginas respetivas</a> — cria-os lá e liga-os aqui.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${segs}${icpSel}${cls}${camps}${tplSel}</div>`)}
     ${sec('Notas', `<textarea class="np-input" id="sub-notes" rows="2" style="width:100%">${esc(s.notes || '')}</textarea><label style="display:flex;gap:6px;align-items:center;margin-top:8px;font-size:12.5px"><input type="checkbox" id="sub-active" ${s.active !== false ? 'checked' : ''}> Ativo</label>`)}
     <div style="display:flex;gap:8px;margin-top:18px"><button class="np-btn np-btn--primary" onclick="subSave()">Guardar</button><button class="np-btn" onclick="subCancel()">Cancelar</button><span id="sub-msg" class="muted" style="font-size:12.5px;align-self:center"></span></div>
   </div></div>`;
 }
-window.subNew = () => { SUB.edit = { frequency: 'monthly', features: [], icps: [''], segment_ids: [], client_ids: [], campaign_ids: [], email_templates: [], active: true }; viewSubscriptions(); };
-window.subEdit = async (id) => { const data = await api('/api/subscriptions'); SUB.refs = data.refs || SUB.refs; const s = (data.subscriptions || []).find((x) => x.id === id); if (!s) return; SUB.edit = { ...s, features: s.features || [], icps: s.icps || [], segment_ids: s.segment_ids || [], client_ids: s.client_ids || [], campaign_ids: s.campaign_ids || [], email_templates: s.email_templates || [] }; viewSubscriptions(); };
+window.subNew = () => { SUB.edit = { frequency: 'monthly', features: [], segment_ids: [], client_ids: [], campaign_ids: [], icp_ids: [], template_ids: [], active: true }; viewSubscriptions(); };
+window.subEdit = async (id) => { const data = await api('/api/subscriptions'); SUB.refs = data.refs || SUB.refs; const s = (data.subscriptions || []).find((x) => x.id === id); if (!s) return; SUB.edit = { ...s, features: s.features || [], segment_ids: s.segment_ids || [], client_ids: s.client_ids || [], campaign_ids: s.campaign_ids || [], icp_ids: s.icp_ids || [], template_ids: s.template_ids || [] }; viewSubscriptions(); };
 window.subCancel = () => { SUB.edit = null; viewSubscriptions(); };
 function subReadDom() {
   const s = SUB.edit; if (!s) return; const g = (id) => document.getElementById(id);
@@ -429,8 +425,6 @@ function subReadDom() {
   if (g('sub-features')) s.features = g('sub-features').value.split('\n').map((x) => x.trim()).filter(Boolean);
   if (g('sub-ex')) s.price_ex_vat = g('sub-ex').value === '' ? null : parseFloat(g('sub-ex').value);
   if (g('sub-inc')) s.price_inc_vat = g('sub-inc').value === '' ? null : parseFloat(g('sub-inc').value);
-  s.icps = [...document.querySelectorAll('.sub-icp')].map((t) => t.value.trim()).filter(Boolean);
-  s.email_templates = [...document.querySelectorAll('#sub-tpls > div')].map((d) => ({ name: d.querySelector('.sub-tpl-name').value.trim(), subject: d.querySelector('.sub-tpl-subject').value.trim(), body: d.querySelector('.sub-tpl-body').value.trim() })).filter((t) => t.name || t.subject || t.body);
   if (g('sub-notes')) s.notes = g('sub-notes').value;
   if (g('sub-active')) s.active = g('sub-active').checked;
 }
@@ -445,7 +439,7 @@ window.subSave = async () => {
   subReadDom(); const s = SUB.edit; const msg = document.getElementById('sub-msg');
   if (!s.name) { if (msg) msg.textContent = 'Falta o nome.'; return; }
   if (msg) msg.textContent = 'a guardar…';
-  const body = { name: s.name, frequency: s.frequency, category: s.category, features: s.features, price_ex_vat: s.price_ex_vat, price_inc_vat: s.price_inc_vat, icps: s.icps, segment_ids: s.segment_ids, client_ids: s.client_ids, campaign_ids: s.campaign_ids, email_templates: s.email_templates, active: s.active, notes: s.notes };
+  const body = { name: s.name, frequency: s.frequency, category: s.category, features: s.features, price_ex_vat: s.price_ex_vat, price_inc_vat: s.price_inc_vat, segment_ids: s.segment_ids, client_ids: s.client_ids, campaign_ids: s.campaign_ids, icp_ids: s.icp_ids, template_ids: s.template_ids, active: s.active, notes: s.notes };
   try {
     if (s.id) await api('/api/subscriptions/' + s.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     else await api('/api/subscriptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -459,7 +453,7 @@ window.subDelete = async (id, name) => { if (!confirm('Apagar o pacote “' + na
 window.subCampaign = (id) => {
   const s = (SUB.list || []).find((x) => x.id === id); if (!s) return;
   const segs = (SUB.refs.segments || []).filter((seg) => (s.segment_ids || []).map(Number).includes(Number(seg.id)));
-  const tpls = s.email_templates || [];
+  const tpls = (SUB.refs.templates || []).filter((t) => (s.template_ids || []).map(Number).includes(Number(t.id)));
   const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
   const hd = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">Criar campanha</div><div class="muted" style="font-size:12px">${esc(s.name)}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>`;
   if (!segs.length) { dw.innerHTML = hd + `<div class="np-empty">Este pacote não tem segmentos. Adiciona segmentos ao pacote (Editar) primeiro.</div>`; return; }
@@ -470,7 +464,7 @@ window.subCampaign = (id) => {
     ${lab('Conteúdo do email')}
     <select id="sc-tpl" class="np-input" style="width:100%">
       <option value="ai">Gerar por IA (ângulo — refinas na campanha)</option>
-      ${tpls.map((t, i) => `<option value="${i}">Template: ${esc(t.name || ('#' + (i + 1)))}</option>`).join('')}
+      ${tpls.map((t) => `<option value="${t.id}">Template: ${esc(t.name || ('#' + t.id))}</option>`).join('')}
     </select>
     ${tpls.length ? `<div class="muted" style="font-size:11px;margin-top:4px">Com template, os e-mails são preenchidos já (variáveis {{name}}, {{company}}, {{domain}}, {{city}}, {{industry}}, {{seo_score}}… substituídas por contacto) e ficam prontos a enviar.</div>` : ''}
     ${lab('Remetente')}
@@ -485,13 +479,187 @@ window.subCampaignSubmit = async (id) => {
   const g = (x) => document.getElementById(x); const msg = g('sc-msg');
   const tplVal = g('sc-tpl').value;
   const body = { segmentId: g('sc-seg').value, from_name: g('sc-from-name').value.trim(), from_email: g('sc-from-email').value.trim(), reply_to: g('sc-reply').value.trim() };
-  if (tplVal !== 'ai') body.templateIndex = parseInt(tplVal, 10);
+  if (tplVal !== 'ai') body.templateId = parseInt(tplVal, 10);
   msg.textContent = 'a criar…';
   try {
     const r = await api('/api/subscriptions/' + id + '/campaign', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     captureEvent('subscription_campaign_created', { subscription_id: id, mode: r.mode, filled: r.filled });
     closeDrawer(); location.hash = '#/campaigns?id=' + r.campaignId;
   } catch (e) { msg.textContent = 'erro: ' + e.message; }
+};
+
+// Multi-seleção reutilizável (relações por ids). toggleFn(kind, id) atualiza o estado da página.
+function relBox(label, items, sel, kind, fmtItem, toggleFn) {
+  return `<div><div class="muted" style="font-size:11px;margin-bottom:4px">${label}</div><div style="max-height:150px;overflow:auto;border:1px solid var(--np-border);border-radius:8px;padding:6px">${(items || []).length ? items.map((it) => `<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;padding:2px 0"><input type="checkbox" ${(sel || []).map(Number).includes(Number(it.id)) ? 'checked' : ''} onchange="${toggleFn}('${kind}',${it.id})"> ${fmtItem(it)}</label>`).join('') : '<span class="muted" style="font-size:12px">nenhum</span>'}</div></div>`;
+}
+
+// ========== PÚBLICOS-ALVO (ICPs) ==========
+let ICP = { edit: null, list: [], refs: {} };
+async function viewIcps() {
+  if (!STATS) STATS = await api('/api/stats'); renderNav('icps');
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Comercial</div><h1 class="np-h1">Públicos-alvo (ICPs)</h1><div class="np-sub">Ideal Customer Profiles — descrição, tags, categoria, língua e ligações a templates, clientes, campanhas e segmentos</div></div>${ICP.edit ? '' : `<button class="np-btn np-btn--primary" onclick="icpNew()">+ Novo ICP</button>`}</div>`;
+  let data; try { data = await api('/api/icps'); } catch (e) { $('#view').innerHTML = head + errCard(e); return; }
+  ICP.refs = data.refs || {}; ICP.list = data.items || [];
+  if (ICP.edit) { $('#view').innerHTML = head + `<div id="icp-editor">${icpEditorHtml()}</div>`; return; }
+  if (!ICP.list.length) { $('#view').innerHTML = head + `<div class="np-empty">Ainda não há ICPs. Cria o primeiro com “+ Novo ICP”.</div>`; return; }
+  $('#view').innerHTML = head + `<div class="np-grid" style="grid-template-columns:repeat(auto-fill,minmax(300px,1fr))">${ICP.list.map(icpCardHtml).join('')}</div>`;
+}
+function icpCardHtml(s) {
+  const rel = (arr, l) => (arr && arr.length ? `<span class="np-chip" style="height:18px">${arr.length} ${l}</span>` : '');
+  const tags = (s.tags || []).map((t) => `<span class="np-chip" style="height:18px">${esc(t)}</span>`).join(' ');
+  return `<section class="np-card" style="${s.active === false ? 'opacity:.55' : ''}"><div class="np-card-b">
+    <div style="font-weight:800;font-size:15px">${esc(s.name)}</div><div class="muted" style="font-size:11.5px">${[s.category, s.language].filter(Boolean).map(esc).join(' · ') || '—'}</div>
+    ${s.description ? `<div style="font-size:12.5px;color:var(--np-text-2);margin-top:8px">${esc(s.description.slice(0, 170))}${s.description.length > 170 ? '…' : ''}</div>` : ''}
+    ${tags ? `<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">${tags}</div>` : ''}
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px">${rel(s.template_ids, 'templates')}${rel(s.segment_ids, 'seg')}${rel(s.client_ids, 'clientes')}${rel(s.campaign_ids, 'camp')}</div>
+    <div style="display:flex;gap:6px;margin-top:12px"><button class="np-btn np-btn--sm" onclick="icpEdit(${s.id})">Editar</button><button class="np-btn np-btn--sm" onclick="icpDelete(${s.id},'${esc((s.name || '').replace(/'/g, ''))}')">Apagar</button></div>
+  </div></section>`;
+}
+function icpEditorHtml() {
+  const s = ICP.edit, r = ICP.refs;
+  return `<div class="np-card"><div class="np-card-b" style="max-width:820px">
+    <div style="display:grid;grid-template-columns:1fr 150px 110px;gap:10px">
+      <div><label class="muted" style="font-size:11px">Nome do ICP</label><input class="np-input" id="icp-name" value="${esc(s.name || '')}" placeholder="ex.: PMEs com WordPress" style="width:100%"></div>
+      <div><label class="muted" style="font-size:11px">Categoria</label><input class="np-input" id="icp-category" value="${esc(s.category || '')}" style="width:100%"></div>
+      <div><label class="muted" style="font-size:11px">Língua</label><input class="np-input" id="icp-language" value="${esc(s.language || '')}" placeholder="pt" style="width:100%"></div>
+    </div>
+    <div style="margin-top:14px"><label class="muted" style="font-size:11px">Descrição do público-alvo</label><textarea class="np-input" id="icp-description" rows="5" style="width:100%;font-size:12.5px">${esc(s.description || '')}</textarea></div>
+    <div style="margin-top:14px"><label class="muted" style="font-size:11px">Tags (separadas por vírgula)</label><input class="np-input" id="icp-tags" value="${esc((s.tags || []).join(', '))}" style="width:100%"></div>
+    <div class="np-sec-t" style="margin-top:18px">Ligações</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      ${relBox('Templates de email', r.templates, s.template_ids, 'template_ids', (it) => esc(it.name), 'icpToggle')}
+      ${relBox('Segmentos', r.segments, s.segment_ids, 'segment_ids', (it) => esc(it.name), 'icpToggle')}
+      ${relBox('Clientes', r.clients, s.client_ids, 'client_ids', (it) => esc(it.name || it.org_domain || ('#' + it.id)), 'icpToggle')}
+      ${relBox('Campanhas', r.campaigns, s.campaign_ids, 'campaign_ids', (it) => esc(it.name), 'icpToggle')}
+    </div>
+    <div style="margin-top:14px"><label style="display:flex;gap:6px;align-items:center;font-size:12.5px"><input type="checkbox" id="icp-active" ${s.active !== false ? 'checked' : ''}> Ativo</label></div>
+    <div style="display:flex;gap:8px;margin-top:18px"><button class="np-btn np-btn--primary" onclick="icpSave()">Guardar</button><button class="np-btn" onclick="icpCancel()">Cancelar</button><span id="icp-msg" class="muted" style="font-size:12.5px;align-self:center"></span></div>
+  </div></div>`;
+}
+window.icpNew = () => { ICP.edit = { tags: [], template_ids: [], client_ids: [], campaign_ids: [], segment_ids: [], active: true }; viewIcps(); };
+window.icpEdit = (id) => { const s = ICP.list.find((x) => x.id === id); if (!s) return; ICP.edit = { ...s, tags: s.tags || [], template_ids: s.template_ids || [], client_ids: s.client_ids || [], campaign_ids: s.campaign_ids || [], segment_ids: s.segment_ids || [] }; viewIcps(); };
+window.icpCancel = () => { ICP.edit = null; viewIcps(); };
+function icpReadDom() { const s = ICP.edit; if (!s) return; const g = (x) => document.getElementById(x); if (g('icp-name')) s.name = g('icp-name').value.trim(); if (g('icp-category')) s.category = g('icp-category').value.trim(); if (g('icp-language')) s.language = g('icp-language').value.trim(); if (g('icp-description')) s.description = g('icp-description').value; if (g('icp-tags')) s.tags = g('icp-tags').value.split(',').map((x) => x.trim()).filter(Boolean); if (g('icp-active')) s.active = g('icp-active').checked; }
+window.icpToggle = (kind, id) => { icpReadDom(); const a = ICP.edit[kind]; const i = a.map(Number).indexOf(Number(id)); if (i >= 0) a.splice(i, 1); else a.push(Number(id)); };
+window.icpSave = async () => { icpReadDom(); const s = ICP.edit; const msg = document.getElementById('icp-msg'); if (!s.name) { if (msg) msg.textContent = 'Falta o nome.'; return; } if (msg) msg.textContent = 'a guardar…'; const body = { name: s.name, description: s.description, category: s.category, language: s.language, tags: s.tags, template_ids: s.template_ids, client_ids: s.client_ids, campaign_ids: s.campaign_ids, segment_ids: s.segment_ids, active: s.active }; try { if (s.id) await api('/api/icps/' + s.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); else await api('/api/icps', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); ICP.edit = null; viewIcps(); } catch (e) { if (msg) msg.textContent = 'erro: ' + e.message; } };
+window.icpDelete = async (id, name) => { if (!confirm('Apagar o ICP “' + name + '”?')) return; await api('/api/icps/' + id, { method: 'DELETE' }); viewIcps(); };
+
+// ========== TEMPLATES DE EMAIL ==========
+const TPL_VARS = ['greeting', 'name', 'first_name', 'company', 'domain', 'city', 'industry', 'platform', 'platform_word', 'seo_score', 'ssl_days_left', 'cms_version', 'dns_provider'];
+let TPL = { edit: null, list: [], refs: {}, f: {}, lastField: 'tpl-body' };
+async function viewTemplates() {
+  if (!STATS) STATS = await api('/api/stats'); renderNav('templates');
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Comercial</div><h1 class="np-h1">Templates de email</h1><div class="np-sub">Assunto + corpo com {{variáveis}} do dataset dos contactos · tags, categorias, tipo de negócio, língua · ligações a ICPs, segmentos, clientes, campanhas e contactos</div></div>${TPL.edit ? '' : `<button class="np-btn np-btn--primary" onclick="tplNew()">+ Novo template</button>`}</div>`;
+  let data; try { data = await api('/api/email-templates'); } catch (e) { $('#view').innerHTML = head + errCard(e); return; }
+  TPL.refs = data.refs || {}; TPL.list = data.items || [];
+  if (TPL.edit) { $('#view').innerHTML = head + `<div id="tpl-editor">${tplEditorHtml()}</div>`; return; }
+  if (!TPL.list.length) { $('#view').innerHTML = head + `<div class="np-empty">Ainda não há templates. Cria o primeiro com “+ Novo template”.</div>`; return; }
+  // Filtros por relação
+  const uniq = (arr) => [...new Set(arr.filter(Boolean))].sort();
+  const cats = uniq(TPL.list.map((t) => t.category)), biz = uniq(TPL.list.map((t) => t.business_type)), langs = uniq(TPL.list.map((t) => t.language)), tags = uniq(TPL.list.flatMap((t) => t.tags || []));
+  const opt = (val, cur) => `<option value="${esc(val)}" ${cur === val ? 'selected' : ''}>${esc(val)}</option>`;
+  const sel = (k, label, vals) => `<select class="np-input" style="min-width:130px" onchange="tplFilter('${k}',this.value)"><option value="">${label}: todos</option>${vals.map((v) => opt(v, TPL.f[k])).join('')}</select>`;
+  const relSel = (k, label, items, fmt) => `<select class="np-input" style="min-width:150px" onchange="tplFilter('${k}',this.value)"><option value="">${label}: todos</option>${(items || []).map((it) => `<option value="${it.id}" ${String(TPL.f[k]) === String(it.id) ? 'selected' : ''}>${esc(fmt(it))}</option>`).join('')}</select>`;
+  const filters = `<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">${relSel('icp', 'ICP', TPL.refs.icps, (i) => i.name)}${relSel('segment', 'Segmento', TPL.refs.segments, (i) => i.name)}${sel('category', 'Categoria', cats)}${sel('business_type', 'Tipo de negócio', biz)}${sel('language', 'Língua', langs)}${sel('tag', 'Tag', tags)}${Object.values(TPL.f).some(Boolean) ? `<button class="np-btn np-btn--sm" onclick="tplFilterClear()">Limpar</button>` : ''}</div>`;
+  const rows = TPL.list.filter(tplMatch);
+  const grid = rows.length ? `<div class="np-grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${rows.map(tplCardHtml).join('')}</div>` : `<div class="np-empty">Nenhum template com estes filtros.</div>`;
+  $('#view').innerHTML = head + filters + grid;
+}
+function tplMatch(t) {
+  const f = TPL.f;
+  if (f.icp && !(t.icp_ids || []).map(Number).includes(Number(f.icp))) return false;
+  if (f.segment && !(t.segment_ids || []).map(Number).includes(Number(f.segment))) return false;
+  if (f.category && t.category !== f.category) return false;
+  if (f.business_type && t.business_type !== f.business_type) return false;
+  if (f.language && t.language !== f.language) return false;
+  if (f.tag && !(t.tags || []).includes(f.tag)) return false;
+  return true;
+}
+window.tplFilter = (k, v) => { TPL.f[k] = v || ''; viewTemplates(); };
+window.tplFilterClear = () => { TPL.f = {}; viewTemplates(); };
+function tplCardHtml(s) {
+  const rel = (arr, l) => (arr && arr.length ? `<span class="np-chip" style="height:18px">${arr.length} ${l}</span>` : '');
+  const tags = (s.tags || []).map((t) => `<span class="np-chip" style="height:18px">${esc(t)}</span>`).join(' ');
+  return `<section class="np-card" style="${s.active === false ? 'opacity:.55' : ''}"><div class="np-card-b">
+    <div style="font-weight:800;font-size:15px">${esc(s.name)}</div>
+    <div class="muted" style="font-size:11.5px">${esc(s.subject || '(sem assunto)')}</div>
+    <div class="muted" style="font-size:11px;margin-top:4px">${[s.category, s.business_type, s.language].filter(Boolean).map(esc).join(' · ') || '—'}</div>
+    ${tags ? `<div style="margin-top:8px;display:flex;gap:4px;flex-wrap:wrap">${tags}</div>` : ''}
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:8px">${rel(s.icp_ids, 'ICP')}${rel(s.segment_ids, 'seg')}${rel(s.client_ids, 'clientes')}${rel(s.campaign_ids, 'camp')}${rel(s.contact_ids, 'contactos')}</div>
+    <div style="display:flex;gap:6px;margin-top:12px"><button class="np-btn np-btn--sm" onclick="tplEdit(${s.id})">Editar</button><button class="np-btn np-btn--sm" onclick="tplDelete(${s.id},'${esc((s.name || '').replace(/'/g, ''))}')">Apagar</button></div>
+  </div></section>`;
+}
+function tplEditorHtml() {
+  const s = TPL.edit, r = TPL.refs;
+  const palette = TPL_VARS.map((v) => `<button type="button" class="np-chip" style="cursor:pointer" onclick="tplInsertVar('${v}')" title="inserir no último campo focado">{{${v}}}</button>`).join(' ');
+  const contacts = (s._contacts || []).map((c) => `<span class="np-chip" style="height:20px">${esc(c.name || c.email)} <span onclick="tplRmContact(${c.id})" style="cursor:pointer;color:var(--np-warn)">×</span></span>`).join(' ') || '<span class="muted" style="font-size:12px">nenhum contacto manual</span>';
+  return `<div class="np-card"><div class="np-card-b" style="max-width:860px">
+    <div style="display:grid;grid-template-columns:1fr 140px 140px 90px;gap:10px">
+      <div><label class="muted" style="font-size:11px">Nome</label><input class="np-input" id="tpl-name" value="${esc(s.name || '')}" placeholder="ex.: Cold — SEO fraco" style="width:100%"></div>
+      <div><label class="muted" style="font-size:11px">Categoria</label><input class="np-input" id="tpl-category" value="${esc(s.category || '')}" style="width:100%"></div>
+      <div><label class="muted" style="font-size:11px">Tipo de negócio</label><input class="np-input" id="tpl-business_type" value="${esc(s.business_type || '')}" style="width:100%"></div>
+      <div><label class="muted" style="font-size:11px">Língua</label><input class="np-input" id="tpl-language" value="${esc(s.language || '')}" placeholder="pt" style="width:100%"></div>
+    </div>
+    <div style="margin-top:14px"><label class="muted" style="font-size:11px">Assunto</label><input class="np-input" id="tpl-subject" onfocus="tplFocus('tpl-subject')" value="${esc(s.subject || '')}" style="width:100%"></div>
+    <div style="margin-top:14px"><label class="muted" style="font-size:11px">Corpo</label><textarea class="np-input" id="tpl-body" onfocus="tplFocus('tpl-body')" rows="8" style="width:100%;font-size:12.5px">${esc(s.body || '')}</textarea>
+      <div style="margin-top:6px;display:flex;gap:5px;flex-wrap:wrap;align-items:center"><span class="muted" style="font-size:11px">Variáveis (clica para inserir):</span> ${palette}</div></div>
+    <div style="margin-top:14px"><label class="muted" style="font-size:11px">Tags (vírgula)</label><input class="np-input" id="tpl-tags" value="${esc((s.tags || []).join(', '))}" style="width:100%"></div>
+    <div class="np-sec-t" style="margin-top:18px">Ligações</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      ${relBox('ICPs', r.icps, s.icp_ids, 'icp_ids', (it) => esc(it.name), 'tplToggle')}
+      ${relBox('Segmentos', r.segments, s.segment_ids, 'segment_ids', (it) => esc(it.name), 'tplToggle')}
+      ${relBox('Clientes', r.clients, s.client_ids, 'client_ids', (it) => esc(it.name || it.org_domain || ('#' + it.id)), 'tplToggle')}
+      ${relBox('Campanhas', r.campaigns, s.campaign_ids, 'campaign_ids', (it) => esc(it.name), 'tplToggle')}
+    </div>
+    <div class="np-sec-t" style="margin-top:18px">Contactos manuais <button class="np-btn np-btn--sm" style="margin-left:8px" onclick="tplPickContacts()">+ Adicionar contactos</button></div>
+    <div id="tpl-contacts" style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">${contacts}</div>
+    <div style="margin-top:14px"><label style="display:flex;gap:6px;align-items:center;font-size:12.5px"><input type="checkbox" id="tpl-active" ${s.active !== false ? 'checked' : ''}> Ativo</label></div>
+    <div style="display:flex;gap:8px;margin-top:18px"><button class="np-btn np-btn--primary" onclick="tplSave()">Guardar</button><button class="np-btn" onclick="tplCancel()">Cancelar</button><span id="tpl-msg" class="muted" style="font-size:12.5px;align-self:center"></span></div>
+  </div></div>`;
+}
+window.tplNew = () => { TPL.edit = { tags: [], variables: [], icp_ids: [], segment_ids: [], client_ids: [], campaign_ids: [], contact_ids: [], _contacts: [], active: true }; viewTemplates(); };
+window.tplEdit = async (id) => { const s = TPL.list.find((x) => x.id === id); if (!s) return; let _contacts = []; if ((s.contact_ids || []).length) { try { _contacts = (await api('/api/contacts-by-ids?ids=' + s.contact_ids.join(','))).contacts || []; } catch (e) {} } TPL.edit = { ...s, tags: s.tags || [], variables: s.variables || [], icp_ids: s.icp_ids || [], segment_ids: s.segment_ids || [], client_ids: s.client_ids || [], campaign_ids: s.campaign_ids || [], contact_ids: s.contact_ids || [], _contacts }; viewTemplates(); };
+window.tplCancel = () => { TPL.edit = null; viewTemplates(); };
+window.tplFocus = (id) => { TPL.lastField = id; };
+window.tplInsertVar = (v) => { const el = document.getElementById(TPL.lastField || 'tpl-body'); if (!el) return; const t = '{{' + v + '}}'; const st = el.selectionStart ?? el.value.length, en = el.selectionEnd ?? st; el.value = el.value.slice(0, st) + t + el.value.slice(en); el.focus(); el.selectionStart = el.selectionEnd = st + t.length; };
+function tplReadDom() { const s = TPL.edit; if (!s) return; const g = (x) => document.getElementById(x); ['name', 'subject', 'category', 'business_type', 'language'].forEach((k) => { if (g('tpl-' + k)) s[k] = g('tpl-' + k).value.trim(); }); if (g('tpl-body')) s.body = g('tpl-body').value; if (g('tpl-tags')) s.tags = g('tpl-tags').value.split(',').map((x) => x.trim()).filter(Boolean); if (g('tpl-active')) s.active = g('tpl-active').checked; }
+window.tplToggle = (kind, id) => { tplReadDom(); const a = TPL.edit[kind]; const i = a.map(Number).indexOf(Number(id)); if (i >= 0) a.splice(i, 1); else a.push(Number(id)); };
+window.tplRmContact = (id) => { tplReadDom(); TPL.edit.contact_ids = (TPL.edit.contact_ids || []).filter((x) => Number(x) !== Number(id)); TPL.edit._contacts = (TPL.edit._contacts || []).filter((c) => Number(c.id) !== Number(id)); document.getElementById('tpl-editor').innerHTML = tplEditorHtml(); };
+window.tplSave = async () => {
+  tplReadDom(); const s = TPL.edit; const msg = document.getElementById('tpl-msg'); if (!s.name) { if (msg) msg.textContent = 'Falta o nome.'; return; } if (msg) msg.textContent = 'a guardar…';
+  const usedVars = [...new Set(((s.subject || '') + ' ' + (s.body || '')).match(/\{\{\s*([a-z_]+)\s*\}\}/gi) || [])].map((m) => m.replace(/[{}\s]/g, ''));
+  const body = { name: s.name, subject: s.subject, body: s.body, category: s.category, business_type: s.business_type, language: s.language, tags: s.tags, variables: usedVars, icp_ids: s.icp_ids, segment_ids: s.segment_ids, client_ids: s.client_ids, campaign_ids: s.campaign_ids, contact_ids: s.contact_ids, active: s.active };
+  try { if (s.id) await api('/api/email-templates/' + s.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); else await api('/api/email-templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); TPL.edit = null; viewTemplates(); } catch (e) { if (msg) msg.textContent = 'erro: ' + e.message; }
+};
+window.tplDelete = async (id, name) => { if (!confirm('Apagar o template “' + name + '”?')) return; await api('/api/email-templates/' + id, { method: 'DELETE' }); viewTemplates(); };
+// Popup de seleção de contactos (pesquisa + filtro). Adiciona os selecionados ao template em edição.
+window.tplPickContacts = async () => {
+  tplReadDom();
+  const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:16px;font-weight:800">Adicionar contactos</div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+    <div style="padding:12px 16px"><input id="cp-q" class="np-input" placeholder="Pesquisar por nome, email ou empresa…" style="width:100%" oninput="clearTimeout(window.__cpt);window.__cpt=setTimeout(()=>cpSearch(),300)"><div id="cp-list" style="margin-top:10px"><div class="np-empty">Escreve para pesquisar.</div></div>
+    <div style="margin-top:12px;display:flex;gap:8px;align-items:center"><button class="np-btn np-btn--primary" onclick="cpAdd()">Adicionar selecionados</button><span id="cp-msg" class="muted" style="font-size:12px"></span></div></div>`;
+  window.__cpSel = new Map();
+  cpSearch();
+};
+window.cpSearch = async () => {
+  const q = (document.getElementById('cp-q')?.value || '').trim();
+  const el = document.getElementById('cp-list'); if (!el) return; el.innerHTML = '<div class="muted" style="font-size:12px">a procurar…</div>';
+  try {
+    const r = await api('/api/contacts-search?limit=50&q=' + encodeURIComponent(q));
+    const cs = (r.contacts || []).filter((c) => !(TPL.edit.contact_ids || []).map(Number).includes(Number(c.id)));
+    el.innerHTML = cs.length ? cs.map((c) => `<label style="display:flex;gap:8px;align-items:center;padding:5px 0;border-bottom:1px solid var(--np-border);font-size:12.5px"><input type="checkbox" ${window.__cpSel.has(c.id) ? 'checked' : ''} onchange="cpTgl(${c.id},this.checked)"><span style="flex:1"><b>${esc(c.name || '—')}</b> <span class="muted">${esc(c.email)}</span><br><span class="muted" style="font-size:11px">${esc(c.company?.name || c.site?.domain || '')}${c.role ? ' · ' + esc(c.role) : ''}</span></span></label>`).join('') : '<div class="np-empty">Nenhum contacto.</div>';
+    // reaplica os já selecionados que não estão nesta página
+    window.__cpData = window.__cpData || {}; cs.forEach((c) => { window.__cpData[c.id] = c; });
+  } catch (e) { el.innerHTML = `<div class="np-empty">Erro: ${esc(e.message)}</div>`; }
+};
+window.cpTgl = (id, on) => { if (on) window.__cpSel.set(id, window.__cpData[id]); else window.__cpSel.delete(id); const m = document.getElementById('cp-msg'); if (m) m.textContent = window.__cpSel.size + ' selecionados'; };
+window.cpAdd = () => {
+  const sel = [...window.__cpSel.values()];
+  if (!sel.length) { const m = document.getElementById('cp-msg'); if (m) m.textContent = 'Nenhum selecionado.'; return; }
+  TPL.edit.contact_ids = [...new Set([...(TPL.edit.contact_ids || []).map(Number), ...sel.map((c) => Number(c.id))])];
+  TPL.edit._contacts = [...(TPL.edit._contacts || []), ...sel];
+  closeDrawer(); document.getElementById('tpl-editor').innerHTML = tplEditorHtml();
 };
 
 // ---------- bars ----------
@@ -801,7 +969,7 @@ window.openSite = async (domain) => {
         <div class="np-sec-t">Tech stack detetada</div><div>${tech}</div>
         <div class="np-sec-t">Subdomínios (${(site.hostnames || []).length})</div>${subs}
         <div id="np-timeline"></div>
-        <div class="np-sec-t">Contactos (${contacts.length})</div>${people}
+        <div class="np-sec-t" style="display:flex;justify-content:space-between;align-items:center;gap:6px">Contactos (${contacts.length})${contacts.some((c) => c.email) ? `<button class="np-btn np-btn--sm" onclick="companyToTemplate('${esc(site.domain)}')" title="Adicionar os contactos desta empresa a um template de email">+ a template</button>` : ''}</div>${people}
         ${site.company?.general_email || site.company?.general_phone ? `<div style="margin-top:8px;padding:8px 10px;background:var(--np-surface-2);border-radius:8px;font-size:12.5px"><b>Geral:</b> ${esc(site.company?.general_email || '')} ${esc(site.company?.general_phone || '')}</div>` : ''}
         <div style="margin-top:16px;padding:10px 12px;background:var(--np-surface-2);border-radius:8px;color:var(--np-text-3);font-size:11.5px;display:flex;gap:8px;align-items:center">${ic('shield', 14)} Base legal RGPD: <b style="color:var(--np-text-2)">interesse legítimo B2B</b></div>
       </div>`;
@@ -809,6 +977,26 @@ window.openSite = async (domain) => {
   } catch (e) { d.innerHTML = `<div class="np-empty">Erro: ${esc(e.message)} <br><button class="np-btn np-btn--sm" style="margin-top:12px" onclick="closeDrawer()">Fechar</button></div>`; }
 };
 window.closeDrawer = () => { $('#drawer').classList.remove('open'); $('#scrim').classList.remove('open'); };
+// Adicionar os contactos (com email) de uma empresa a um template de email (a partir do drawer do site).
+window.companyToTemplate = async (domain) => {
+  const ids = Object.values(window._DC || {}).filter((c) => c.email && c.id != null).map((c) => c.id);
+  if (!ids.length) return;
+  const dw = $('#drawer'); dw.innerHTML = `<div class="np-empty">A carregar templates…</div>`;
+  let tpls; try { tpls = (await api('/api/email-templates-list')).templates || []; } catch (e) { dw.innerHTML = `<div class="np-empty">Erro: ${esc(e.message)}</div>`; return; }
+  const hd = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:16px;font-weight:800">Contactos → template</div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="openSite('${esc(domain)}')">${ic('x', 16)}</button></div>`;
+  if (!tpls.length) { dw.innerHTML = hd + `<div class="np-empty">Ainda não há templates. Cria um em <a href="#/templates" style="color:var(--np-brand)">Templates</a>.</div>`; return; }
+  window.__ctIds = ids;
+  dw.innerHTML = hd + `<div style="padding:14px 16px">
+    <div class="muted" style="font-size:12.5px;margin-bottom:8px">Adicionar os <b>${ids.length}</b> contactos com email desta empresa a:</div>
+    <select id="ct-tpl" class="np-input" style="width:100%">${tpls.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join('')}</select>
+    <div style="display:flex;gap:8px;margin-top:14px"><button class="np-btn np-btn--primary" onclick="companyToTemplateAdd('${esc(domain)}')">Adicionar</button><button class="np-btn" onclick="openSite('${esc(domain)}')">Voltar</button><span id="ct-msg" class="muted" style="font-size:12px;align-self:center"></span></div>
+  </div>`;
+};
+window.companyToTemplateAdd = async () => {
+  const tplId = document.getElementById('ct-tpl').value; const msg = document.getElementById('ct-msg'); msg.textContent = 'a adicionar…';
+  try { const r = await api('/api/email-templates/' + tplId + '/contacts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ add: window.__ctIds }) }); captureEvent('template_contacts_added', { count: window.__ctIds.length }); msg.textContent = '✓ o template ficou com ' + r.count + ' contactos'; }
+  catch (e) { msg.textContent = 'erro: ' + e.message; }
+};
 $('#scrim').onclick = closeDrawer;
 
 // Sparkline SVG minimal (série de {ts,v} numéricos, 0-100 típico) → linha inline.
@@ -1878,6 +2066,8 @@ async function route() {
     else if (h === 'triggers') await viewTriggers();
     else if (h === 'segments') await viewSegments();
     else if (h === 'subscriptions') await viewSubscriptions();
+    else if (h === 'icps') await viewIcps();
+    else if (h === 'templates') await viewTemplates();
     else if (h === 'campaigns') await viewCampaigns();
     else if (h === 'agents') await viewAgents();
     else if (h === 'chat') await viewChat();
@@ -1902,7 +2092,7 @@ async function route() {
 // Auto-refresh global (10s) das páginas de dados. NÃO refresca ferramentas (import/agents/
 // settings), nem enquanto se edita um campo, nem com um drawer aberto; preserva o scroll.
 let REFRESHING = false;
-  const NO_AUTOREFRESH = new Set(['import', 'agents', 'chat', 'settings', 'coverage', 'data-coverage', 'logs', 'subscriptions']);
+  const NO_AUTOREFRESH = new Set(['import', 'agents', 'chat', 'settings', 'coverage', 'data-coverage', 'logs', 'subscriptions', 'icps', 'templates']);
 window.addEventListener('hashchange', route);
 route();
 setInterval(() => {

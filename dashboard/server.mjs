@@ -646,6 +646,90 @@ app.post('/api/subscriptions/:id/campaign', async (req, res) => {
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 
+// --- ICPs (públicos-alvo) + Email Templates: CRUD genérico (relações por arrays de ids) ----------
+function idArrayCrud(basePath, collection, fields, allow, refsSpec) {
+  const clean = (b) => {
+    const o = {};
+    for (const [k, kind] of Object.entries(allow)) {
+      if (kind === 'str' && typeof b[k] === 'string') o[k] = b[k].slice(0, 500);
+      else if (kind === 'text' && typeof b[k] === 'string') o[k] = b[k];
+      else if (kind === 'arr' && Array.isArray(b[k])) o[k] = b[k];
+      else if (kind === 'bool' && typeof b[k] === 'boolean') o[k] = b[k];
+      else if (kind === 'int' && b[k] != null) o[k] = parseInt(b[k], 10) || null;
+    }
+    return o;
+  };
+  app.get(basePath, async (req, res) => {
+    try {
+      const items = await d(`/items/${collection}?sort[]=sort&sort[]=-id&limit=-1&fields=${fields}`);
+      const refs = {};
+      await Promise.all(Object.entries(refsSpec).map(async ([k, url]) => { refs[k] = await d(url).catch(() => []); }));
+      res.json({ items, refs });
+    } catch (e) { res.status(502).json({ error: e.message }); }
+  });
+  app.post(basePath, async (req, res) => {
+    try { const b = clean(req.body || {}); if (!b.name) return res.status(400).json({ error: 'name obrigatório' }); res.json({ item: await dwrite('POST', `/items/${collection}`, b) }); }
+    catch (e) { res.status(502).json({ error: e.message }); }
+  });
+  app.put(`${basePath}/:id`, async (req, res) => {
+    try { res.json({ item: await dwrite('PATCH', `/items/${collection}/${encodeURIComponent(req.params.id)}`, clean(req.body || {})) }); }
+    catch (e) { res.status(502).json({ error: e.message }); }
+  });
+  app.delete(`${basePath}/:id`, async (req, res) => {
+    try { await dwrite('DELETE', `/items/${collection}/${encodeURIComponent(req.params.id)}`); res.json({ ok: true }); }
+    catch (e) { res.status(502).json({ error: e.message }); }
+  });
+}
+const REF_SEGMENTS = '/items/segments?limit=-1&fields=id,name';
+const REF_CAMPAIGNS = '/items/campaigns?limit=-1&fields=id,name,angle';
+idArrayCrud('/api/icps', 'icps',
+  'id,name,description,tags,category,language,template_ids,client_ids,campaign_ids,segment_ids,active,notes,sort,date_created',
+  { name: 'str', description: 'text', category: 'str', language: 'str', tags: 'arr', template_ids: 'arr', client_ids: 'arr', campaign_ids: 'arr', segment_ids: 'arr', active: 'bool', notes: 'text', sort: 'int' },
+  { segments: REF_SEGMENTS, campaigns: REF_CAMPAIGNS, clients: CLIENTS_REF_URL, templates: '/items/email_templates?limit=-1&fields=id,name,subject' });
+idArrayCrud('/api/email-templates', 'email_templates',
+  'id,name,subject,body,variables,tags,category,business_type,language,icp_ids,segment_ids,client_ids,campaign_ids,contact_ids,active,notes,sort,date_created',
+  { name: 'str', subject: 'str', body: 'text', category: 'str', business_type: 'str', language: 'str', variables: 'arr', tags: 'arr', icp_ids: 'arr', segment_ids: 'arr', client_ids: 'arr', campaign_ids: 'arr', contact_ids: 'arr', active: 'bool', notes: 'text', sort: 'int' },
+  { segments: REF_SEGMENTS, campaigns: REF_CAMPAIGNS, clients: CLIENTS_REF_URL, icps: '/items/icps?limit=-1&fields=id,name,description' });
+
+// Pesquisa de contactos (popup do template): por nome/email/empresa. Só com email.
+app.get('/api/contacts-search', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+    const limit = Math.min(100, parseInt(req.query.limit, 10) || 40);
+    let filter = 'filter[email][_nnull]=true';
+    if (q) { const s = encodeURIComponent(q); filter += `&filter[_and][0][_or][0][name][_icontains]=${s}&filter[_and][0][_or][1][email][_icontains]=${s}&filter[_and][0][_or][2][company][name][_icontains]=${s}`; }
+    const contacts = await d(`/items/contacts?${filter}&fields=id,name,email,role,role_category,company.name,site.domain&sort=name&limit=${limit}`);
+    res.json({ contacts });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+// Resolve ids de contactos → detalhes (para mostrar os contactos já associados a um template).
+app.get('/api/contacts-by-ids', async (req, res) => {
+  try {
+    const ids = (req.query.ids || '').split(',').map((x) => parseInt(x, 10)).filter(Boolean);
+    if (!ids.length) return res.json({ contacts: [] });
+    const contacts = await d(`/items/contacts?filter[id][_in]=${ids.join(',')}&fields=id,name,email,role,company.name,site.domain&limit=${ids.length}`);
+    res.json({ contacts });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+// Adicionar/remover contactos de um template (popup + vista de empresa). {add:[ids], remove:[ids]}
+app.post('/api/email-templates/:id/contacts', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const rows = await d(`/items/email_templates?filter[id][_eq]=${encodeURIComponent(id)}&fields=contact_ids&limit=1`);
+    if (!rows[0]) return res.status(404).json({ error: 'template não encontrado' });
+    const cur = new Set((rows[0].contact_ids || []).map(Number));
+    (req.body?.add || []).map(Number).forEach((x) => cur.add(x));
+    (req.body?.remove || []).map(Number).forEach((x) => cur.delete(x));
+    const item = await dwrite('PATCH', `/items/email_templates/${encodeURIComponent(id)}`, { contact_ids: [...cur] });
+    res.json({ ok: true, count: cur.size, item });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+// Templates disponíveis (para a vista de empresa: "adicionar contactos a um template").
+app.get('/api/email-templates-list', async (req, res) => {
+  try { res.json({ templates: await d('/items/email_templates?limit=-1&fields=id,name&sort=name') }); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
 // --- Campanhas (Fase F) ------------------------------------------------------
 const newToken = () => crypto.randomBytes(16).toString('hex');
 async function natsPublish(subject, obj, msgId) {

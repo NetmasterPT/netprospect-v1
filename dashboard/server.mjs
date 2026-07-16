@@ -568,15 +568,18 @@ function subClean(b) {
   else if (b.price_inc_vat != null && b.price_inc_vat !== '') { o.price_inc_vat = round2(b.price_inc_vat); o.price_ex_vat = round2(o.price_inc_vat / 1.23); }
   return o;
 }
+const CLIENTS_REF_URL = '/items/companies?filter[is_client][_eq]=true&limit=-1&fields=id,name,org_domain';
 app.get('/api/subscriptions', async (req, res) => {
   try {
-    const [subscriptions, segments, campaigns, clients] = await Promise.all([
-      d(`/items/subscriptions?sort[]=sort&sort[]=-id&limit=-1&fields=${SUB_FIELDS}`),
+    const [subscriptions, segments, campaigns, clients, icps, templates] = await Promise.all([
+      d(`/items/subscriptions?sort[]=sort&sort[]=-id&limit=-1&fields=${SUB_FIELDS},icp_ids,template_ids`),
       d('/items/segments?limit=-1&fields=id,name,accent').catch(() => []),
       d('/items/campaigns?limit=-1&fields=id,name,angle,status').catch(() => []),
-      d('/items/companies?filter[is_client][_eq]=true&limit=-1&fields=id,name,org_domain').catch(() => []),
+      d(CLIENTS_REF_URL).catch(() => []),
+      d('/items/icps?limit=-1&fields=id,name,description').catch(() => []),
+      d('/items/email_templates?limit=-1&fields=id,name,subject').catch(() => []),
     ]);
-    res.json({ subscriptions, refs: { segments, campaigns, clients } });
+    res.json({ subscriptions, refs: { segments, campaigns, clients, icps, templates } });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 app.post('/api/subscriptions', async (req, res) => {

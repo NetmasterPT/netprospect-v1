@@ -424,11 +424,11 @@ function auditFacetsHtml(st, px) {
   const trafficActive = !!st.traffic;
   const auditActive = st.seo_max || st.mobile || st.desktop || st.security || st.sev || st.wpvuln;
   const leadActive = st.dm || st.lead_min || st.lead_max;
-  const LEAD_TH = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+  const LEAD_TH = [10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80];
   return dd('lead', 'Qualidade', leadActive, `<div style="max-height:320px;overflow:auto">` + bOpt('dm', 'Tem decisor')
-      + sub('Lead score ≥') + LEAD_TH.map((n) => vOpt('lead_min', String(n), '≥ ' + n)).join('')
-      + sub('Lead score <') + LEAD_TH.map((n) => vOpt('lead_max', String(n), '< ' + n)).join('')
-      + sub('(combina ≥ e < = intervalo)') + `</div>`)
+      + sub('Lead score ≥ (maior que)') + LEAD_TH.map((n) => vOpt('lead_min', String(n), '≥ ' + n)).join('')
+      + sub('Lead score < (menor que)') + LEAD_TH.map((n) => vOpt('lead_max', String(n), '< ' + n)).join('')
+      + sub('(combina ≥ e < = intervalo à tua escolha)') + `</div>`)
     + dd('contacto', 'Contacto', (st.has_email || st.has_phone), bOpt('has_email', 'Tem email') + bOpt('has_phone', 'Tem telefone'))
     + dd('social', 'Social', (st.fb || st.ig || st.li || st.tw || st.gmb || st.wa || st.pin || st.yt || st.tk), bOpt('fb', 'Facebook') + bOpt('ig', 'Instagram') + bOpt('li', 'LinkedIn') + bOpt('tw', 'Twitter / X') + bOpt('gmb', 'Google Business') + bOpt('wa', 'WhatsApp') + bOpt('pin', 'Pinterest') + bOpt('yt', 'YouTube') + bOpt('tk', 'TikTok'))
     + dd('infra', 'Infra / Perf', (st.cpanel || st.notcpanel || st.load), bOpt('cpanel', 'cPanel') + bOpt('notcpanel', 'Sem cPanel') + sub('Velocidade') + cOpt('load', 'fast', 'Rápido') + cOpt('load', 'medium', 'Médio') + cOpt('load', 'slow', 'Lento') + cOpt('load', 'very_slow', 'Muito lento'))
@@ -1157,7 +1157,15 @@ async function viewLogs() {
 }
 // ---------- Cobertura ----------
 let COV_THRESH = 'all';
-const COV_BUCKETS = { gt70: ['gt70'], gt60: ['gt70', 'b60'], gt50: ['gt70', 'b60', 'b50'], gt40: ['gt70', 'b60', 'b50', 'b40'], lt40: ['lt40'], all: ['gt70', 'b60', 'b50', 'b40', 'lt40'] };
+// Buckets disjuntos de 5 em 5 (b75=(75,∞], b70=(70,75], …, b20=(20,25], lt20=[0,20]). Os limiares ">X"
+// somam cumulativamente do topo até bX. Alinhado com o CASE do COVERAGE_SQL/DATA_COVERAGE_SQL.
+const COV_ORDER = ['b75', 'b70', 'b65', 'b60', 'b55', 'b50', 'b45', 'b40', 'b35', 'b30', 'b25', 'b20', 'lt20'];
+const COV_BUCKETS = (() => {
+  const m = { all: COV_ORDER, lt20: ['lt20'] };
+  [75, 70, 65, 60, 55, 50, 45, 40, 35, 30, 25, 20].forEach((t, i) => { m['gt' + t] = COV_ORDER.slice(0, i + 1); });
+  return m;
+})();
+const COV_THS = [['gt75', '&gt;75'], ['gt70', '&gt;70'], ['gt65', '&gt;65'], ['gt60', '&gt;60'], ['gt55', '&gt;55'], ['gt50', '&gt;50'], ['gt45', '&gt;45'], ['gt40', '&gt;40'], ['gt35', '&gt;35'], ['gt30', '&gt;30'], ['gt25', '&gt;25'], ['gt20', '&gt;20'], ['lt20', '&lt;20'], ['all', 'Todos']];
 const COV_JOBS = [
   ['enrich', 'Enrich', 'base'], ['fetch', 'Fetch (homepage)', 'base'],
   ['dns', 'DNS → IP', 'base'], ['geoip', 'GeoIP', 'base'], ['fingerprint', 'Fingerprint / CMS', 'base'],
@@ -1172,7 +1180,7 @@ function covSum(cov, thresh) {
   const keys = COV_BUCKETS[thresh] || COV_BUCKETS.all;
   const rows = (cov.buckets || []).filter((b) => keys.includes(b.bucket));
   const sum = (f) => rows.reduce((a, b) => a + (+b[f] || 0), 0);
-  const out = { total: sum('total') };
+  const out = { total: sum('total'), wp_total: sum('wp_total') };
   for (const [k] of COV_JOBS) out[k] = sum(k);
   return out;
 }
@@ -1208,10 +1216,10 @@ async function viewCoverage() {
   const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Cobertura de jobs</h1><div class="np-sub">Fração de sites onde o job <b>já correu</b> (não “tem resultado” — um job que correu e não achou nada conta como coberto) · filtra por lead score · via np-db</div></div></div>`;
   let cov; try { cov = await api('/api/coverage'); } catch (e) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
   if (!cov.ok) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Indisponível:</b> ${esc(cov.error || '—')} <span class="muted">(a página Cobertura precisa do PG_HOST/creds no dashboard).</span></div></div>`; return; }
-  const THS = [['gt70', '&gt;70'], ['gt60', '&gt;60'], ['gt50', '&gt;50'], ['gt40', '&gt;40'], ['lt40', '&lt;40'], ['all', 'Todos']];
-  const seg = THS.map(([k, l]) => `<button class="np-btn np-btn--sm ${COV_THRESH === k ? 'np-btn--primary' : ''}" onclick="window.covSet('${k}')">${l}</button>`).join(' ');
+  const seg = COV_THS.map(([k, l]) => `<button class="np-btn np-btn--sm ${COV_THRESH === k ? 'np-btn--primary' : ''}" onclick="window.covSet('${k}')">${l}</button>`).join(' ');
   const s = covSum(cov, COV_THRESH); const total = s.total || 1;
-  const rows = COV_JOBS.map(([k, label, kind]) => ({ label, cat: kind, n: s[k] || 0, total, pct: Math.round(1000 * (s[k] || 0) / total) / 10 }));
+  // wpscan só se aplica a sites WordPress → denominador = wp_total (não-WP não pode ter wpscan).
+  const rows = COV_JOBS.map(([k, label, kind]) => { const tot = k === 'wpscan' ? (s.wp_total || 1) : total; return { label: k === 'wpscan' ? label + ' (só WP)' : label, cat: kind, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 }; });
   const sorted = covSortRows(rows, 'jobs');
   const v = cov.verify || {};
   $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">
@@ -1243,7 +1251,7 @@ function dcovSum(cov, thresh) {
   const keys = COV_BUCKETS[thresh] || COV_BUCKETS.all;
   const rows = (cov.buckets || []).filter((b) => keys.includes(b.bucket));
   const sum = (f) => rows.reduce((a, b) => a + (+b[f] || 0), 0);
-  const out = { total: sum('total') };
+  const out = { total: sum('total'), wp_total: sum('wp_total') };
   for (const [k] of DCOV_FIELDS) out[k] = sum(k);
   return out;
 }
@@ -1253,10 +1261,10 @@ async function viewDataCoverage() {
   const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Cobertura de dados</h1><div class="np-sub">Fração de sites que <b>têm cada dado</b> (o campo tem valor) — não é “o job correu”. Um dado em falta pode ser porque o job ainda não correu <i>ou</i> porque simplesmente não existe · filtra por lead score · via np-db</div></div></div>`;
   let cov; try { cov = await api('/api/data-coverage'); } catch (e) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
   if (!cov.ok) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Indisponível:</b> ${esc(cov.error || '—')} <span class="muted">(precisa do PG_HOST/creds no dashboard).</span></div></div>`; return; }
-  const THS = [['gt70', '&gt;70'], ['gt60', '&gt;60'], ['gt50', '&gt;50'], ['gt40', '&gt;40'], ['lt40', '&lt;40'], ['all', 'Todos']];
-  const seg = THS.map(([k, l]) => `<button class="np-btn np-btn--sm ${DCOV_THRESH === k ? 'np-btn--primary' : ''}" onclick="window.dcovSet('${k}')">${l}</button>`).join(' ');
+  const seg = COV_THS.map(([k, l]) => `<button class="np-btn np-btn--sm ${DCOV_THRESH === k ? 'np-btn--primary' : ''}" onclick="window.dcovSet('${k}')">${l}</button>`).join(' ');
   const s = dcovSum(cov, DCOV_THRESH); const total = s.total || 1;
-  const rows = DCOV_FIELDS.map(([k, label, cat]) => ({ label, cat, n: s[k] || 0, total, pct: Math.round(1000 * (s[k] || 0) / total) / 10 }));
+  // wpscan só se aplica a WordPress → denominador = wp_total.
+  const rows = DCOV_FIELDS.map(([k, label, cat]) => { const tot = k === 'wpscan' ? (s.wp_total || 1) : total; return { label: k === 'wpscan' ? label + ' (só WP)' : label, cat, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 }; });
   const sorted = covSortRows(rows, 'data');
   const v = cov.verify || {};
   $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">

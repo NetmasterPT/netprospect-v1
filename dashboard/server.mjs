@@ -1337,9 +1337,14 @@ const COVERAGE_SQL = `
 -- porque exigia email IS NOT NULL → o site contava como "verificado" sem o job ter terminado).
 WITH unv AS (SELECT DISTINCT site FROM contacts WHERE email_status IS NULL)
 SELECT
-  CASE WHEN lead_score>70 THEN 'gt70' WHEN lead_score>60 THEN 'b60' WHEN lead_score>50 THEN 'b50'
-       WHEN lead_score>40 THEN 'b40' ELSE 'lt40' END AS bucket,
+  CASE WHEN lead_score>75 THEN 'b75' WHEN lead_score>70 THEN 'b70' WHEN lead_score>65 THEN 'b65'
+       WHEN lead_score>60 THEN 'b60' WHEN lead_score>55 THEN 'b55' WHEN lead_score>50 THEN 'b50'
+       WHEN lead_score>45 THEN 'b45' WHEN lead_score>40 THEN 'b40' WHEN lead_score>35 THEN 'b35'
+       WHEN lead_score>30 THEN 'b30' WHEN lead_score>25 THEN 'b25' WHEN lead_score>20 THEN 'b20'
+       ELSE 'lt20' END AS bucket,
   count(*)::int AS total,
+  -- wp_total: sites WordPress/WooCommerce por bucket → denominador do wpscan (não-WP não pode ter wpscan).
+  count(*) FILTER (WHERE s.primary_platform IN (SELECT id FROM platforms WHERE slug IN ('wordpress','woocommerce')))::int AS wp_total,
   -- Cada métrica = O JOB CORREU para o site (não "tem resultado"). Marcador por job:
   count(*) FILTER (WHERE s.checked_at IS NOT NULL)::int AS enrich,
   count(*) FILTER (WHERE s.http_status IS NOT NULL)::int AS fetch,
@@ -1385,9 +1390,13 @@ app.get('/api/coverage', async (req, res) => {
 //     nada (o dado simplesmente não existe). np-db direto; cache 2min. Antes do catch-all. ---
 const DATA_COVERAGE_SQL = `
 SELECT
-  CASE WHEN lead_score>70 THEN 'gt70' WHEN lead_score>60 THEN 'b60' WHEN lead_score>50 THEN 'b50'
-       WHEN lead_score>40 THEN 'b40' ELSE 'lt40' END AS bucket,
+  CASE WHEN lead_score>75 THEN 'b75' WHEN lead_score>70 THEN 'b70' WHEN lead_score>65 THEN 'b65'
+       WHEN lead_score>60 THEN 'b60' WHEN lead_score>55 THEN 'b55' WHEN lead_score>50 THEN 'b50'
+       WHEN lead_score>45 THEN 'b45' WHEN lead_score>40 THEN 'b40' WHEN lead_score>35 THEN 'b35'
+       WHEN lead_score>30 THEN 'b30' WHEN lead_score>25 THEN 'b25' WHEN lead_score>20 THEN 'b20'
+       ELSE 'lt20' END AS bucket,
   count(*)::int AS total,
+  count(*) FILTER (WHERE primary_platform IN (SELECT id FROM platforms WHERE slug IN ('wordpress','woocommerce')))::int AS wp_total,
   count(*) FILTER (WHERE has_email)::int AS email,
   count(*) FILTER (WHERE has_phone)::int AS phone,
   count(*) FILTER (WHERE has_decision_maker)::int AS decision_maker,

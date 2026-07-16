@@ -237,6 +237,21 @@ host remoto uma fatia de um job que os locais **também** consomem.
 (2) `lighthouse`+`nuclei` nos qualificados — material do relatório; (3) `whois`+`verify` — precisam das
 **free VMs** (quota por IP); (4) `wpscan` — a drenar; escala com as free VMs de security.
 
+**Atualização 2026-07-16 (em curso):**
+- **`ssl` backfill** de TODA a base (`enqueue-domain-health.js --only=ssl --all --force`) para popular os 2
+  campos novos **`ssl_validation` (DV/OV)** e **`ssl_wildcard`** — o OV distingue certificado pago (empresa
+  validada) do DV grátis (inclui cPanel AutoSSL-Sectigo). Colunas + filtros no directório.
+- **`industry` reclassify** via **snapshot-regen** (`enqueue-snapshot-regen.js`): os snapshots foram **podados
+  do MinIO**, por isso a reclassificação faz `fetch` com **`snapshotOnly:true`** (regenera o snapshot +
+  reclassifica só a indústria; NÃO re-corre os extractors partidos contacts/social/locality). O classificador
+  melhorou: **`gmb_category` = override autoritário** + headings/meta-keywords no scoring. Cap do `industry`
+  subiu 3→96 (já é heurístico/instantâneo, não Ollama).
+- **`ssllabs`** (NOVO): análise profunda SSL Labs (nota A+..F + avisos), **on-demand** (botão no drawer) +
+  batch pequeno de leads de topo (`enqueue-ssllabs.js --qualified/--min-score`). Lento/rate-limited (cap 4).
+- **Métrica de `verify` CORRIGIDA**: o CTE `unv` passou a contar QUALQUER contacto por processar
+  (`email_status NULL`), não só os que já têm email → um site só conta como verificado quando o job TERMINOU.
+  Antes, os jobs que esgotaram a quota da API escapavam à métrica (contavam como feitos sem terem corrido).
+
 ---
 
 ## 6. Decisões — estado
@@ -316,3 +331,45 @@ wappalyzer CPU) — agora drenado; o que resta (lighthouse/nuclei/wpscan) é I/O
 5. **O NATS força `ack_wait = backoff[0]`** quando há backoff. Um backoff fixo de 5s matava jobs Chromium
    (15-97s) aos 5s → órfãos no workqueue (nunca ACK, nunca removidos). Backoff agora escala do ackWait; e o
    stream tem `MaxAge 48h` para órfãos auto-expirarem. Ver `lib/jobs.js`.
+
+## 9. Auto-deploy por PULL + controlo de env por host (2026-07-16)
+
+**Como se atualiza a frota e se editam os `.env` de qualquer lugar.** Runbook completo:
+[`docs/runbook-laptop-autodeploy.md`](docs/runbook-laptop-autodeploy.md).
+
+**Porquê PULL (e não SSH-push do server):** a frota corre **Tailscale SSH** — o tailscaled interceta a
+porta 22 e a autenticação é por **ACL do Tailscale**, não por chaves. O np-server (`tag:control`) NÃO
+tem ACL para SSH aos workers (`tag:worker`) nem ao hel1 (`tag:proxmox`), por isso um push por SSH exigiria
+mexer na ACL. E o **laptop** (Windows) não aceita inbound de todo. Solução uniforme: cada host **PUXA** o
+estado do np-server e recria **só se algo mudou**. Zero SSH, zero ACL, zero chaves.
+
+**Peças:**
+- **Store central**: o np-server guarda `fleet-env/<host>.env` (volume rw, gitignored — segredos).
+- **Editor**: dashboard → Servidores → **⚙ .env** por host (grava no store). Endpoints
+  `GET/PUT /api/fleet/env/:host` (editor, tailnet-gated) e `GET /api/fleet/pull/:host` (agente, raw +
+  `X-Env-Hash`, protegido por `FLEET_PULL_TOKEN` se definido).
+- **Agente** (`deploy/agent/`): `pull-deploy.sh` (Linux) / `pull-deploy.ps1` (Windows). A cada ciclo:
+  `git fetch`+ff-only, puxa o `.env`, e **recria só se o git avançou OU o `.env` mudou** (compara SHA e
+  conteúdo; senão → "sem alterações", não toca nos containers). Config em `agent.env`(`.ps1`).
+  **`COMPOSE_PROJECT` é OBRIGATÓRIO** (sem ele o compose usa o nome da pasta e DUPLICA os containers).
+
+**Estado por host (2026-07-16):**
+
+| Host | Método | Projeto | Notas |
+|---|---|---|---|
+| de1, oracle-e2-1/2 | systemd `--system` timer (root), 5 min | `npworker` | padrão; git pull + .env + recreate |
+| **hel1-docker** | systemd `--user` timer (user `claude`, lingering), 5 min | `netprospect` | **`SKIP_GIT=1`** + `COMPOSE_SERVICES="worker worker-base"` |
+| **gpedro-laptop** | Windows Scheduled Task (PowerShell), horária | `laptop` | pull-only; setup manual pelo utilizador |
+
+**As 2 exceções e porquê:**
+- **hel1-docker é DIFERENTE**: (1) é onde se **committa** — tem sempre o working tree à frente do
+  `origin/main`, logo `git pull` não faz sentido → **`SKIP_GIT=1`** (só reage a mudanças do `.env`; o código
+  deploya-se aqui diretamente). (2) O compose do hel1 tem a **stack de controlo** (directus/nats/redis/minio/
+  dashboard) além dos workers → `COMPOSE_SERVICES="worker worker-base"` para uma mudança de `.env` **não
+  recriar a stack toda**. (3) Corre como user `claude` (sem root/cron) → timer **`systemctl --user`** com
+  lingering (sobrevive a reboots), em vez do timer `--system`.
+- **gpedro-laptop é DIFERENTE**: Windows 10 + Docker Desktop, **IP residencial, sem SSH de entrada** (o
+  Tailscale SSH no WSL "abre e fecha" — ACL). É **pull-only** via **Tarefa Agendada** (PowerShell), não
+  systemd, e horária (não 5 min) porque só está online de forma intermitente
+  (`-RunOnlyIfNetworkAvailable -StartWhenAvailable`). O `.env` dele fica no store e é editável no dashboard
+  como os outros. Setup manual pelo utilizador (ver runbook) — é o único que não conseguimos gerir remotamente.

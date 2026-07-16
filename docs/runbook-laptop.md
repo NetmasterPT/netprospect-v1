@@ -10,6 +10,11 @@
 >    pode ligar `security`/`base` para dar uma ajuda. Mas **é intermitente** (é o portátil de trabalho)
 >    → nada crítico depende dele.
 
+> **Auto-deploy (2026-07-16).** O laptop é o único host **sem SSH de entrada** (Tailscale SSH no WSL
+> "abre e fecha" — ACL). Mantém-se via **PULL**: uma Tarefa Agendada corre git pull + puxa o `.env` do
+> np-server e recria se mudou. O `.env` fica editável no dashboard como os outros. **Setup (manual, tu):**
+> ver [runbook-laptop-autodeploy.md](runbook-laptop-autodeploy.md) §2.
+
 ## Porque é que o GMB precisa disto (o desenho)
 
 O consumer `gmb` tem agora um **role próprio: `residential`** ([`lib/jobs.js`](../lib/jobs.js)). Como os

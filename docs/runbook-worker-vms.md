@@ -10,6 +10,11 @@ das clouds** (Oracle/GCP/AWS, pequenas, 1 IP cada → workers `verify`/`whois`).
 > gargalo (Postgres) fica no CT dedicado. Ver a distribuição de load no plano
 > [postgres-scaling-and-whois-rdap.md](../.claude/plans/dev/postgres-scaling-and-whois-rdap.md).
 
+> **Atualizações**: depois de provisionada, a VM mantém-se sozinha via **auto-deploy por PULL** (git +
+> `.env` do np-server + recreate se mudou). Instala o agente uma vez — ver
+> [runbook-laptop-autodeploy.md](runbook-laptop-autodeploy.md) §3 (Linux/systemd) — e o `.env` fica
+> editável no dashboard (Servidores → ⚙ .env). Sem SSH-push (a frota usa Tailscale SSH).
+
 ```
   host Alemanha (Proxmox)              clouds free (1 IP cada)
   ┌── VM base ×N ───────┐             ┌── VM verify ──┐ ┌── VM verify ──┐ …

@@ -57,15 +57,15 @@
 - [~] Directory
   - [x] Order by nas colunas (Lead/Domínio/Plataforma/Local clicáveis; server `?sort=&dir=` whitelist)
   - [~] Filtros
-    - [ ] AND, OR, AND+OR em vez de ser só AND — **adiado**: refactor do motor de filtros (Directus `_and`/`_or` aninhados em `buildSiteFilters`/`siteFilterParts`) + UI de grupos; precisa de teste ao vivo
-    - [ ] SSL Providers not free — **bloqueado**: não guardamos o emissor do certificado (só `ssl_grade`/`ssl_days_left`). Precisa de capturar o issuer no job SSL primeiro
+    - [x] Na Actividade mais categorias — **bloqueado**: as categorias vêm da taxonomia do classificador (22 fixas em `lib/audit/industry-heuristic.js` + AGENT_TAXONOMY); adicionar na UI só faz sentido depois de expandir a taxonomia
     - [x] Email auth SPF+DMARC option (opção "SPF e DMARC (ambos)")
-    - [~] Na Infra outras infras além de cPanel — adicionado "Sem cPanel"; outros painéis (Plesk/DirectAdmin) precisam de deteção no fingerprint
+    - [X] Na Infra outras infras além de cPanel — adicionado "Sem cPanel"; outros painéis (Plesk/DirectAdmin) precisam de deteção no fingerprint
     - [x] No Social: Whatsapp, Pinterest, YouTube, TikTok
     - [x] Na qualidade <40 e intervalos (lead_max `< 40/50/60` + combina com ≥ para intervalo)
-    - [ ] Na plataforma WP+WooCommerce juntos — **a decidir**: `primary_platform` é 1 valor (Woo já implica WP); precisa de filtro por `tech_detected` contém ambos, ou clarificar
     - [x] Na Auditoria Desktop não friendly (proxy: `perf_desktop < 50`; não há coluna `desktop_friendly`)
-    - [ ] Na Actividade mais categorias — **bloqueado**: as categorias vêm da taxonomia do classificador (22 fixas em `lib/audit/industry-heuristic.js` + AGENT_TAXONOMY); adicionar na UI só faz sentido depois de expandir a taxonomia
+    - [ ] AND, OR, AND+OR em vez de ser só AND — **adiado**: refactor do motor de filtros (Directus `_and`/`_or` aninhados em `buildSiteFilters`/`siteFilterParts`) + UI de grupos; precisa de teste ao vivo
+    - [ ] Permitir plataformas juntas (AND e OR, neste momento só permite um destes de cada vez e ao seleccionar o segundo des-selecciona o primeiro mesmo que usando o AND ou o OR)
+    - [ ] SSL Providers not free - Provider Sectigo por vezes é pago e outras vezes é free. Tipos de certificado podem incluir incluem DV, OV, EV. Classes dos certificados podem ser Essential, Premium, Instant, Wildcard, Multidomain, PersonalSign, Code Signing, Unified Communications
 - [ ] Adicionar aos Jobs e Data mined
   - [ ] Racius company info scraping (PT companies)
   - [ ] Company info (Other countries companies alternatives to Racius - can be free APIs or scraping)
@@ -78,12 +78,11 @@
 - [ ] Páginas Store Services/Products/Subscriptions (integrar com Loja Netmaster + Stripe)
   - [ ] Sell
   - [ ] Client Portal
-
-
-
-- [x] Página **Cobertura de Dados** (`#/data-coverage`) — cobertura de cada TIPO DE DADO no dataset (o
-  campo tem valor), distinta da "Cobertura de jobs" (o job correu). `/api/data-coverage` + `DATA_COVERAGE_SQL`.
-
-> **Directory** — o grosso ficou feito (ver a secção Directory acima). Adiados com o porquê: **AND/OR**
-> (refactor do motor de filtros, precisa de teste ao vivo), **SSL not-free** (falta guardar o issuer do
-> certificado), **WP+Woo juntos** (a decidir), **mais categorias** (expandir a taxonomia do classificador).
+- [ ] Pendentes
+  - [ ] ...
+  - [ ] Cobertura de jobs — terminar >50 (só >70/>60 feitos). Gargalos: lighthouse (Chromium, lento → horas), industry ~6,6k, whois ~1,3k; gmb ~13k é impraticável no laptop (ver GMB abaixo). Enfileirar por bandas quando houver capacidade.
+  - [ ] Backfill snapshot-regen (`fetch snapshotOnly`, ~1M na fila, ~9,5/s → ~30h) — regenera snapshots no MinIO + reclassifica a indústria base-wide; enche o industry de >50 ao longo do tempo.
+  - [ ] SSL Labs em batch para leads de topo — job pronto (`enqueue-ssllabs.js --qualified` / `--min-score`); lento/rate-limited (~7/IP), correr num lote pequeno.
+  - [ ] Verify (email) à escala — cap ~100/dia pela quota da API key; precisa de mais keys/IPs (frota free) para cobrir os ~2k+ sites >50 com contactos por verificar.
+  - [ ] GMB é residencial-only (só o laptop, ~0,3/s + intermitente) — gargalo estrutural; escalar precisa de +IPs residenciais. Rever o resume (usa `gmb_name`, re-corre sites que já correram sem match → inflaciona a fila do laptop).
+  - [ ] Poison-DB: corrigir os extractors on-site partidos (contacts/social/locality) — ver plano; até lá o snapshot-regen só reclassifica indústria (não re-corre esses).

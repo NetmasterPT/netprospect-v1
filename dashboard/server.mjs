@@ -550,6 +550,52 @@ app.delete('/api/segments/:id', async (req, res) => {
   catch (e) { res.status(502).json({ error: e.message }); }
 });
 
+// --- Subscrições (produtos Netmaster: pacotes + preço IVA + ICPs + segmentos/clientes/campanhas/templates) ---
+const SUB_FREQ = ['one_off', 'monthly', 'quarterly', 'semiannual', 'annual'];
+const SUB_FIELDS = 'id,name,frequency,category,features,price_ex_vat,price_inc_vat,icps,segment_ids,client_ids,campaign_ids,email_templates,active,notes,sort,date_created';
+const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+function subClean(b) {
+  const o = {};
+  if (typeof b.name === 'string') o.name = b.name.slice(0, 255);
+  if (SUB_FREQ.includes(b.frequency)) o.frequency = b.frequency;
+  if (typeof b.category === 'string') o.category = b.category.slice(0, 120);
+  for (const k of ['features', 'icps', 'segment_ids', 'client_ids', 'campaign_ids', 'email_templates']) if (Array.isArray(b[k])) o[k] = b[k];
+  if (typeof b.active === 'boolean') o.active = b.active;
+  if (typeof b.notes === 'string') o.notes = b.notes;
+  if (b.sort != null) o.sort = parseInt(b.sort, 10) || null;
+  // IVA 23%: entra o preço s/IVA (ou c/IVA) e calcula-se o outro.
+  if (b.price_ex_vat != null && b.price_ex_vat !== '') { o.price_ex_vat = round2(b.price_ex_vat); o.price_inc_vat = round2(o.price_ex_vat * 1.23); }
+  else if (b.price_inc_vat != null && b.price_inc_vat !== '') { o.price_inc_vat = round2(b.price_inc_vat); o.price_ex_vat = round2(o.price_inc_vat / 1.23); }
+  return o;
+}
+app.get('/api/subscriptions', async (req, res) => {
+  try {
+    const [subscriptions, segments, campaigns, clients] = await Promise.all([
+      d(`/items/subscriptions?sort[]=sort&sort[]=-id&limit=-1&fields=${SUB_FIELDS}`),
+      d('/items/segments?limit=-1&fields=id,name,accent').catch(() => []),
+      d('/items/campaigns?limit=-1&fields=id,name,angle,status').catch(() => []),
+      d('/items/companies?filter[is_client][_eq]=true&limit=-1&fields=id,name,org_domain').catch(() => []),
+    ]);
+    res.json({ subscriptions, refs: { segments, campaigns, clients } });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+app.post('/api/subscriptions', async (req, res) => {
+  try {
+    const b = subClean(req.body || {});
+    if (!b.name) return res.status(400).json({ error: 'name obrigatório' });
+    const subscription = await dwrite('POST', '/items/subscriptions', b);
+    res.json({ subscription });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+app.put('/api/subscriptions/:id', async (req, res) => {
+  try { const subscription = await dwrite('PATCH', `/items/subscriptions/${encodeURIComponent(req.params.id)}`, subClean(req.body || {})); res.json({ subscription }); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+app.delete('/api/subscriptions/:id', async (req, res) => {
+  try { await dwrite('DELETE', `/items/subscriptions/${encodeURIComponent(req.params.id)}`); res.json({ ok: true }); }
+  catch (e) { res.status(502).json({ error: e.message }); }
+});
+
 // --- Campanhas (Fase F) ------------------------------------------------------
 const newToken = () => crypto.randomBytes(16).toString('hex');
 async function natsPublish(subject, obj, msgId) {

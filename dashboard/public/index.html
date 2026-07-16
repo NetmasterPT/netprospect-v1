@@ -350,11 +350,109 @@ async function renderNav(active) {
       ${item('chat', 'sparkles', 'Chat IA')}
     ${item('isps', 'globe', 'ISPs / alojamento')}
     ${item('triggers', 'activity', 'Gatilhos')}
+    ${item('subscriptions', 'briefcase', 'Subscrições')}
     ${item('campaigns', 'send', 'Campanhas')}
       ${item('outreach', 'send', 'Outreach')}
     ${item('segments', 'segments', 'Segmentos')}
     ${item('config', 'sliders', 'Configuração')}`;
 }
+
+// ========== SUBSCRIÇÕES (produtos Netmaster) ==========
+const SUB_FREQ = [['one_off', 'One-Off'], ['monthly', 'Mensal'], ['quarterly', 'Trimestral'], ['semiannual', 'Semestral'], ['annual', 'Anual']];
+const SUB_CATS = ['alojamento', 'manutenção', 'ssl', 'segurança', 'seo', 'desktop', 'mobile', 'outro'];
+let SUB = { edit: null, refs: { segments: [], campaigns: [], clients: [] } };
+const eur = (n) => (n == null || n === '' ? '—' : '€ ' + Number(n).toLocaleString('pt-PT', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+const subFreqLabel = (f) => (SUB_FREQ.find((x) => x[0] === f) || [f, f])[1];
+async function viewSubscriptions() {
+  if (!STATS) STATS = await api('/api/stats');
+  renderNav('subscriptions');
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Comercial</div><h1 class="np-h1">Subscrições</h1><div class="np-sub">Pacotes que a Netmaster oferece — preço c/ e s/ IVA (23%), pontos, ICPs, segmentos, clientes, campanhas e templates de email</div></div>${SUB.edit ? '' : `<button class="np-btn np-btn--primary" onclick="subNew()">+ Novo pacote</button>`}</div>`;
+  let data; try { data = await api('/api/subscriptions'); } catch (e) { $('#view').innerHTML = head + errCard(e); return; }
+  SUB.refs = data.refs || { segments: [], campaigns: [], clients: [] };
+  if (SUB.edit) { $('#view').innerHTML = head + `<div id="sub-editor">${subEditorHtml()}</div>`; return; }
+  const subs = data.subscriptions || [];
+  if (!subs.length) { $('#view').innerHTML = head + `<div class="np-empty">Ainda não há pacotes. Cria o primeiro com “+ Novo pacote”.</div>`; return; }
+  $('#view').innerHTML = head + `<div class="np-grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${subs.map(subCardHtml).join('')}</div>`;
+}
+function subCardHtml(s) {
+  const feats = (s.features || []).slice(0, 5);
+  const rel = (arr, label) => (arr && arr.length ? `<span class="np-chip" style="height:18px">${arr.length} ${label}</span>` : '');
+  return `<section class="np-card" style="${s.active === false ? 'opacity:.55' : ''}"><div class="np-card-b">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div><div style="font-weight:800;font-size:15px">${esc(s.name)}</div><div class="muted" style="font-size:11.5px">${subFreqLabel(s.frequency)}${s.category ? ' · ' + esc(s.category) : ''}${s.active === false ? ' · inativo' : ''}</div></div>
+      <span style="text-align:right"><div style="font-weight:800">${eur(s.price_ex_vat)}</div><div class="muted" style="font-size:10.5px">${eur(s.price_inc_vat)} c/IVA</div></span></div>
+    ${feats.length ? `<ul style="margin:10px 0 0;padding-left:16px;font-size:12px;color:var(--np-text-2)">${feats.map((f) => `<li>${esc(f)}</li>`).join('')}${(s.features || []).length > 5 ? `<li class="muted">+${s.features.length - 5}…</li>` : ''}</ul>` : ''}
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:10px">${rel(s.icps, 'ICP')}${rel(s.segment_ids, 'seg')}${rel(s.client_ids, 'clientes')}${rel(s.campaign_ids, 'camp')}${rel(s.email_templates, 'templates')}</div>
+    <div style="display:flex;gap:6px;margin-top:12px"><button class="np-btn np-btn--sm" onclick="subEdit(${s.id})">Editar</button><button class="np-btn np-btn--sm" onclick="subDelete(${s.id},'${esc((s.name || '').replace(/'/g, ''))}')">Apagar</button></div>
+  </div></section>`;
+}
+function subEditorHtml() {
+  const s = SUB.edit;
+  const freqSel = `<select class="np-input" id="sub-frequency">${SUB_FREQ.map(([v, l]) => `<option value="${v}" ${s.frequency === v ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  const catSel = `<input class="np-input" id="sub-category" list="sub-cats" value="${esc(s.category || '')}" placeholder="ex.: alojamento"><datalist id="sub-cats">${SUB_CATS.map((c) => `<option value="${c}">`).join('')}</datalist>`;
+  const price = `<div style="display:flex;gap:14px;align-items:end;flex-wrap:wrap">
+    <div><label class="muted" style="font-size:11px">Preço s/ IVA (€)</label><br><input class="np-input" id="sub-ex" type="number" step="0.01" value="${s.price_ex_vat ?? ''}" oninput="subCalcVat(false)" style="width:130px"></div>
+    <div><label class="muted" style="font-size:11px">Preço c/ IVA 23% (€)</label><br><input class="np-input" id="sub-inc" type="number" step="0.01" value="${s.price_inc_vat ?? ''}" oninput="subCalcVat(true)" style="width:130px"></div></div>`;
+  const icps = `<div id="sub-icps">${(s.icps || []).map((v, i) => `<div style="display:flex;gap:6px;margin-bottom:6px"><textarea class="np-input sub-icp" rows="2" placeholder="Descrição do público-alvo / ICP…" style="flex:1;font-size:12.5px">${esc(v)}</textarea><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="subDelIcp(${i})" title="remover">×</button></div>`).join('')}</div><button class="np-btn np-btn--sm" onclick="subAddIcp()">+ ICP</button>`;
+  const multi = (kind, items, sel, label, fmtItem) => `<div><div class="muted" style="font-size:11px;margin-bottom:4px">${label}</div><div style="max-height:160px;overflow:auto;border:1px solid var(--np-border);border-radius:8px;padding:6px">${items.length ? items.map((it) => `<label style="display:flex;gap:6px;align-items:center;font-size:12.5px;padding:2px 0"><input type="checkbox" ${sel.map(Number).includes(Number(it.id)) ? 'checked' : ''} onchange="subToggle('${kind}',${it.id})"> ${fmtItem(it)}</label>`).join('') : '<span class="muted" style="font-size:12px">nenhum</span>'}</div></div>`;
+  const segs = multi('segment_ids', SUB.refs.segments || [], s.segment_ids || [], 'Segmentos (filtros do directório)', (it) => esc(it.name));
+  const cls = multi('client_ids', SUB.refs.clients || [], s.client_ids || [], 'Clientes', (it) => esc(it.name || it.org_domain || ('#' + it.id)));
+  const camps = multi('campaign_ids', SUB.refs.campaigns || [], s.campaign_ids || [], 'Campanhas', (it) => esc(it.name) + (it.angle ? ` <span class="muted">(${esc(it.angle)})</span>` : ''));
+  const tpls = `<div id="sub-tpls">${(s.email_templates || []).map((t, i) => `<div style="border:1px solid var(--np-border);border-radius:8px;padding:8px;margin-bottom:8px">
+      <div style="display:flex;gap:6px;margin-bottom:6px"><input class="np-input sub-tpl-name" value="${esc(t.name || '')}" placeholder="Nome do template" style="flex:1"><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="subDelTpl(${i})" title="remover">×</button></div>
+      <input class="np-input sub-tpl-subject" value="${esc(t.subject || '')}" placeholder="Assunto" style="width:100%;margin-bottom:6px">
+      <textarea class="np-input sub-tpl-body" rows="3" placeholder="Corpo do email…" style="width:100%;font-size:12.5px">${esc(t.body || '')}</textarea></div>`).join('')}</div><button class="np-btn np-btn--sm" onclick="subAddTpl()">+ Template</button>`;
+  const sec = (t, inner) => `<div style="margin-top:16px"><div class="np-sec-t" style="margin:0 0 8px">${t}</div>${inner}</div>`;
+  return `<div class="np-card"><div class="np-card-b" style="max-width:840px">
+    <div style="display:grid;grid-template-columns:1fr 150px 190px;gap:10px">
+      <div><label class="muted" style="font-size:11px">Nome do pacote</label><input class="np-input" id="sub-name" value="${esc(s.name || '')}" placeholder="ex.: Manutenção WordPress" style="width:100%"></div>
+      <div><label class="muted" style="font-size:11px">Frequência</label>${freqSel}</div>
+      <div><label class="muted" style="font-size:11px">Categoria</label>${catSel}</div>
+    </div>
+    ${sec('Preço', price)}
+    ${sec('Pontos / funcionalidades', `<textarea class="np-input" id="sub-features" rows="5" placeholder="Um ponto por linha…" style="width:100%;font-size:12.5px">${esc((s.features || []).join('\n'))}</textarea>`)}
+    ${sec('Públicos-alvo / ICPs', icps)}
+    ${sec('Relações', `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${segs}${cls}${camps}</div>`)}
+    ${sec('Templates de email', tpls)}
+    ${sec('Notas', `<textarea class="np-input" id="sub-notes" rows="2" style="width:100%">${esc(s.notes || '')}</textarea><label style="display:flex;gap:6px;align-items:center;margin-top:8px;font-size:12.5px"><input type="checkbox" id="sub-active" ${s.active !== false ? 'checked' : ''}> Ativo</label>`)}
+    <div style="display:flex;gap:8px;margin-top:18px"><button class="np-btn np-btn--primary" onclick="subSave()">Guardar</button><button class="np-btn" onclick="subCancel()">Cancelar</button><span id="sub-msg" class="muted" style="font-size:12.5px;align-self:center"></span></div>
+  </div></div>`;
+}
+window.subNew = () => { SUB.edit = { frequency: 'monthly', features: [], icps: [''], segment_ids: [], client_ids: [], campaign_ids: [], email_templates: [], active: true }; viewSubscriptions(); };
+window.subEdit = async (id) => { const data = await api('/api/subscriptions'); SUB.refs = data.refs || SUB.refs; const s = (data.subscriptions || []).find((x) => x.id === id); if (!s) return; SUB.edit = { ...s, features: s.features || [], icps: s.icps || [], segment_ids: s.segment_ids || [], client_ids: s.client_ids || [], campaign_ids: s.campaign_ids || [], email_templates: s.email_templates || [] }; viewSubscriptions(); };
+window.subCancel = () => { SUB.edit = null; viewSubscriptions(); };
+function subReadDom() {
+  const s = SUB.edit; if (!s) return; const g = (id) => document.getElementById(id);
+  if (g('sub-name')) s.name = g('sub-name').value.trim();
+  if (g('sub-frequency')) s.frequency = g('sub-frequency').value;
+  if (g('sub-category')) s.category = g('sub-category').value.trim();
+  if (g('sub-features')) s.features = g('sub-features').value.split('\n').map((x) => x.trim()).filter(Boolean);
+  if (g('sub-ex')) s.price_ex_vat = g('sub-ex').value === '' ? null : parseFloat(g('sub-ex').value);
+  if (g('sub-inc')) s.price_inc_vat = g('sub-inc').value === '' ? null : parseFloat(g('sub-inc').value);
+  s.icps = [...document.querySelectorAll('.sub-icp')].map((t) => t.value.trim()).filter(Boolean);
+  s.email_templates = [...document.querySelectorAll('#sub-tpls > div')].map((d) => ({ name: d.querySelector('.sub-tpl-name').value.trim(), subject: d.querySelector('.sub-tpl-subject').value.trim(), body: d.querySelector('.sub-tpl-body').value.trim() })).filter((t) => t.name || t.subject || t.body);
+  if (g('sub-notes')) s.notes = g('sub-notes').value;
+  if (g('sub-active')) s.active = g('sub-active').checked;
+}
+function subRerender() { const el = document.getElementById('sub-editor'); if (el) el.innerHTML = subEditorHtml(); }
+window.subCalcVat = (fromInc) => { const ex = document.getElementById('sub-ex'), inc = document.getElementById('sub-inc'); const r2 = (v) => Math.round(v * 100) / 100; if (fromInc) { const v = parseFloat(inc.value); ex.value = isNaN(v) ? '' : r2(v / 1.23); } else { const v = parseFloat(ex.value); inc.value = isNaN(v) ? '' : r2(v * 1.23); } };
+window.subAddIcp = () => { subReadDom(); SUB.edit.icps.push(''); subRerender(); };
+window.subDelIcp = (i) => { subReadDom(); SUB.edit.icps.splice(i, 1); subRerender(); };
+window.subAddTpl = () => { subReadDom(); SUB.edit.email_templates.push({ name: '', subject: '', body: '' }); subRerender(); };
+window.subDelTpl = (i) => { subReadDom(); SUB.edit.email_templates.splice(i, 1); subRerender(); };
+window.subToggle = (kind, id) => { subReadDom(); const arr = SUB.edit[kind]; const i = arr.map(Number).indexOf(Number(id)); if (i >= 0) arr.splice(i, 1); else arr.push(Number(id)); };
+window.subSave = async () => {
+  subReadDom(); const s = SUB.edit; const msg = document.getElementById('sub-msg');
+  if (!s.name) { if (msg) msg.textContent = 'Falta o nome.'; return; }
+  if (msg) msg.textContent = 'a guardar…';
+  const body = { name: s.name, frequency: s.frequency, category: s.category, features: s.features, price_ex_vat: s.price_ex_vat, price_inc_vat: s.price_inc_vat, icps: s.icps, segment_ids: s.segment_ids, client_ids: s.client_ids, campaign_ids: s.campaign_ids, email_templates: s.email_templates, active: s.active, notes: s.notes };
+  try {
+    if (s.id) await api('/api/subscriptions/' + s.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    else await api('/api/subscriptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    captureEvent('subscription_saved', { id: s.id || 'new', frequency: s.frequency });
+    SUB.edit = null; viewSubscriptions();
+  } catch (e) { if (msg) msg.textContent = 'erro: ' + e.message; }
+};
+window.subDelete = async (id, name) => { if (!confirm('Apagar o pacote “' + name + '”?')) return; await api('/api/subscriptions/' + id, { method: 'DELETE' }); viewSubscriptions(); };
 
 // ---------- bars ----------
 function barRows(items, colorFn, showPct = true) {
@@ -1739,6 +1837,7 @@ async function route() {
     else if (h === 'contacts') await viewContacts();
     else if (h === 'triggers') await viewTriggers();
     else if (h === 'segments') await viewSegments();
+    else if (h === 'subscriptions') await viewSubscriptions();
     else if (h === 'campaigns') await viewCampaigns();
     else if (h === 'agents') await viewAgents();
     else if (h === 'chat') await viewChat();
@@ -1763,7 +1862,7 @@ async function route() {
 // Auto-refresh global (10s) das páginas de dados. NÃO refresca ferramentas (import/agents/
 // settings), nem enquanto se edita um campo, nem com um drawer aberto; preserva o scroll.
 let REFRESHING = false;
-  const NO_AUTOREFRESH = new Set(['import', 'agents', 'chat', 'settings', 'coverage', 'data-coverage', 'logs']);
+  const NO_AUTOREFRESH = new Set(['import', 'agents', 'chat', 'settings', 'coverage', 'data-coverage', 'logs', 'subscriptions']);
 window.addEventListener('hashchange', route);
 route();
 setInterval(() => {

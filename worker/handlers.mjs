@@ -137,9 +137,13 @@ export function makeFineHandlers(ctx, js) {
     for (const host of [domain, `www.${domain}`]) { try { const a = await dns.resolve4(host); if (a?.length) { hosting_ip = a[0]; break; } } catch { /* sem A */ } }
     if (hosting_ip) { try { ptr = (await dns.reverse(hosting_ip))[0] || null; } catch { /* sem PTR */ } }
     const siteId = await ensureSite(domain, { hosting_ip: clip(hosting_ip, 45), ptr: clip(ptr), checked_at: new Date().toISOString() });
-    if (hosting_ip) await pub(SUBJECTS.geoip, { domain, siteId, ip: hosting_ip }, `geoip:${domain}`);
-    await pub(SUBJECTS.emailauth, { domain, siteId }, `emailauth:${domain}`);
-    await pub(SUBJECTS.traffic, { domain, siteId }, `traffic:${domain}`);
+    // snapshotOnly: regenerar o snapshot (que foi podado do MinIO) + reclassificar SÓ a indústria,
+    // sem re-correr os extractors partidos (contacts/social/locality) nem o enrich extra.
+    if (!job.snapshotOnly) {
+      if (hosting_ip) await pub(SUBJECTS.geoip, { domain, siteId, ip: hosting_ip }, `geoip:${domain}`);
+      await pub(SUBJECTS.emailauth, { domain, siteId }, `emailauth:${domain}`);
+      await pub(SUBJECTS.traffic, { domain, siteId }, `traffic:${domain}`);
+    }
     if (!hosting_ip) { await client.request(updateItem('sites', siteId, { is_live: false })); return 'ack'; }
 
     let resp = null;
@@ -152,9 +156,10 @@ export function makeFineHandlers(ctx, js) {
       if (!job.residential) await pub(SUBJECTS.fetchResidential, { domain, residential: true }, `fetchres:${domain}`);
       return 'ack';
     }
-    // Páginas de contacto (para o job contacts, sem re-fetch).
+    // Páginas de contacto (para o job contacts, sem re-fetch). No snapshotOnly a indústria não as
+    // usa → salta (poupa ~3 fetches/site); ficam vazias e reenchem-se num fetch completo futuro.
     const pages = [];
-    if (resp.html) for (const link of findContactLinks(resp.html, resp.finalUrl).slice(0, 3)) { const p = await tryFetch(link); if (p?.html) pages.push({ url: p.finalUrl, html: p.html }); }
+    if (!job.snapshotOnly && resp.html) for (const link of findContactLinks(resp.html, resp.finalUrl).slice(0, 3)) { const p = await tryFetch(link); if (p?.html) pages.push({ url: p.finalUrl, html: p.html }); }
     const cp = detectCpanel({ ptr, headers: resp.headers, setCookies: resp.setCookies, finalUrl: resp.finalUrl });
     let redirects_www = false; try { redirects_www = new URL(resp.finalUrl).hostname.startsWith('www.'); } catch { /* ignora */ }
     await client.request(updateItem('sites', siteId, {
@@ -164,8 +169,9 @@ export function makeFineHandlers(ctx, js) {
       blocked_datacenter: false, // fetch bom a partir do datacenter → limpa flag de bloqueio
     }));
     await putSnapshot(siteId, { finalUrl: resp.finalUrl, status: resp.status, headers: resp.headers, setCookies: resp.setCookies, html: resp.html, pages, fetchedAt: new Date().toISOString() });
-    // Fan-out de análise (leem o snapshot).
-    for (const s of [SUBJECTS.fingerprint, SUBJECTS.social, SUBJECTS.locality, SUBJECTS.contacts, SUBJECTS.industry]) await pub(s, { domain, siteId });
+    // Fan-out de análise (leem o snapshot). snapshotOnly → só reclassifica a indústria.
+    const fanout = job.snapshotOnly ? [SUBJECTS.industry] : [SUBJECTS.fingerprint, SUBJECTS.social, SUBJECTS.locality, SUBJECTS.contacts, SUBJECTS.industry];
+    for (const s of fanout) await pub(s, { domain, siteId });
     return 'ack';
   }
 

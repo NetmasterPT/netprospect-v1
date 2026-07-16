@@ -408,7 +408,7 @@ window.dirSort = (col) => {
 function parseHashQuery() { const h = location.hash.split('?')[1] || ''; return Object.fromEntries(new URLSearchParams(h)); }
 
 // --- Facetas de auditoria (partilhadas por Negócios e Contactos) ---
-const AUDIT_KEYS = ['has_email', 'has_phone', 'dm', 'lead_min', 'lead_max', 'city', 'cpanel', 'notcpanel', 'fb', 'ig', 'li', 'tw', 'gmb', 'wa', 'pin', 'yt', 'tk', 'load', 'spf', 'dmarc', 'authboth', 'traffic', 'industry', 'seo_max', 'mobile', 'desktop', 'security', 'sev', 'wpvuln', 'ssl_expiring', 'domain_expiring', 'cms_outdated', 'isp', 'client', 'match'];
+const AUDIT_KEYS = ['has_email', 'has_phone', 'dm', 'lead_min', 'lead_max', 'city', 'cpanel', 'notcpanel', 'fb', 'ig', 'li', 'tw', 'gmb', 'wa', 'pin', 'yt', 'tk', 'load', 'spf', 'dmarc', 'authboth', 'traffic', 'industry', 'seo_max', 'mobile', 'desktop', 'security', 'sev', 'wpvuln', 'ssl_expiring', 'ssl_expired', 'ssl_paid', 'domain_expiring', 'cms_outdated', 'isp', 'client', 'match'];
 const INDUSTRIES = [['restauracao', 'Restauração'], ['retalho', 'Retalho'], ['saude', 'Saúde'], ['construcao', 'Construção'], ['imobiliario', 'Imobiliário'], ['turismo', 'Turismo'], ['juridico', 'Jurídico'], ['contabilidade', 'Contabilidade'], ['automovel', 'Automóvel'], ['beleza', 'Beleza'], ['educacao', 'Educação'], ['ti', 'TI'], ['marketing', 'Marketing'], ['industria', 'Indústria'], ['agricultura', 'Agricultura'], ['transportes', 'Transportes'], ['desporto', 'Desporto'], ['moda', 'Moda'], ['casa', 'Casa'], ['financeiro', 'Financeiro'], ['associacao', 'Associação'], ['outros', 'Outros']];
 const SP14 = '<span style="width:14px;display:inline-block"></span>';
 function auditParse(st, qp) { for (const k of AUDIT_KEYS) st[k] = qp[k] || ''; }
@@ -424,15 +424,16 @@ function auditFacetsHtml(st, px) {
   const trafficActive = !!st.traffic;
   const auditActive = st.seo_max || st.mobile || st.desktop || st.security || st.sev || st.wpvuln;
   const leadActive = st.dm || st.lead_min || st.lead_max;
-  return dd('lead', 'Qualidade', leadActive, bOpt('dm', 'Tem decisor')
-      + sub('Lead score ≥') + vOpt('lead_min', '40', '≥ 40') + vOpt('lead_min', '50', '≥ 50') + vOpt('lead_min', '60', '≥ 60') + vOpt('lead_min', '70', '≥ 70')
-      + sub('Lead score <') + vOpt('lead_max', '40', '< 40') + vOpt('lead_max', '50', '< 50') + vOpt('lead_max', '60', '< 60')
-      + sub('(combina ≥ e < para um intervalo)'))
+  const LEAD_TH = [10, 20, 30, 40, 50, 60, 70, 80, 90];
+  return dd('lead', 'Qualidade', leadActive, `<div style="max-height:320px;overflow:auto">` + bOpt('dm', 'Tem decisor')
+      + sub('Lead score ≥') + LEAD_TH.map((n) => vOpt('lead_min', String(n), '≥ ' + n)).join('')
+      + sub('Lead score <') + LEAD_TH.map((n) => vOpt('lead_max', String(n), '< ' + n)).join('')
+      + sub('(combina ≥ e < = intervalo)') + `</div>`)
     + dd('contacto', 'Contacto', (st.has_email || st.has_phone), bOpt('has_email', 'Tem email') + bOpt('has_phone', 'Tem telefone'))
     + dd('social', 'Social', (st.fb || st.ig || st.li || st.tw || st.gmb || st.wa || st.pin || st.yt || st.tk), bOpt('fb', 'Facebook') + bOpt('ig', 'Instagram') + bOpt('li', 'LinkedIn') + bOpt('tw', 'Twitter / X') + bOpt('gmb', 'Google Business') + bOpt('wa', 'WhatsApp') + bOpt('pin', 'Pinterest') + bOpt('yt', 'YouTube') + bOpt('tk', 'TikTok'))
     + dd('infra', 'Infra / Perf', (st.cpanel || st.notcpanel || st.load), bOpt('cpanel', 'cPanel') + bOpt('notcpanel', 'Sem cPanel') + sub('Velocidade') + cOpt('load', 'fast', 'Rápido') + cOpt('load', 'medium', 'Médio') + cOpt('load', 'slow', 'Lento') + cOpt('load', 'very_slow', 'Muito lento'))
     + dd('emailauth', 'Email auth', (st.spf || st.dmarc || st.authboth), vOpt('spf', 'missing,weak,invalid', 'SPF com problemas') + vOpt('dmarc', 'missing,weak,invalid', 'DMARC com problemas') + vOpt('authboth', 'both', 'SPF e DMARC (ambos)'))
-    + dd('dominio', 'Domínio / SSL', (st.ssl_expiring || st.domain_expiring || st.cms_outdated), bOpt('ssl_expiring', 'Certificado a expirar (≤30d)') + bOpt('domain_expiring', 'Domínio a expirar (≤90d)') + bOpt('cms_outdated', 'CMS desatualizado'))
+    + dd('dominio', 'Domínio / SSL', (st.ssl_expiring || st.ssl_expired || st.ssl_paid || st.domain_expiring || st.cms_outdated), bOpt('ssl_expiring', 'Certificado a expirar (≤30d)') + bOpt('ssl_expired', 'Certificado EXPIRADO') + bOpt('ssl_paid', 'SSL pago (não-grátis)') + bOpt('domain_expiring', 'Domínio a expirar (≤90d)') + bOpt('cms_outdated', 'CMS desatualizado'))
     + dd('traffic', 'Tráfego', trafficActive, cOpt('traffic', 'top10k', 'Top 10k') + cOpt('traffic', 'top100k', 'Top 100k') + cOpt('traffic', 'top1m', 'Top 1M') + cOpt('traffic', 'unranked', 'Sem ranking'))
     + dd('industry', 'Atividade', !!st.industry, INDUSTRIES.map(([v, l]) => vOpt('industry', v, l)).join(''))
     + dd('audit', 'Auditoria', auditActive, vOpt('seo_max', '60', 'SEO fraco (<60)') + vOpt('mobile', 'bad', 'Mobile não-friendly') + vOpt('desktop', 'bad', 'Desktop não-friendly') + vOpt('security', 'true', 'Com problemas de segurança') + sub('Severidade (Nuclei)') + cOpt('sev', 'high', 'Alta') + cOpt('sev', 'critical', 'Crítica') + vOpt('wpvuln', 'true', 'WordPress com vulns'))
@@ -456,6 +457,8 @@ function auditChips(st) {
   if (st.sev) out.push(['sev', 'Severidade: ' + st.sev.replace(/,/g, ', ')]);
   if (st.wpvuln) out.push(['wpvuln', 'WordPress com vulns']);
   if (st.ssl_expiring) out.push(['ssl_expiring', 'Certificado a expirar']);
+  if (st.ssl_expired) out.push(['ssl_expired', 'Certificado expirado']);
+  if (st.ssl_paid) out.push(['ssl_paid', 'SSL pago']);
   if (st.domain_expiring) out.push(['domain_expiring', 'Domínio a expirar']);
   if (st.cms_outdated) out.push(['cms_outdated', 'CMS desatualizado']);
   if (st.isp) out.push(['isp', 'ISP: ' + st.isp]);
@@ -599,6 +602,7 @@ window.openSite = async (domain) => {
   d.innerHTML = `<div class="np-empty">A carregar…</div>`;
   try {
     const { site, contacts, reports, directusPublicUrl } = await api('/api/site?domain=' + encodeURIComponent(domain));
+    window._SITE = site; // p/ o editor manual de atividade (editIndustry/saveIndustry)
     const tech = (site.tech_detected || []).map((t) => `<span class="np-chip">${esc(t.name)}${t.version ? ' ' + esc(t.version) : ''}</span>`).join(' ') || '<span class="muted">—</span>';
     // --- Auditoria & prospeção ---
     const soc = site.social || {};
@@ -615,7 +619,6 @@ window.openSite = async (domain) => {
       site.gmb ? `<span class="np-badge brand" style="height:20px">Google Business${site.gmb_signal ? ` (${esc(site.gmb_signal)})` : ''}</span>` : '',
       site.is_cpanel ? `<span class="np-badge neutral" style="height:20px">cPanel${site.cpanel_signal ? ` (${esc(site.cpanel_signal)})` : ''}</span>` : '',
       loadB, authBadge('SPF', site.spf_status), authBadge('DMARC', site.dmarc_status),
-      site.industry ? `<span class="np-badge info" style="height:20px">${esc(site.industry)}</span>` : '',
       site.traffic_bucket && site.traffic_bucket !== 'unranked' ? `<span class="np-badge info" style="height:20px">Tráfego: ${esc(site.traffic_bucket)}</span>` : '',
     ].filter(Boolean).join(' ') || '<span class="muted">Ainda sem sinais.</span>';
     const scoreRows = [
@@ -636,6 +639,7 @@ window.openSite = async (domain) => {
         <div class="np-sec-t" style="display:flex;justify-content:space-between;align-items:center;gap:6px">Auditoria &amp; prospeção
           <span style="display:flex;gap:6px">${isWp ? `<button class="np-btn np-btn--sm" onclick="auditNow('${esc(site.domain)}','wpscan')" id="wpscanbtn" title="WPScan (on-demand, 25/dia)">${ic('shield', 13)} WPScan</button>` : ''}<button class="np-btn np-btn--sm" onclick="auditNow('${esc(site.domain)}')" id="auditbtn">${ic('shield', 13)} Auditar agora</button></span></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">${auditBadges}</div>
+        ${industryRow(site)}
         ${socLinks ? `<div style="margin-bottom:8px;display:flex;gap:6px;flex-wrap:wrap">${socLinks}</div>` : ''}
         ${(site.business_city || site.business_address) ? `<div class="np-kv"><div class="k">Cidade</div><div class="v">${esc(site.business_city || '—')}</div>${site.business_region ? `<div class="k">Região</div><div class="v">${esc(site.business_region)}</div>` : ''}${site.business_address ? `<div class="k">Morada</div><div class="v">${esc(site.business_address)}</div>` : ''}</div>` : ''}
         ${scoreRows ? `<div class="np-kv" style="margin-top:6px">${scoreRows}</div>` : ''}
@@ -726,6 +730,31 @@ function contactCardHtml(c) {
       <div class="muted" style="font-size:12px">${c.email ? `<a href="mailto:${esc(c.email)}" style="color:var(--np-brand-ink)">${esc(c.email)}</a>` : ''} ${esc(c.phone || '')}</div></div>
     ${c.id != null ? `<button class="np-iconbtn" style="border-color:var(--np-border)" title="Editar / reclassificar" onclick="editContact('${c.id}')">✎</button>` : ''}</div>`;
 }
+// Linha "Atividade" editável no drawer do site — correção manual da área de atividade quando o
+// classificador erra. Guarda via PATCH /api/sites/:id/industry (grava confidence=1 = revisto).
+function industryRow(site) {
+  const label = INDUSTRIES.find((x) => x[0] === site.industry)?.[1] || site.industry;
+  const reviewed = Number(site.industry_confidence) >= 1;
+  const conf = site.industry_confidence != null && !reviewed ? ` <span class="muted" style="font-size:11px" title="confiança do classificador">${Math.round(site.industry_confidence * 100)}%</span>` : '';
+  const val = site.industry ? `<span class="np-badge info" style="height:20px">${esc(label)}</span>${conf}${reviewed ? ' <span class="np-badge neutral" style="height:18px" title="corrigido manualmente — não é re-classificado">✓ revisto</span>' : ''}` : '<span class="muted">— sem classificação</span>';
+  return `<div class="np-kv" id="np-ind-box" style="margin-top:6px"><div class="k">Atividade</div><div class="v">${val} <button class="np-iconbtn" style="border-color:var(--np-border)" title="Corrigir atividade" onclick="editIndustry()">✎</button></div></div>`;
+}
+window.editIndustry = () => {
+  const s = window._SITE; const box = document.getElementById('np-ind-box'); if (!s || !box) return;
+  const v = box.querySelector('.v');
+  v.innerHTML = `<span style="display:flex;gap:6px;align-items:center;flex-wrap:wrap"><select class="np-input" id="ind-sel" style="width:170px">${INDUSTRIES.map(([iv, l]) => `<option value="${iv}" ${s.industry === iv ? 'selected' : ''}>${l}</option>`).join('')}</select><button class="np-btn np-btn--sm np-btn--primary" onclick="saveIndustry()">Guardar</button><button class="np-btn np-btn--sm" onclick="cancelEditIndustry()">Cancelar</button></span>`;
+};
+window.cancelEditIndustry = () => { const box = document.getElementById('np-ind-box'); if (box && window._SITE) box.outerHTML = industryRow(window._SITE); };
+window.saveIndustry = async () => {
+  const s = window._SITE; const sel = document.getElementById('ind-sel'); if (!s || !sel) return;
+  const industry = sel.value;
+  try {
+    await api('/api/sites/' + encodeURIComponent(s.id) + '/industry', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ industry }) });
+    s.industry = industry; s.industry_confidence = 1;
+    captureEvent('industry_edited', { domain: s.domain, industry });
+    const box = document.getElementById('np-ind-box'); if (box) box.outerHTML = industryRow(s);
+  } catch (e) { alert('Erro ao guardar: ' + e.message); }
+};
 window.editContact = (id) => {
   const c = window._DC[id]; const el = document.getElementById('np-c-' + id); if (!c || !el) return;
   const cats = [['decision_maker', 'Decisor'], ['manager', 'Gestão'], ['dpo', 'DPO'], ['staff', 'Staff'], ['general', 'Empresa (não-pessoa)'], ['unknown', 'Sem cargo']];

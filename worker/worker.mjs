@@ -26,7 +26,7 @@ import { getSnapshot, ensureBucket, ensureReportsBucket, putReport } from '../li
 import { initEgress, egressDispatcher } from '../lib/egress.js';
 import { makeClient } from '../lib/directus.js';
 import { startTelemetry, taskStart, taskEnd, logLine } from '../lib/worker-telemetry.js';
-import { classifyIndustryHeuristic } from '../lib/audit/industry-heuristic.js';
+import { classifyIndustryHeuristic, industryFromGmbCategory } from '../lib/audit/industry-heuristic.js';
 import os from 'os';
 
 const WORKER_ROLES = process.env.WORKER_ROLES || ''; // vazio=todos; ex.: base|browser|security|ai|verify
@@ -116,17 +116,24 @@ function makeHeavyFineHandlers(ctx, audit, js) {
   const load = async (job, fields) => (await client.request(readItems('sites', { filter: job.siteId ? { id: { _eq: job.siteId } } : { domain: { _eq: job.domain } }, fields: ['id', 'domain', 'final_url', ...fields], limit: 1 })))[0];
 
   async function industry(job) {
-    const site = await load(job, []); if (!site) return 'ack';
-    const snap = await getSnapshot(site.id);
-    let html = snap?.html;
-    if (!html) { const h = await fetchHomepage(site.final_url || `https://${site.domain}/`); html = h?.html; }
-    if (!html) return 'ack';
+    const site = await load(job, ['gmb_category', 'industry_confidence']); if (!site) return 'ack';
+    // Correção manual (dashboard) grava confidence=1 → NÃO sobrescrever o que um humano revistou.
+    if (Number(site.industry_confidence) >= 1) return 'ack';
+    // GMB category (categoria real do Google) = sinal-ouro → override; não precisa do HTML.
+    const gmb = industryFromGmbCategory(site.gmb_category);
     // Classificador HEURÍSTICO (keywords) por default — instantâneo, sem GPU. O Ollama em CPU
     // levava 107 s/site (26 dias p/ 729k) e roubava CPU ao Lighthouse. INDUSTRY_LLM=true volta
     // ao Ollama (só faz sentido numa VM com GPU).
     try {
-      const s = audit.ollama.summarizeForClassify(html, {});
-      const cls = INDUSTRY_LLM ? await audit.ollama.classifyIndustry(s) : classifyIndustryHeuristic(s);
+      let cls = gmb;
+      if (!cls) {
+        const snap = await getSnapshot(site.id);
+        let html = snap?.html;
+        if (!html) { const h = await fetchHomepage(site.final_url || `https://${site.domain}/`); html = h?.html; }
+        if (!html) return 'ack';
+        const s = audit.ollama.summarizeForClassify(html, {});
+        cls = INDUSTRY_LLM ? await audit.ollama.classifyIndustry(s) : classifyIndustryHeuristic(s);
+      }
       if (cls.industry) await client.request(updateItem('sites', site.id, { industry: cls.industry, industry_confidence: cls.confidence }));
     } catch (e) { log(`industry ${site.domain}: ${e.message}`); }
     return 'ack';
@@ -236,7 +243,7 @@ function makeHandlers(ctx, audit, js) {
     const job = decodeJob(m);
     if (!job?.domain && !job?.siteId) { m.term(); return; }
     const filter = job.siteId ? { id: { _eq: job.siteId } } : { domain: { _eq: job.domain } };
-    const rows = await client.request(readItems('sites', { filter, fields: ['id', 'domain', 'final_url', 'business_city', 'primary_platform.slug', 'company.name', 'tech_detected', 'load_bucket'], limit: 1 }));
+    const rows = await client.request(readItems('sites', { filter, fields: ['id', 'domain', 'final_url', 'business_city', 'primary_platform.slug', 'company.name', 'tech_detected', 'load_bucket', 'gmb_category'], limit: 1 }));
     const site = rows[0];
     if (!site) { m.term(); return; }
     const bizName = site.company?.name || null;
@@ -252,16 +259,21 @@ function makeHandlers(ctx, audit, js) {
       // Tranco (rápido, local).
       if (want('tranco')) { try { const tr = audit.tranco.trafficOf(site.domain); patch.traffic_rank = tr.rank; patch.traffic_bucket = tr.bucket; } catch { /* ignora */ } }
 
-      // Homepage + classificação de atividade (Ollama).
+      // Classificação de atividade: GMB category (categoria real do Google) = override; senão
+      // homepage + Ollama (com headings/meta-keywords via summarizeForClassify).
       if (want('industry')) {
         m.working();
-        const home = await fetchHomepage(url);
-        if (home?.html) {
-          try {
-            const s = audit.ollama.summarizeForClassify(home.html, { title: bizName });
-            const cls = await audit.ollama.classifyIndustry(s);
-            if (cls.industry) { patch.industry = cls.industry; patch.industry_confidence = cls.confidence; }
-          } catch (e) { log(`ollama ${site.domain}: ${e.message}`); }
+        const gmbOverride = industryFromGmbCategory(patch.gmb_category || site.gmb_category);
+        if (gmbOverride) { patch.industry = gmbOverride.industry; patch.industry_confidence = gmbOverride.confidence; }
+        else {
+          const home = await fetchHomepage(url);
+          if (home?.html) {
+            try {
+              const s = audit.ollama.summarizeForClassify(home.html, { title: bizName });
+              const cls = await audit.ollama.classifyIndustry(s);
+              if (cls.industry) { patch.industry = cls.industry; patch.industry_confidence = cls.confidence; }
+            } catch (e) { log(`ollama ${site.domain}: ${e.message}`); }
+          }
         }
       }
 

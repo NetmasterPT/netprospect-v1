@@ -198,6 +198,12 @@ function buildSiteFilters(f = {}, pfx = '') {
   if (on(f.wpvuln)) F('wp_vuln_count', '_gt', '0');
   // Fase D — SSL / domínio / CMS (gatilhos de venda: renovação, hosting, manutenção).
   if (on(f.ssl_expiring)) F('ssl_days_left', '_between', '0,30');   // certificado a expirar ≤30d
+  if (on(f.ssl_expired)) F('ssl_days_left', '_lt', '0');           // certificado JÁ expirado (dias < 0)
+  // SSL "pago": emissor é uma CA comercial, i.e. NÃO está na lista das gratuitas dominantes
+  // (Let's Encrypt 1.1M, Google Trust Services 131k, ZeroSSL, Amazon ACM, Certainly). Proxy de
+  // sinal de venda (empresa que investiu). Nota: Sectigo (87k) inclui muito cPanel AutoSSL grátis —
+  // fica marcado como "pago" (não há como distinguir só pelo emissor); afinável se o utilizador quiser.
+  if (on(f.ssl_paid)) F('ssl_issuer', '_nin', "Let's Encrypt,Google Trust Services,ZeroSSL GmbH,Amazon,Certainly");
   if (on(f.domain_expiring)) F('expiring_soon', '_eq', 'true');    // domínio a expirar ≤90d
   if (on(f.cms_outdated)) F('cms_outdated', '_eq', 'true');        // CMS desatualizado
   if (f.dns) F('dns_provider', '_icontains', f.dns);
@@ -492,6 +498,20 @@ app.patch('/api/contacts/:id', async (req, res) => {
     patch.reviewed_at = new Date().toISOString();
     const updated = await dwrite('PATCH', `/items/contacts/${encodeURIComponent(id)}`, patch);
     res.json({ ok: true, contact: updated });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
+// Edição manual da ÁREA DE ATIVIDADE de um site — correção pontual quando o classificador erra.
+// Grava industry_confidence=1 (sentinela "revisto por humano"): o handler `industry` do worker
+// não sobrescreve sites com conf ≥ 1, por isso a correção fica protegida de re-classificações.
+const INDUSTRY_TAX = ['restauracao', 'retalho', 'saude', 'construcao', 'imobiliario', 'turismo', 'juridico', 'contabilidade', 'automovel', 'beleza', 'educacao', 'ti', 'marketing', 'industria', 'agricultura', 'transportes', 'desporto', 'moda', 'casa', 'financeiro', 'associacao', 'outros'];
+app.patch('/api/sites/:id/industry', async (req, res) => {
+  try {
+    const id = req.params.id;
+    const industry = String((req.body || {}).industry || '');
+    if (!INDUSTRY_TAX.includes(industry)) return res.status(400).json({ error: 'categoria inválida' });
+    const updated = await dwrite('PATCH', `/items/sites/${encodeURIComponent(id)}`, { industry, industry_confidence: 1 });
+    res.json({ ok: true, site: updated });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 

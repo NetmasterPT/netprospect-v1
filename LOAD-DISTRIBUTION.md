@@ -332,10 +332,15 @@ wappalyzer CPU) — agora drenado; o que resta (lighthouse/nuclei/wpscan) é I/O
    (15-97s) aos 5s → órfãos no workqueue (nunca ACK, nunca removidos). Backoff agora escala do ackWait; e o
    stream tem `MaxAge 48h` para órfãos auto-expirarem. Ver `lib/jobs.js`.
 
-## 9. Auto-deploy por PULL + controlo de env por host (2026-07-16)
+## 9. Auto-deploy por PULL + controlo de env por host (2026-07-16) — ✅ LIVE
 
 **Como se atualiza a frota e se editam os `.env` de qualquer lugar.** Runbook completo:
 [`docs/runbook-laptop-autodeploy.md`](docs/runbook-laptop-autodeploy.md).
+
+> **Estado: fechado e validado end-to-end.** Os **5 hosts** (hel1, de1, oracle-e2-1/2, laptop) estão em
+> auto-pull. Controlamos **código e `.env` de qualquer host a partir do dashboard** (Servidores → ⚙ .env):
+> editar o `.env` de um host → ele puxa e recria no próximo ciclo. Validado no laptop escalando os workers
+> 1↔2 pelo dashboard. Deixou de ser preciso SSH manual para operar a frota.
 
 **Porquê PULL (e não SSH-push do server):** a frota corre **Tailscale SSH** — o tailscaled interceta a
 porta 22 e a autenticação é por **ACL do Tailscale**, não por chaves. O np-server (`tag:control`) NÃO
@@ -359,9 +364,9 @@ estado do np-server e recria **só se algo mudou**. Zero SSH, zero ACL, zero cha
 
 | Host | Método | Projeto | Notas |
 |---|---|---|---|
-| de1, oracle-e2-1/2 | systemd `--system` timer (root), 5 min | `npworker` | padrão; git pull + .env + recreate |
-| **hel1-docker** | systemd `--user` timer (user `claude`, lingering), 5 min | `netprospect` | **`SKIP_GIT=1`** + `COMPOSE_SERVICES="worker worker-base"` |
-| **gpedro-laptop** | Windows Scheduled Task (PowerShell), horária | `laptop` | pull-only; setup manual pelo utilizador |
+| de1, oracle-e2-1/2 | systemd `--system` timer (root), 5 min | `npworker` | ✅ padrão; git pull + .env + recreate |
+| **hel1-docker** | systemd `--user` timer (user `claude`, lingering), 5 min | `netprospect` | ✅ **`SKIP_GIT=1`** + `COMPOSE_SERVICES="worker worker-base"` |
+| **gpedro-laptop** | Windows Scheduled Task (PowerShell), horária | `laptop` | ✅ live (pull-only; `.ps1` UTF-8+BOM — ver §9 do runbook) |
 
 **As 2 exceções e porquê:**
 - **hel1-docker é DIFERENTE**: (1) é onde se **committa** — tem sempre o working tree à frente do
@@ -373,5 +378,6 @@ estado do np-server e recria **só se algo mudou**. Zero SSH, zero ACL, zero cha
 - **gpedro-laptop é DIFERENTE**: Windows 10 + Docker Desktop, **IP residencial, sem SSH de entrada** (o
   Tailscale SSH no WSL "abre e fecha" — ACL). É **pull-only** via **Tarefa Agendada** (PowerShell), não
   systemd, e horária (não 5 min) porque só está online de forma intermitente
-  (`-RunOnlyIfNetworkAvailable -StartWhenAvailable`). O `.env` dele fica no store e é editável no dashboard
-  como os outros. Setup manual pelo utilizador (ver runbook) — é o único que não conseguimos gerir remotamente.
+  (`-RunOnlyIfNetworkAvailable -StartWhenAvailable`). O `.env` dele fica no store e é **editável no dashboard
+  como os outros** (já validado: escalar workers pelo dashboard). Só a **instalação inicial** foi manual (feita) —
+  é o único host que não alcançamos por SSH, mas depois de instalado gere-se centralmente como os restantes.

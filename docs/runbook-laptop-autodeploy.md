@@ -1,3 +1,4 @@
+
 # Runbook — Auto-deploy por PULL (laptop Windows + frota Linux)
 
 Como manter cada host da frota atualizado **sem SSH** e com o `.env` de cada um **editável a
@@ -35,12 +36,17 @@ O `<host>` tem de bater com o `FLEET_HOST` reportado pelo worker desse host (o n
 
 ## 2. Laptop Windows 10 (o caso principal)
 
+> ✅ **Instalado e validado (2026-07-16)** — o `gpedro-laptop` está em auto-pull e o `.env` dele é
+> editável no dashboard (testado a escalar workers 1↔2). Os passos abaixo ficam como referência para
+> reinstalar/recriar. O `.ps1` **tem de estar gravado UTF-8 com BOM** (ver §2.1).
+
 Pré-requisitos: **Git for Windows**, **Docker Desktop** (com o worker do laptop já a correr), e o
 repo clonado (ex.: `C:\Users\gpedro\netprospect-v1`).
 
 ### 2.1 Configurar o agente
 
 1. Copia `deploy\agent\agent.env.ps1.example` → `deploy\agent\agent.env.ps1` e preenche:
+
    - `$FLEET_HOST = "gpedro-laptop"` (igual ao do worker).
    - `$SERVER_URL = "http://100.114.17.74:3001"`.
    - `$FLEET_PULL_TOKEN` = igual ao do np-server (ou vazio se não usares token).
@@ -53,7 +59,7 @@ repo clonado (ex.: `C:\Users\gpedro\netprospect-v1`).
    **UTF-8 com BOM**. Se o editaste noutro editor, corrige com:
 
    ```powershell
-   $f = "C:\...\deploy\agent\agent.env.ps1"
+   $f = "C:\Users\Gonçalo Pedro\Documents\GitHub\netprospect-v1\deploy\agent\agent.env.ps1"
    [IO.File]::WriteAllText($f, (Get-Content -Raw -Encoding UTF8 $f), (New-Object Text.UTF8Encoding $true))
    ```
 
@@ -63,7 +69,7 @@ Abre o **PowerShell** e corre:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File "C:\Users\Gonçalo Pedro\Documents\GitHub\netprospect-v1\deploy\agent\pull-deploy.ps1"
-Get-Content "C:\Users\Gonçalo Pedro\Documents\GitHub\netprospect-v1\deploy\agent\pull-deploy.log -Tail 10"
+Get-Content "C:\Users\Gonçalo Pedro\Documents\GitHub\netprospect-v1\deploy\agent\pull-deploy.log" -Tail 10
 ```
 
 Deve dizer "sem alteracoes" (ou aplicar mudanças e "recreate OK"). Se falhar o `.env`, confirma o

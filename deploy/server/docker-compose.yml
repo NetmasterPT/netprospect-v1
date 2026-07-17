@@ -138,18 +138,6 @@ services:
       - '${TAILNET_IP}:16686:16686'
       - '127.0.0.1:16686:16686'
 
-  # Bridge Alertmanager → ntfy — recebe os webhooks do Alertmanager (hel1-alertmanager) e publica
-  # notificações formatadas no ntfy. Config em ntfy-alertmanager.toml.
-  ntfy-bridge:
-    image: ghcr.io/xenrox/ntfy-alertmanager:v1
-    restart: unless-stopped
-    command: ['-config', '/config.toml']
-    volumes:
-      - ./ntfy-alertmanager.toml:/config.toml:ro
-    ports:
-      - '${TAILNET_IP}:8091:8080'
-      - '127.0.0.1:8091:8080'
-
   # Adminer — gestão manual da base de dados (liga ao PostgreSQL do np-db). Login com as credenciais PG.
   adminer:
     image: adminer:4

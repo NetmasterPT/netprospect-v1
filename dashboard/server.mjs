@@ -1996,6 +1996,30 @@ app.post('/api/fleet/metrics/:host', async (req, res) => {
   res.json({ ok: true, host, fields: Object.keys(h).length });
 });
 
+// --- Bridge Alertmanager → ntfy: recebe os webhooks do Alertmanager e publica notificações formatadas
+// no ntfy (o Alertmanager só faz webhook JSON; aqui damos-lhe título/prioridade/tags legíveis). O
+// receiver do Alertmanager (CT 203) aponta para este endpoint. Ver docs/observability.md.
+const NTFY_URL = (process.env.NTFY_URL || 'http://100.118.244.35').replace(/\/$/, '');
+const NTFY_TOPIC = process.env.NTFY_TOPIC || 'netprospect-alerts';
+app.post('/api/alertmanager-webhook', async (req, res) => {
+  const alerts = Array.isArray(req.body?.alerts) ? req.body.alerts : [];
+  let sent = 0;
+  for (const a of alerts) {
+    const firing = a.status === 'firing';
+    const sev = a.labels?.severity || 'info';
+    const name = a.labels?.alertname || 'alerta';
+    const host = a.labels?.host ? ' @ ' + a.labels.host : '';
+    const summary = a.annotations?.summary || a.annotations?.description || name;
+    const prio = !firing ? '2' : sev === 'critical' ? '5' : sev === 'warning' ? '4' : '3';
+    const tag = !firing ? 'white_check_mark' : sev === 'critical' ? 'rotating_light' : 'warning';
+    const title = (firing ? '[FIRING] ' : '[RESOLVED] ') + name + host; // ASCII (header ntfy)
+    try {
+      await fetch(`${NTFY_URL}/${NTFY_TOPIC}`, { method: 'POST', headers: { 'X-Title': title.slice(0, 250), 'X-Priority': prio, 'X-Tags': tag }, body: `${firing ? 'FIRING' : 'RESOLVED'} · ${sev}\n${summary}` });
+      sent++;
+    } catch { /* fail-soft */ }
+  }
+  res.json({ ok: true, received: alerts.length, sent });
+});
 // --- Prometheus /metrics — expõe a telemetria da frota p/ o Prometheus da stack de observabilidade.
 // Fonte: Redis (rápido, sem NATS). Host (CPU/RAM/disco/rede/IO/latências) + unidades (docker/lxc/vm/
 // serviço/storage) + throughput por host + workers vivos. Ver docs/observability.md.

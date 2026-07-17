@@ -1647,7 +1647,10 @@ async function viewServers() {
   const dcNames = Object.keys(dcs).sort(); // ordenação estável por nome do DC
   for (const dc of dcNames) dcs[dc].sort((a, b) => a.host.localeCompare(b.host));
   const sig = dcNames.map((dc) => dc + ':' + dcs[dc].map((v) => v.host + '#' + v.workers.length + (v.infra ? 'i' : '')).join(',')).join('|');
-  const dynLoad = (list) => loadBar(+list.reduce((a, v) => a + (v.load || 0), 0).toFixed(2), list.reduce((a, v) => a + (v.cores || 0), 0));
+  // Load do DC: se houver nó físico Proxmox (-pve), o seu loadavg JÁ agrega todos os guests LXC/VM —
+  // usa-o diretamente. Somar os guests estava a contar a mesma carga física ~Nx (LXC lê o /proc/loadavg
+  // do host → HEL1 dava 190%). DCs sem nó -pve (Oracle/Laptop = workers cloud independentes) → soma.
+  const dynLoad = (list) => { const pve = list.find((v) => /-pve$/.test(v.host || '')); return (pve && pve.load != null && pve.cores) ? loadBar(pve.load, pve.cores) : loadBar(+list.reduce((a, v) => a + (v.load || 0), 0).toFixed(2), list.reduce((a, v) => a + (v.cores || 0), 0)); };
   const dynStats = (list) => { const d1 = list.reduce((a, v) => a + v.done1h, 0), f = list.reduce((a, v) => a + v.fail24h, 0); return `<div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(d1)}/h</div><div class="muted" style="font-size:10px">throughput</div></div><div><div class="tnum" style="font-size:16px;font-weight:800;color:${f ? 'var(--np-warn)' : ''}">${fmt(f)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div>`; };
   const dynCap = (list) => capBlock({ cap1h: sumCaps(list, 'cap1h'), cap24h: sumCaps(list, 'cap24h'), cap30d: sumCaps(list, 'cap30d') });
   const vmBtns = (list) => list.map((v) => `<button class="np-btn np-btn--sm" onclick="event.stopPropagation();openVm('${esc(v.host)}')" title="${v.infra ? 'infra · ' + ((v.cap && v.cap.containers) ? v.cap.containers.length : 0) + ' containers' : esc(v.roles.join('/')) + ' · ' + v.workers.length + ' workers'}">${vmBtnInner(v)}</button>`).join('');
@@ -1724,7 +1727,7 @@ window.openServer = async (dc) => {
   const pve = vms.find((v) => /-pve$/.test(v.host || ''));
   dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(dc)}</div><div class="muted" style="font-size:12px">${vms.length} VMs · ${workers} workers</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
     <div style="padding:16px 18px">
-      ${loadBar(totLoad, totCores)}
+      ${(pve && pve.load != null && pve.cores) ? loadBar(pve.load, pve.cores) : loadBar(totLoad, totCores)}
       ${pve && pve.cap ? `<div class="np-sec-t">Servidor físico (Proxmox) · <a href="#" onclick="openVm('${esc(pve.host)}');return false" style="color:var(--np-brand-ink,#2563eb)">${esc(pve.host)}</a></div>${hostMetricsBlock(pve.cap)}${pveStorageBars(pve.cap)}${latMatrixBlock(pve.cap)}` : ''}
       <div class="np-sec-t">Capacidade agregada (usado / total · livre)</div>${capBlock(cap)}
       <div class="np-sec-t">VMs (${vms.length})</div>

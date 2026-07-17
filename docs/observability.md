@@ -127,11 +127,27 @@ OpenTelemetry/Jaeger, UptimeKuma, Ntfy, PostHog) e **Data** (Directus, MinIO, **
 nova aba (URLs tailnet). O **Adminer** (`deploy/server/docker-compose.yml`, `:8080`) liga ao PostgreSQL do
 np-db (`ADMINER_DEFAULT_SERVER`) para gestão manual da DB (login com as credenciais PG).
 
-## 9. Estado & próximos passos
+## 9. Alertas → ntfy
 
-**Live**: recolha em todos os hosts; `/metrics` scraped; 8 alertas → Alertmanager; dashboard Grafana
-provisionado; **tracing do dashboard → Jaeger**; menus de acesso + Adminer.
+O Alertmanager (CT 203) tinha os receivers a apontar para si próprio (loop, não notificava). Passam a
+fazer webhook para **`POST /api/alertmanager-webhook`** no dashboard, que formata cada alerta
+(título/prioridade/tags) e publica no **ntfy** (tópico `netprospect-alerts`). `NTFY_URL`/`NTFY_TOPIC`
+configuráveis. Cadeia validada: alerta → Alertmanager → dashboard → ntfy.
 
-**Por fazer**: instrumentar os **workers** (OTel); **uptime-kuma** (monitores HTTP a `/api/config`,
-`/metrics`, Directus, MinIO); confirmar o **receiver ntfy** no Alertmanager (CT 203); **datasource
-Prometheus/Tempo** provisionado por ficheiro no Grafana; **PDM** e Oracle/GCP por API.
+## 10. uptime-kuma
+
+O uptime-kuma não tem REST API para gerir monitores (só socket.io autenticado). O script
+`deploy/observability/uptime-kuma-monitors.py` (lib `uptime-kuma-api`) cria os monitores dos endpoints-chave
+(Dashboard, /metrics, Directus, MinIO, Jaeger, Adminer, Prometheus, Grafana, Alertmanager, ntfy, PG, NATS,
+Redis, PBS). Corre-se **com as credenciais do uptime-kuma**:
+`KUMA_URL=... KUMA_USER=... KUMA_PASS=... python3 uptime-kuma-monitors.py`.
+
+## 11. Estado & próximos passos
+
+**Live**: recolha em todos os hosts; `/metrics` scraped; 8 alertas → Alertmanager → **ntfy**; dashboard
+Grafana provisionado; **tracing dashboard + workers → Jaeger**; menus + Adminer.
+
+**Por fazer**: correr o script do **uptime-kuma** (precisa das credenciais); **datasource Tempo/Jaeger**
+no Grafana (a UI do Jaeger já serve os traces); **PDM** e Oracle/GCP por API. Nota: o tracing dos workers
+é **opt-in** (`OTEL_ENABLED=1`) com amostragem 2% (`OTEL_TRACES_SAMPLER_ARG`) — os workers fazem muito
+HTTP de saída.

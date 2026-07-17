@@ -4,6 +4,18 @@ Lista do que estamos **à procura** ou a **testar** agora. O monitor de saúde (
 **prioridade** a qualquer erro relacionado com estes itens. Edita à vontade: adiciona uma hipótese
 quando estás a testar algo novo, marca `[resolvido]` quando fechares.
 
+> **CONSULTA A OBSERVABILIDADE PRIMEIRO (Alertmanager = fonte de verdade).** A stack (Prometheus →
+> regras → Alertmanager) já deteta a maioria dos problemas de forma sempre-on. Começa CADA ronda por
+> `curl -s --max-time 15 http://100.114.17.74:3001/api/alerts` → devolve os alertas ATIVOS
+> (nome/severidade/host/consumer/summary). **Se vier vazio**, a frota está saudável nas dimensões
+> cobertas por regras (dashboard/worker down · host CPU/RAM/disco/**swap** · latência Directus · **fila
+> presa** `NetProspectQueueStuck` · **órfãos em fila terminada** `NetProspectQueueOrphans`) → NÃO precisas
+> dos curls exaustivos; confirma só o deploy-watch e as AÇÕES. **Só investigas a fundo** (NATS/`/api/logs`)
+> o que estiver a DISPARAR. As **AÇÕES continuam contigo** (não são regras): requeue de órfãos seguros,
+> deploy-watch (baseline/observação), decisões de POISON, e o julgamento "isto é esperado?". A stack
+> observa; tu decides e operas. (Endpoint: `dashboard/server.mjs` `/api/alerts`; regras nos grupos
+> `netprospect` + `netprospect-queues` do Prometheus CT200 → Alertmanager CT203 → ntfy.)
+
 > **FONTE DE LOGS (importante para o monitor):** a telemetria/logs da frota NÃO está no
 > `netprospect-redis-1` (hel1) — esse está sempre vazio. Os workers reportam para o **Redis do
 > np-server** (`redis://100.114.17.74:6379`, container `server-redis-1`). Para o sinal de logs de TODA

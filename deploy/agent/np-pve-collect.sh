@@ -12,13 +12,13 @@ LXC="$(pvesh get "/nodes/$node/lxc" --output-format json 2>/dev/null || echo '[]
 QEMU="$(pvesh get "/nodes/$node/qemu" --output-format json 2>/dev/null || echo '[]')"
 STOR="$(pvesh get "/nodes/$node/storage" --output-format json 2>/dev/null || echo '[]')"
 
-# Contagem de snapshots por guest (exclui a pseudo-snapshot "current"). Mapa JSON "type:vmid" -> n.
+# Snapshots por guest (exclui a pseudo-snapshot "current"). Mapa JSON "type:vmid" -> [{n:nome,t:epoch,d:desc}].
 guest_ids() { python3 -c "import sys,json;[print('%s:%s'%(sys.argv[1],r['vmid'])) for r in json.load(sys.stdin)]" "$1" 2>/dev/null; }
 SNAPS='{'; sf=1
 for vt in $(printf '%s' "$LXC" | guest_ids lxc) $(printf '%s' "$QEMU" | guest_ids qemu); do
   typ="${vt%%:*}"; vmid="${vt##*:}"
-  n=$(pvesh get "/nodes/$node/$typ/$vmid/snapshot" --output-format json 2>/dev/null | python3 -c "import sys,json;print(sum(1 for s in json.load(sys.stdin) if s.get('name')!='current'))" 2>/dev/null || echo 0)
-  [ "$sf" = 1 ] && sf=0 || SNAPS="$SNAPS,"; SNAPS="$SNAPS\"$vt\":$n"
+  snl=$(pvesh get "/nodes/$node/$typ/$vmid/snapshot" --output-format json 2>/dev/null | python3 -c "import sys,json;print(json.dumps([{'n':s.get('name'),'t':s.get('snaptime'),'d':s.get('description','')} for s in json.load(sys.stdin) if s.get('name')!='current']))" 2>/dev/null || echo '[]')
+  [ "$sf" = 1 ] && sf=0 || SNAPS="$SNAPS,"; SNAPS="$SNAPS\"$vt\":$snl"
 done
 SNAPS="$SNAPS}"
 
@@ -44,6 +44,7 @@ node = sys.argv[1]
 raw = sys.stdin.read().split(chr(0x1e))
 snaps = json.loads(sys.argv[2]) if len(sys.argv) > 2 else {}
 out = []
+names = {}
 def human(n):
     n=float(n)
     for u in ["B","KB","MB","GB","TB","PB"]:
@@ -55,11 +56,12 @@ def add_guest(txt, kind):
     except Exception: return
     for r in data:
         vmid=r.get("vmid",""); status=r.get("status","") or ""; name=r.get("name") or str(vmid)
+        names[str(vmid)]=name
         cpu=r.get("cpu"); mem=r.get("mem"); up=r.get("uptime")
         cpu_s="%.1f%%"%(cpu*100) if isinstance(cpu,(int,float)) and status=="running" else ""
         st=status
         if isinstance(up,int) and up>0: st += " . up %dd"%(up//86400) if up>=86400 else " . up %dh"%(up//3600)
-        ns=snaps.get("%s:%s"%(kind,vmid),0)
+        ns=len(snaps.get("%s:%s"%(kind,vmid),[]))
         if ns: st += " . %d snap%s"%(ns, "s" if ns!=1 else "")
         out.append({"kind":kind,"id":"%s:%s"%(kind,vmid),"name":name,"state":status,"status":st,
                     "image":"vmid %s . %s"%(vmid,node),"cpu":cpu_s,
@@ -83,8 +85,21 @@ def add_zfs(txt):
         out.append({"kind":"zfs","id":"zfs:%s"%z.get("name",""),"name":z.get("name",""),
                     "state":z.get("health",""),"status":"%s . %s/%s (%d%%)"%(z.get("health",""),human(z.get("alloc",0)),human(z.get("size",0)),z.get("pct",0)),
                     "image":"pool ZFS . %s"%node,"cpu":"","memb":str(int(z.get("alloc",0))),"logb64":""})
+import datetime
+def add_snapshots():
+    for key, snl in (snaps or {}).items():
+        try: typ, vmid = key.split(":")
+        except Exception: continue
+        gname = names.get(str(vmid), str(vmid))
+        for sn in (snl or []):
+            t = sn.get("t"); nm = sn.get("n") or ""
+            when = datetime.datetime.fromtimestamp(t).strftime("%d/%m/%y %H:%M") if isinstance(t, (int, float)) else ""
+            out.append({"kind":"snapshot","id":"snap:%s:%s"%(vmid, nm),"name":"%s / %s"%(gname, nm),
+                        "state":"snapshot","status":("criado %s"%when if when else "snapshot")+((" . "+sn.get("d","")) if sn.get("d") else ""),
+                        "image":"snapshot . %s . %s"%(typ, node),"cpu":"","memb":"","logb64":""})
 add_guest(raw[0] if len(raw)>0 else "[]","lxc")
 add_guest(raw[1] if len(raw)>1 else "[]","vm")
+add_snapshots()
 add_storage(raw[2] if len(raw)>2 else "[]")
 add_zfs(raw[3] if len(raw)>3 else "[]")
 print(json.dumps(out))

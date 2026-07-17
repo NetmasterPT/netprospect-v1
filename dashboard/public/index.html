@@ -1454,7 +1454,7 @@ function b64utf8(b64) { try { const bin = atob(b64 || ''); const bytes = Uint8Ar
 // Unidade (container/serviço) está "a correr"? container: running/Up · serviço: active/running.
 const unitUp = (c) => /running|^active|healthy|online|^Up/i.test(c && c.state || '') || /running|healthy|online|^Up/i.test(c && c.status || '');
 const cpuSecFmt = (s) => { const n = +s; return n >= 3600 ? (n / 3600).toFixed(1) + ' h' : n >= 60 ? (n / 60).toFixed(0) + ' min' : n + ' s'; };
-const kindLabel = (k) => ({ service: 'serviço systemd', lxc: 'container LXC', vm: 'VM (Proxmox)', storage: 'storage (Proxmox)', zfs: 'pool ZFS', datastore: 'datastore (PBS)', timer: 'agendamento (timer/cron)' }[k] || 'container Docker');
+const kindLabel = (k) => ({ service: 'serviço systemd', lxc: 'container LXC', vm: 'VM (Proxmox)', storage: 'storage (Proxmox)', zfs: 'pool ZFS', datastore: 'datastore (PBS)', timer: 'agendamento (timer/cron)', snapshot: 'snapshot' }[k] || 'container Docker');
 // Bloco de recursos de uma unidade. container(docker) → CPU%/RAM/rede/IO; serviço → RAM+CPU acumulado (cgroup);
 // lxc/vm → RAM + CPU% (pvesh).
 function containerStatsBlock(c) {
@@ -1486,10 +1486,10 @@ const containerMini = (c) => { if (!c) return ''; const cpu = c.cpu ? parseFloat
 const contForWorker = (hosts, w) => { const cs = ((hosts || {})[w.host] || {}).containers || []; return cs.find((c) => c.id && (c.id === w.id || w.id.startsWith(c.id) || c.id.startsWith(w.id))) || null; };
 // Botões das unidades (container/serviço/lxc/vm) de um host — nome + ponto de estado; não-container = tracejado.
 const containerChips = (host, cs) => (cs && cs.length)
-  ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = { lxc: 'LXC·', vm: 'VM·', storage: 'disco·', zfs: 'zfs·', datastore: 'ds·', timer: 'cron·' }[c.kind] || ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}</button>`; }).join(' ')
+  ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = { lxc: 'LXC·', vm: 'VM·', storage: 'disco·', zfs: 'zfs·', datastore: 'ds·', timer: 'cron·', snapshot: 'snap·' }[c.kind] || ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}</button>`; }).join(' ')
   : '<span class="muted" style="font-size:10px">sem unidades reportadas</span>';
 // Unidades AGRUPADAS por tipo (para os drawers): Docker / LXC / VMs / Serviços / Storage / ZFS / Datastores.
-const UNIT_ORDER = [['container', 'Containers Docker'], ['lxc', 'Containers LXC'], ['vm', 'VMs'], ['service', 'Serviços (OS)'], ['timer', 'Agendamentos (timers/cron)'], ['storage', 'Storage'], ['zfs', 'Pools ZFS'], ['datastore', 'Datastores']];
+const UNIT_ORDER = [['container', 'Containers Docker'], ['lxc', 'Containers LXC'], ['vm', 'VMs'], ['service', 'Serviços (OS)'], ['timer', 'Agendamentos (timers/cron)'], ['storage', 'Storage'], ['zfs', 'Pools ZFS'], ['datastore', 'Datastores'], ['snapshot', 'Snapshots']];
 function unitGroups(host, cs) {
   if (!cs || !cs.length) return '<span class="muted" style="font-size:10px">sem unidades reportadas</span>';
   const byKind = {}; for (const c of cs) { const k = c.kind || 'container'; (byKind[k] = byKind[k] || []).push(c); }
@@ -1592,6 +1592,21 @@ function latMatrixBlock(H) {
   const chips = entries.map(([host, ms]) => { const col = ms < 20 ? 'var(--np-ok-mark)' : ms < 80 ? 'var(--np-warn,#d97706)' : 'var(--np-bad,#dc2626)'; return `<span class="np-chip" style="font-size:10px" title="latência (ping) para ${esc(host)}">${esc(host)} <b style="color:${col}">${ms}ms</b></span>`; }).join('');
   return `<div class="np-sec-t">Latência para outros nós (${entries.length})</div><div style="display:flex;gap:4px;flex-wrap:wrap;max-height:220px;overflow:auto">${chips}</div>`;
 }
+// Barras de uso/capacidade por cada storage/pool ZFS/datastore (para os drawers). Parseia used/total/% do status.
+function pveStorageBars(H) {
+  const cs = (H && H.containers) || [];
+  const st = cs.filter((c) => c.kind === 'storage' || c.kind === 'zfs' || c.kind === 'datastore');
+  if (!st.length) return '';
+  const rows = st.map((s) => {
+    const m = /([\d.]+\s*[KMGTPE]?i?B)\s*\/\s*([\d.]+\s*[KMGTPE]?i?B)\s*\((\d+)%\)/.exec(s.status || '');
+    const pct = m ? +m[3] : null, used = m ? m[1].replace(/\s/g, '') : '', total = m ? m[2].replace(/\s/g, '') : '';
+    const col = pct == null ? 'var(--np-text-3)' : pct >= 90 ? 'var(--np-bad,#dc2626)' : pct >= 75 ? 'var(--np-warn,#d97706)' : 'var(--np-ok-mark,#16a34a)';
+    const tag = s.kind === 'zfs' ? 'ZFS' : s.kind === 'datastore' ? 'PBS' : 'storage';
+    const health = /online/i.test(s.state || '') ? '' : ` <b style="color:var(--np-bad,#dc2626)">${esc(s.state)}</b>`;
+    return `<div style="margin-top:5px"><div style="display:flex;justify-content:space-between;font-size:10px;gap:8px"><span class="muted" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(tag)} · ${esc(s.name)}${health}</span><span class="tnum" style="color:${col};white-space:nowrap">${used}${total ? ' / ' + total : ''}${pct != null ? ' · ' + pct + '%' : ''}</span></div>${pct != null ? `<div style="height:5px;background:var(--np-border);border-radius:3px;overflow:hidden;margin-top:2px"><div style="height:100%;width:${pct}%;background:${col}"></div></div>` : ''}</div>`;
+  });
+  return `<div class="np-sec-t">Armazenamento (${st.length})</div>${rows.join('')}`;
+}
 const vmBusy = (v) => v.workers.some((w) => w.cur);
 const vmBtnInner = (v) => `${esc(v.host)}${vmBusy(v) ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''} <span class="muted tnum" style="font-size:10px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : ''}</span>`;
 async function viewVms() {
@@ -1679,7 +1694,7 @@ window.openVm = async (host) => {
     <div style="padding:16px 18px">
       ${loadBar(v.load, v.cores)}
       ${hostMetricsBlock(v.cap)}
-      ${/-pve$/.test(v.host || '') ? pveStorageChips(v.cap) : ''}
+      ${/-pve$/.test(v.host || '') ? pveStorageBars(v.cap) : ''}
       ${latMatrixBlock(v.cap)}
       ${contSec}
       ${wkCfg}
@@ -1710,7 +1725,7 @@ window.openServer = async (dc) => {
   dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(dc)}</div><div class="muted" style="font-size:12px">${vms.length} VMs · ${workers} workers</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
     <div style="padding:16px 18px">
       ${loadBar(totLoad, totCores)}
-      ${pve && pve.cap ? `<div class="np-sec-t">Servidor físico (Proxmox) · <a href="#" onclick="openVm('${esc(pve.host)}');return false" style="color:var(--np-brand-ink,#2563eb)">${esc(pve.host)}</a></div>${hostMetricsBlock(pve.cap)}${pveStorageChips(pve.cap)}` : ''}
+      ${pve && pve.cap ? `<div class="np-sec-t">Servidor físico (Proxmox) · <a href="#" onclick="openVm('${esc(pve.host)}');return false" style="color:var(--np-brand-ink,#2563eb)">${esc(pve.host)}</a></div>${hostMetricsBlock(pve.cap)}${pveStorageBars(pve.cap)}${latMatrixBlock(pve.cap)}` : ''}
       <div class="np-sec-t">Capacidade agregada (usado / total · livre)</div>${capBlock(cap)}
       <div class="np-sec-t">VMs (${vms.length})</div>
       <div style="display:flex;flex-direction:column;gap:8px">${vms.map(vmRow).join('')}</div>

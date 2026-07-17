@@ -108,17 +108,30 @@ Dashboard em `deploy/observability/grafana-netprospect.json` (datasource Prometh
 `/etc/grafana/provisioning/dashboards/`. Painéis: CPU/RAM/disco por host, latências, throughput (jobs/h),
 workers vivos, unidades por tipo.
 
-## 7. Estado & próximos passos
+## 7. Tracing (OpenTelemetry) — LIVE
 
-**Live**: recolha em todos os hosts (workers + infra + Proxmox + PBS/PDM); `/metrics` scraped pelo
-Prometheus; 8 regras de alerta a fluir para o Alertmanager.
+- **Colector**: `jaeger` (jaegertracing/all-in-one) em `deploy/server/docker-compose.yml` (np-server) —
+  recebe OTLP (`:4317`/`:4318`, internos à rede compose) e serve a UI em `:16686` (menu **Observabilidade
+  → OpenTelemetry**).
+- **Instrumentação do dashboard**: `dashboard/tracing.mjs` (`@opentelemetry/sdk-node` +
+  `auto-instrumentations-node` → HTTP/Express/Redis/PG/NATS), carregado via `node --import ./tracing.mjs`
+  no Dockerfile. Exporta OTLP para `http://jaeger:4318`. **Fail-soft** (se as libs/colector falharem o
+  dashboard corre na mesma) e `OTEL_ENABLED=0` desliga. Service name `netprospect-dashboard`.
+- **Por fazer**: instrumentar os **workers** (mesmo padrão, `worker/worker.mjs`) e ligar um datasource
+  Tempo/Jaeger ao Grafana (a UI do Jaeger já serve os traces).
 
-**Por fazer (fase seguinte)**:
+## 8. Menus & acessos rápidos
 
-- **Tracing (OpenTelemetry)**: colector OTel em container no np-server (recebe OTLP) + instrumentar o
-  dashboard/workers (Node SDK: `@opentelemetry/sdk-node` + auto-instrumentations, `NODE_OPTIONS=--require`)
-  → backend de traces (Tempo/Jaeger) + datasource no Grafana. É a peça mais profunda (mexe no código +
-  precisa de um backend de traces na stack).
-- **Grafana provisioning** automático (datasource + dashboard) e **uptime-kuma** (monitores HTTP aos
-  endpoints `/api/config`, `/metrics`, Directus) + **ntfy** (confirmar o receiver do Alertmanager → tópico ntfy).
-- **PDM**: dados de nós geridos via a API do PDM (sem CLI) — a par dos agentes Oracle/GCP por API.
+O menu do dashboard tem os submenus **Observabilidade** (AlertManager, Prometheus, Grafana,
+OpenTelemetry/Jaeger, UptimeKuma, Ntfy, PostHog) e **Data** (Directus, MinIO, **Adminer**) — abrem em
+nova aba (URLs tailnet). O **Adminer** (`deploy/server/docker-compose.yml`, `:8080`) liga ao PostgreSQL do
+np-db (`ADMINER_DEFAULT_SERVER`) para gestão manual da DB (login com as credenciais PG).
+
+## 9. Estado & próximos passos
+
+**Live**: recolha em todos os hosts; `/metrics` scraped; 8 alertas → Alertmanager; dashboard Grafana
+provisionado; **tracing do dashboard → Jaeger**; menus de acesso + Adminer.
+
+**Por fazer**: instrumentar os **workers** (OTel); **uptime-kuma** (monitores HTTP a `/api/config`,
+`/metrics`, Directus, MinIO); confirmar o **receiver ntfy** no Alertmanager (CT 203); **datasource
+Prometheus/Tempo** provisionado por ficheiro no Grafana; **PDM** e Oracle/GCP por API.

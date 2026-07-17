@@ -24,6 +24,10 @@ services:
     env_file: [.env]
     environment:
       CHROME_PATH: /usr/bin/chromium
+      OTEL_ENABLED: ${OTEL_ENABLED:-1}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://100.114.17.74:4318}
+      OTEL_TRACES_SAMPLER: parentbased_traceidratio
+      OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.02}
     volumes:
       # CÓDIGO montado do repo → git pull + restart chega (sem rebuild).
       - ../../lib:/app/lib:ro

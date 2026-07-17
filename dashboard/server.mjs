@@ -2116,6 +2116,32 @@ app.get('/metrics', async (req, res) => {
         for (const k in byKind) g('np_host_units', { host, dc, kind: k }, byKind[k]);
       } catch { /* */ }
     }
+    // Filas / consumers (NATS) — base para as regras Alertmanager de filas. Reusa a lógica do /api/queues
+    // (consumers.info + addQueueCapacity) via self-fetch; corre a cada scrape (~30s).
+    M('np_queue_pending', 'Mensagens pendentes na fila', 'gauge');
+    M('np_queue_ack_pending', 'Mensagens em voo (inflight)', 'gauge');
+    M('np_queue_orphans', 'Mensagens órfãs (esgotaram maxDeliver)', 'gauge');
+    M('np_queue_redelivered', 'Mensagens re-entregues', 'gauge');
+    M('np_queue_max_ack', 'Teto maxAckPending do consumer', 'gauge');
+    M('np_queue_waiting', 'Pull-requests à espera (capacidade ociosa)', 'gauge');
+    M('np_queue_slots', 'Slots efetivos (Σ conc dos workers, capado por maxAckPending)', 'gauge');
+    M('np_consumer_avg_ms', 'Duração média por job (ms)', 'gauge');
+    M('np_consumer_jobs_done_1h', 'Jobs concluídos na última hora (consumer)', 'gauge');
+    try {
+      const q = await fetch(`http://127.0.0.1:${PORT}/api/queues`).then((x) => x.json()).catch(() => null);
+      for (const c of (q && q.consumers) || []) {
+        const lab = { consumer: c.name, role: c.role };
+        g('np_queue_pending', lab, c.pending);
+        g('np_queue_ack_pending', lab, c.ackPending);
+        g('np_queue_orphans', lab, c.orphans);
+        g('np_queue_redelivered', lab, c.redelivered);
+        g('np_queue_max_ack', lab, c.maxAckPending);
+        g('np_queue_waiting', lab, c.waiting);
+        g('np_queue_slots', lab, c.slots);
+        g('np_consumer_avg_ms', lab, c.avgMs);
+        if (c.cap1h && c.cap1h.used != null) g('np_consumer_jobs_done_1h', lab, c.cap1h.used);
+      }
+    } catch { /* fila indisponível — segue sem as séries de fila */ }
   } catch (e) { out.push(`# erro: ${String(e.message).replace(/\n/g, ' ')}`); }
   res.send(out.join('\n') + '\n');
 });

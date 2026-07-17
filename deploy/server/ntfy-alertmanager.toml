@@ -1,0 +1,11 @@
+# Bridge Alertmanager → ntfy (xenrox/ntfy-alertmanager). Recebe webhooks do Alertmanager e publica
+# notificações no ntfy (tópico netprospect-alerts, sem auth). Ver docs/observability.md.
+[http]
+addr = ":8080"
+
+[log]
+level = "info"
+
+[ntfy]
+url = "http://100.118.244.35"
+topic = "netprospect-alerts"

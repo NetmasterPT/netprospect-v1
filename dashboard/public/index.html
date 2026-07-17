@@ -1653,6 +1653,8 @@ async function viewQueues() {
   const totPending = d.consumers.reduce((a, c) => a + c.pending, 0), totProc = d.consumers.reduce((a, c) => a + c.ackPending, 0), totRedeliv = d.consumers.reduce((a, c) => a + c.redelivered, 0); const totRate = d.consumers.reduce((a, c) => a + (c.rate || 0), 0);
   const kpi = (icon, label, v, sub) => `<div class="np-kpi"><div class="np-kpi-l"><span class="np-kpi-ic">${ic(icon, 15)}</span>${label}</div><div class="np-kpi-v tnum">${fmt(v)}</div>${sub ? `<div class="muted" style="font-size:11px;margin-top:2px">${sub}</div>` : ''}</div>`;
   const maxDepth = Math.max(1, ...d.consumers.map((c) => c.pending + c.ackPending));
+  window.QUEUE_DATA = {}; d.consumers.forEach((c) => { window.QUEUE_DATA[c.name] = c; });
+  const totOrph = d.consumers.reduce((a, c) => a + (c.orphans || 0), 0);
   const row = (c) => `<tr onclick="openQueue('${esc(c.name)}')" style="cursor:pointer" title="Ver / gerir jobs desta fila">
     <td style="font-weight:600">${esc(c.name)}</td><td><span class="np-chip">${esc(c.role)}</span></td>
     <td class="np-mono muted" style="font-size:11px">${esc(c.subject)}</td>
@@ -1660,15 +1662,16 @@ async function viewQueues() {
     <td class="tnum" style="text-align:right;font-weight:700;${c.pending ? 'color:var(--np-warn)' : ''}">${fmt(c.pending)}</td>
     <td class="tnum" style="text-align:right">${fmt(c.ackPending)}</td>
     <td class="tnum" style="text-align:right;${c.redelivered ? 'color:var(--np-warn)' : 'color:var(--np-text-3)'}">${fmt(c.redelivered)}</td>
+    <td class="tnum" style="text-align:right;font-weight:${c.orphans ? '800' : '400'};color:${c.orphans ? 'var(--np-bad,#dc2626)' : 'var(--np-text-3)'}" title="Mensagens presas que esgotaram o maxDeliver (relança/limpa no drawer)">${fmt(c.orphans || 0)}</td>
     <td class="tnum" style="text-align:right;color:var(--np-text-3)">${fmt(c.waiting)}</td><td class="tnum" style="text-align:right;font-weight:600;color:${c.rate?'var(--np-ok-mark)':'var(--np-text-3)'}">${c.rate!=null?fmt(c.rate):'—'}</td><td class="tnum" style="text-align:right;color:var(--np-text-3)">${c.eta!=null?c.eta+'h':(c.pending&&c.rate===0?'∞':'')}</td></tr>`;
   const active = d.consumers.filter((c) => c.pending + c.ackPending > 0), idle = d.consumers.filter((c) => c.pending + c.ackPending === 0);
   $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Filas</h1><div class="np-sub">Fila NATS JetStream <b>NP_JOBS</b> · clica numa fila para ver/gerir os jobs · atualiza a cada 10 s</div></div></div>
     <div class="np-kpis">
       ${kpi('server', 'Mensagens na stream', d.stream.messages, fmtBytes(d.stream.bytes) + ' · ' + d.stream.consumerCount + ' consumers')}
-      ${kpi('activity', 'Em fila (por entregar)', totPending)}${kpi('power', 'A processar agora', totProc)}${kpi('clock', 'Re-tentativas (nak)', totRedeliv)}${kpi('activity', 'Throughput (/h)', totRate)}
+      ${kpi('activity', 'Em fila (por entregar)', totPending)}${kpi('power', 'A processar agora', totProc)}${kpi('clock', 'Re-tentativas (nak)', totRedeliv)}${kpi('trash', 'Órfãos (presos)', totOrph)}${kpi('activity', 'Throughput (/h)', totRate)}
     </div>
     <section class="np-card"><div class="np-card-h"><h2>Filas / consumers (${d.consumers.length})</h2><span class="muted" style="font-size:12px">${active.length} com trabalho · ${idle.length} vazias</span></div>
-      <div class="np-tablewrap"><table class="np-table"><thead><tr><th>Fila</th><th>Role</th><th>Subject</th><th>Profundidade</th><th style="text-align:right">Em fila</th><th style="text-align:right">A processar</th><th style="text-align:right">Retry</th><th style="text-align:right">Idle</th><th style="text-align:right">/h</th><th style="text-align:right">ETA</th></tr></thead>
+      <div class="np-tablewrap"><table class="np-table"><thead><tr><th>Fila</th><th>Role</th><th>Subject</th><th>Profundidade</th><th style="text-align:right">Em fila</th><th style="text-align:right">A processar</th><th style="text-align:right">Retry</th><th style="text-align:right" title="Mensagens presas (esgotaram maxDeliver)">Órfãos</th><th style="text-align:right">Idle</th><th style="text-align:right">/h</th><th style="text-align:right">ETA</th></tr></thead>
       <tbody>${[...active, ...idle].map(row).join('')}</tbody></table></div></section>`;
 }
 window.openQueue = async (name) => {
@@ -1679,6 +1682,14 @@ window.openQueue = async (name) => {
   const rows = d.jobs.map((j) => `<tr><td style="width:34px"><input type="checkbox" class="qjob" value="${j.seq}"></td><td class="np-mono" style="font-size:11.5px">${esc(j.label)}</td><td class="muted" style="font-size:11px">seq ${j.seq}${j.time ? ' · ' + new Date(j.time).toLocaleTimeString('pt-PT') : ''}</td></tr>`).join('');
   dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">Fila: ${esc(name)}</div><div class="muted" style="font-size:12px">${esc(d.subject || '')} · ${d.jobs.length} job(s)${d.sampled ? ' (amostra dos mais recentes)' : ''}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
     <div style="padding:14px 18px">
+      ${(() => { const q = (window.QUEUE_DATA || {})[name] || {}; const o = q.orphans || 0; if (!o) return ''; const safe = (q.pending || 0) === 0;
+        return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;padding:8px 10px;background:var(--np-surface-2);border-radius:8px;border:1px solid var(--np-border)">
+          <span style="font-size:12.5px"><b style="color:var(--np-bad,#dc2626)">${fmt(o)} órfão(s)</b> presos (esgotaram o maxDeliver)</span>
+          ${safe ? `<span style="margin-left:auto;display:flex;gap:6px">
+            <button class="np-btn np-btn--sm" onclick="cleanOrphans('${esc(name)}','clean')" title="Remover os órfãos do stream (não relança)">${ic('trash', 13)} Limpar</button>
+            <button class="np-btn np-btn--sm np-btn--primary" onclick="cleanOrphans('${esc(name)}','requeue')" title="Remover e re-enfileirar os órfãos (relança)">${ic('activity', 13)} Limpar + relançar</button>
+          </span>` : `<span class="muted" style="margin-left:auto;font-size:11.5px">a fila tem ${fmt(q.pending)} pendentes legítimos → espera esvaziar (ou expira pelo MaxAge 48h)</span>`}
+        </div>`; })()}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
         <button class="np-btn np-btn--sm" onclick="deleteQueueJobs()">${ic('trash', 13)} Apagar selecionados</button>
         <button class="np-btn np-btn--sm" title="Priorizar não é suportado num workqueue FIFO — ver README (Follow-Ups)" disabled style="opacity:.5">Priorizar (indisponível)</button>
@@ -1693,6 +1704,16 @@ window.deleteQueueJobs = async () => {
   if (!confirm(`Apagar ${seqs.length} job(s) da fila?`)) return;
   const r = await (await fetch('/api/queues/jobs/delete', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ seqs }) })).json();
   alert(`${r.deleted} job(s) apagados.`); openQueue(window.QUEUE_CUR);
+};
+window.cleanOrphans = async (name, mode) => {
+  const verbo = mode === 'requeue' ? 'limpar e relançar' : 'limpar';
+  if (!confirm(`Vais ${verbo} os órfãos da fila "${name}". Continuar?`)) return;
+  try {
+    const r = await api('/api/queues/' + encodeURIComponent(name) + '/orphans', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) });
+    captureEvent('queue_orphans_cleared', { queue: name, mode, purged: r.purged, requeued: r.requeued });
+    alert(mode === 'requeue' ? `${r.purged} órfão(s) limpos e ${r.requeued} re-enfileirados.` : `${r.purged} órfão(s) limpos.`);
+    closeDrawer(); viewQueues();
+  } catch (e) { alert('Erro: ' + e.message); }
 };
 window.purgeQueue = async (name) => {
   if (!confirm(`Purgar TODOS os jobs pendentes da fila "${name}"? Não se desfaz.`)) return;

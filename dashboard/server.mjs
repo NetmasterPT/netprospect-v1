@@ -988,13 +988,19 @@ const CONSUMER_ROLES = {
 app.get('/api/queues', async (req, res) => {
   try {
     const jsm = await natsManager();
-    const stream = await jsm.streams.info('NP_JOBS');
+    const stream = await jsm.streams.info('NP_JOBS', { subjects_filter: '>' });
+    const subjMsgs = stream.state?.subjects || {}; // { 'jobs.x': nMsgs } — p/ contar órfãos
     const consumers = [];
     for await (const ci of jsm.consumers.list('NP_JOBS')) {
       const name = ci.name;
+      const subject = ci.config?.filter_subject || '';
+      const pending = ci.num_pending || 0, ackPending = ci.num_ack_pending || 0;
+      // Órfãos = mensagens no stream para este subject que NÃO estão pendentes nem in-flight
+      // (esgotaram maxDeliver → presas no workqueue até MaxAge). Invisíveis nas colunas normais.
+      const orphans = Math.max(0, (subjMsgs[subject] || 0) - pending - ackPending);
       consumers.push({
-        name, role: CONSUMER_ROLES[name] || '?', subject: ci.config?.filter_subject || '',
-        pending: ci.num_pending || 0, ackPending: ci.num_ack_pending || 0, redelivered: ci.num_redelivered || 0, waiting: ci.num_waiting || 0, delivered: ci.delivered?.consumer_seq || 0, acked: ci.ack_floor?.consumer_seq || 0,
+        name, role: CONSUMER_ROLES[name] || '?', subject,
+        pending, ackPending, orphans, redelivered: ci.num_redelivered || 0, waiting: ci.num_waiting || 0, delivered: ci.delivered?.consumer_seq || 0, acked: ci.ack_floor?.consumer_seq || 0,
       });
     }
     // Rate (jobs/h) por consumer: delta do delivered vs snapshot no Redis (janela >=20s).
@@ -1055,6 +1061,41 @@ app.post('/api/queues/:consumer/purge', async (req, res) => {
     let subj; try { subj = (await jsm.consumers.info('NP_JOBS', req.params.consumer)).config?.filter_subject; } catch { return res.status(404).json({ error: 'consumer desconhecido' }); }
     const r = await jsm.streams.purge('NP_JOBS', { filter: subj });
     res.json({ ok: true, purged: r.purged });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+// Limpar / relançar ÓRFÃOS de uma fila (mensagens presas que esgotaram maxDeliver).
+// body { mode: 'clean' | 'requeue' }. SÓ é seguro quando a fila NÃO tem pendentes legítimos
+// (pending==0) — o purge do NATS é por subject inteiro, logo com pendentes perderíamos trabalho.
+// requeue: lê os payloads órfãos (via next_by_subj), purga, e re-publica (sem msgId → aceite).
+app.post('/api/queues/:consumer/orphans', async (req, res) => {
+  try {
+    const mode = (req.body?.mode === 'requeue') ? 'requeue' : 'clean';
+    const jsm = await natsManager();
+    let ci; try { ci = await jsm.consumers.info('NP_JOBS', req.params.consumer); } catch { return res.status(404).json({ error: 'consumer desconhecido' }); }
+    const subj = ci.config?.filter_subject;
+    const pending = ci.num_pending || 0, inflight = ci.num_ack_pending || 0;
+    const st0 = (await jsm.streams.info('NP_JOBS', { subjects_filter: '>' })).state;
+    const orphans = Math.max(0, ((st0.subjects || {})[subj] || 0) - pending - inflight);
+    if (orphans <= 0) return res.json({ ok: true, orphans: 0, purged: 0, requeued: 0, message: 'sem órfãos' });
+    // Guarda: não purgar por subject enquanto houver pendentes legítimos (ex.: backfill fetch).
+    if (pending > 0) return res.status(409).json({ error: `fila tem ${pending} pendentes legítimos — a purga por subject não é seletiva. Espera a fila esvaziar (ou o MaxAge de 48h expira os órfãos sozinho).`, orphans, pending });
+    // Lê os payloads (todos os do subject = órfãos, já que pending==0).
+    let payloads = [];
+    if (mode === 'requeue') {
+      let seq = st0.first_seq;
+      for (;;) {
+        let m; try { m = await jsm.streams.getMessage('NP_JOBS', { seq, next_by_subj: subj }); } catch { break; }
+        if (!m) break;
+        payloads.push(m.data); seq = m.seq + 1;
+      }
+    }
+    const pr = await jsm.streams.purge('NP_JOBS', { filter: subj });
+    let requeued = 0;
+    if (mode === 'requeue' && payloads.length) {
+      const { js } = await natsJs();
+      for (const data of payloads) { await js.publish(subj, data); requeued++; }
+    }
+    res.json({ ok: true, mode, orphans, purged: pr.purged, requeued });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 

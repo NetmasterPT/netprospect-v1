@@ -1,0 +1,10 @@
+[Unit]
+Description=NetProspect Proxmox — atualiza o dump LXC/VMs a cada 5 min (antes do reporter)
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

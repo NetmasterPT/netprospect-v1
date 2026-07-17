@@ -7,8 +7,9 @@
 # /api/fleet/metrics/<FLEET_HOST>. Sem docker nestes hosts (containers_json devolve []).
 #
 # Instalação: metrics-lib.sh + proxmox-report.sh no dir do user (ex.: /opt/np/); np-pve-collect.sh em
-# /usr/local/bin (root:root); sudoers p/ np-pve-collect; user no grupo systemd-journal; config em
-# /etc/netprospect-metrics.env (FLEET_HOST=hel1-pve|de1-pve, SERVER_URL, ...).
+# /usr/local/bin (root); um oneshot ROOT (np-pve-units.{service,timer}) corre np-pve-collect e escreve
+# /run/np-pve-units.json que este reporter lê (sem privilégios). user no grupo systemd-journal; config
+# em /etc/netprospect-metrics.env (FLEET_HOST=hel1-pve|de1-pve, SERVER_URL, ...).
 set -uo pipefail
 SELF="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CFG="${METRICS_ENV:-/etc/netprospect-metrics.env}"
@@ -17,11 +18,9 @@ CFG="${METRICS_ENV:-/etc/netprospect-metrics.env}"
 : "${FLEET_HOST:?FLEET_HOST em falta}" ; : "${SERVER_URL:?SERVER_URL em falta}"
 [ -f "$SELF/metrics-lib.sh" ] || { echo "falta $SELF/metrics-lib.sh"; exit 1; }
 
-# LXC + VMs do nó — via o wrapper root (só-leitura), autorizado no sudoers.
-extra_units_json() {
-  [ -x "${PVE_COLLECT:-/usr/local/bin/np-pve-collect}" ] || { printf '[]'; return; }
-  sudo -n "${PVE_COLLECT:-/usr/local/bin/np-pve-collect}" 2>/dev/null || printf '[]'
-}
+# LXC + VMs do nó — lidos de um ficheiro que um oneshot ROOT (np-pve-units.service) escreve a cada ciclo.
+# Assim o reporter fica SEM privilégios (o PVE não traz sudo; pvesh/pct/qm exigem root). ≤5min de idade.
+extra_units_json() { cat "${PVE_UNITS_FILE:-/run/np-pve-units.json}" 2>/dev/null || printf '[]'; }
 
 # shellcheck source=metrics-lib.sh
 . "$SELF/metrics-lib.sh"

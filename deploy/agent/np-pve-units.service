@@ -1,0 +1,8 @@
+[Unit]
+Description=NetProspect Proxmox — dump LXC/VMs para /run/np-pve-units.json (root, só-leitura)
+After=pve-cluster.service
+
+[Service]
+Type=oneshot
+# Só LÊ (pvesh get). Escreve atomicamente um ficheiro world-readable que o reporter não-root consome.
+ExecStart=/bin/sh -c '/usr/local/bin/np-pve-collect > /run/np-pve-units.json.tmp && mv /run/np-pve-units.json.tmp /run/np-pve-units.json && chmod 0644 /run/np-pve-units.json'

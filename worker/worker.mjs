@@ -27,6 +27,10 @@ import { initEgress, egressDispatcher } from '../lib/egress.js';
 import { makeClient } from '../lib/directus.js';
 import { startTelemetry, taskStart, taskEnd, logLine } from '../lib/worker-telemetry.js';
 import { classifyIndustryHeuristic, industryFromGmbCategory } from '../lib/audit/industry-heuristic.js';
+// summarizeForClassify é uma função PURA (parsing de HTML) — importada diretamente para o job
+// `industry` correr no role 'base' SEM precisar do contexto de audit (Ollama/Chromium). O Ollama
+// só é preciso com INDUSTRY_LLM=true (audit.ollama.classifyIndustry).
+import { summarizeForClassify } from '../lib/audit/ollama-classify.js';
 import os from 'os';
 
 const WORKER_ROLES = process.env.WORKER_ROLES || ''; // vazio=todos; ex.: base|browser|security|ai|verify
@@ -136,8 +140,8 @@ function makeHeavyFineHandlers(ctx, audit, js) {
         let html = snap?.html;
         if (!html) { const h = await fetchHomepage(site.final_url || `https://${site.domain}/`); html = h?.html; }
         if (!html) return 'ack';
-        const s = audit.ollama.summarizeForClassify(html, {});
-        cls = INDUSTRY_LLM ? await audit.ollama.classifyIndustry(s) : classifyIndustryHeuristic(s);
+        const s = summarizeForClassify(html, {});
+        cls = (INDUSTRY_LLM && audit) ? await audit.ollama.classifyIndustry(s) : classifyIndustryHeuristic(s);
       }
       if (cls.industry) await client.request(updateItem('sites', site.id, { industry: cls.industry, industry_confidence: cls.confidence }));
     } catch (e) { log(`industry ${site.domain}: ${e.message}`); }
@@ -459,7 +463,9 @@ async function writerLoop(js) {
 
 // Consumers "leves" (base) que correm sempre; os pesados (browser/security/ai)
 // só quando AUDIT_ENABLED (custam CPU/Chromium).
-const HEAVY = new Set(['industry', 'lighthouse_mobile', 'lighthouse_desktop', 'nuclei', 'wpscan', 'gmb', 'audit_ondemand', 'audit_qualified', 'audit_rest']);
+// industry saiu do HEAVY: passou a heurístico (CPU-light, sem Ollama/Chromium) → corre no role 'base'
+// sem AUDIT_ENABLED e sem contexto de audit (usa summarizeForClassify importado diretamente).
+const HEAVY = new Set(['lighthouse_mobile', 'lighthouse_desktop', 'nuclei', 'wpscan', 'gmb', 'audit_ondemand', 'audit_qualified', 'audit_rest']);
 const DRAIN = new Set(['audit_ondemand', 'audit_qualified', 'audit_rest']);
 // Concorrência por consumer (heavy = 1; leves = mais).
 // ---- Concorrência DINÂMICA por core: CONC[job] = cores × fator[job], com teto de RAM p/ os
@@ -530,7 +536,10 @@ async function main() {
 
   const coarse = makeHandlers(ctx, audit, js);
   const fine = makeFineHandlers(ctx, js);
-  const heavy = audit ? makeHeavyFineHandlers(ctx, audit, js) : {};
+  // Criado SEMPRE (mesmo com audit=null): o handler `industry` (heurístico) precisa de correr no
+  // role 'base' sem contexto de audit. Os handlers que usam audit (lighthouse/nuclei/gmb/wpscan) só
+  // são invocados em workers com esses roles → que têm AUDIT_ENABLED e portanto audit != null.
+  const heavy = makeHeavyFineHandlers(ctx, audit, js);
 
   // Registo: nome do consumer -> handler (job)->outcome.
   const REG = {

@@ -981,8 +981,8 @@ const CONSUMER_ROLES = {
   score: 'base', subdomains: 'base', ssl: 'base', whois: 'base', dnsprovider: 'base',
   campaign_generate: 'base', campaign_send: 'base',
   audit_ondemand: 'browser', audit_qualified: 'browser', audit_rest: 'browser',
-  industry: 'ai', lighthouse_desktop: 'browser', lighthouse_mobile: 'browser', gmb: 'browser',
-  nuclei: 'security', wpscan: 'security',
+  industry: 'base', lighthouse_desktop: 'browser', lighthouse_mobile: 'browser', gmb: 'residential',
+  nuclei: 'security', wpscan: 'security', ssllabs: 'base', fetch_residential: 'residential',
 };
 // Calcula, por tipo de job (consumer), a DURAÇÃO MÉDIA e a CAPACIDADE (usada/total/disponível) em
 // 3 janelas (1h/24h/30d). Fonte: contadores por-tipo no Redis (np:job:<c>:done:<h> horário 26h,

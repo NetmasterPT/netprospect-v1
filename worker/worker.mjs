@@ -159,6 +159,11 @@ function makeHeavyFineHandlers(ctx, audit, js) {
       const _full = await putReport(site.id, kind, audit.lh.leanLhr(r.lhr));
       await upsertReport(client, site.id, kind, { score: r.performance ?? r.seo_score, summary: audit.lh.lighthouseSummary(r), report: { ...audit.lh.trimLhr(r.lhr), _full } });
       await rescore({ domain: site.domain, siteId: site.id });
+      // FALHA PARCIAL: o Chrome às vezes devolve `performance` null (o trace de perf falhou) mesmo
+      // sem lançar — antes escrevíamos o parcial (só seo) e fazíamos ack, deixando perf_mobile/desktop
+      // null para sempre (o resume por seo_score nunca os re-tenta). Agora gravamos o que temos (SEO
+      // é útil) mas devolvemos 'retry' para re-tentar a perf; ao fim das tentativas, ack gracioso.
+      if (r.performance == null) { log(`lighthouse ${formFactor} ${site.domain}: performance null (parcial) → retry`); return 'retry'; }
     } catch (e) {
       // Chrome/Lighthouse é instável SOB CARGA no hel1 (aborta com "performance mark has not been
       // set" / "pageStacks is not iterable"). Antes fazíamos ack silencioso → o site ficava marcado

@@ -4,6 +4,12 @@ Lista do que estamos **à procura** ou a **testar** agora. O monitor de saúde (
 **prioridade** a qualquer erro relacionado com estes itens. Edita à vontade: adiciona uma hipótese
 quando estás a testar algo novo, marca `[resolvido]` quando fechares.
 
+> **FONTE DE LOGS (importante para o monitor):** a telemetria/logs da frota NÃO está no
+> `netprospect-redis-1` (hel1) — esse está sempre vazio. Os workers reportam para o **Redis do
+> np-server** (`redis://100.114.17.74:6379`, container `server-redis-1`). Para o sinal de logs de TODA
+> a frota, usa o endpoint do dashboard: `curl -s --max-time 15 http://100.114.17.74:3001/api/logs`
+> (host + linha de cada worker). `docker logs` dos containers hel1 = fallback secundário (só hel1).
+
 > Formato de cada item: `- [ ] <área> — o que observar / o que seria um problema`. Move para
 > **Conhecido/esperado** o que NÃO é bug (para o monitor não reportar ruído).
 

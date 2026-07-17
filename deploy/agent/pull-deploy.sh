@@ -23,6 +23,21 @@ DIRECTUS_PING_URL="${DIRECTUS_PING_URL:-}"; MINIO_HEALTH_URL="${MINIO_HEALTH_URL
 PG_HOST="${PG_HOST:-}"; PG_PORT="${PG_PORT:-5432}"; METRICS_ENABLED="${METRICS_ENABLED:-1}"
 changed=0
 
+# 0) LIMPEZA de projetos compose ÓRFÃOS — corre TODOS os ciclos. Se existirem containers de OUTRO projeto
+# compose com o serviço `worker` (ex.: o projeto `worker` de antes de COMPOSE_PROJECT ser definido), derruba
+# esse projeto. Sem isto, renomear o projeto (worker→npworker) deixa DOIS conjuntos de workers a correr em
+# paralelo → duplicados + overload (bug real: de1 saturou a 600% CPU com 2 workers a fazer lighthouse e caiu
+# da tailnet). Genérico: só toca em projetos ≠ COMPOSE_PROJECT que tenham o serviço `worker`.
+if [ -n "${COMPOSE_PROJECT:-}" ]; then
+  for proj in $(docker ps -a --filter 'label=com.docker.compose.service=worker' \
+      --format '{{.Label "com.docker.compose.project"}}' 2>/dev/null | sort -u); do
+    { [ -z "$proj" ] || [ "$proj" = "$COMPOSE_PROJECT" ]; } && continue
+    log "projeto compose órfão '$proj' (≠ $COMPOSE_PROJECT) com serviço worker → derrubar (evita duplicados)"
+    docker compose -p "$proj" down --remove-orphans >>"$LOG" 2>&1 \
+      || docker rm -f $(docker ps -aq --filter "label=com.docker.compose.project=$proj") >>"$LOG" 2>&1
+  done
+fi
+
 # 1) CÓDIGO — git fetch + fast-forward se atrasado. SKIP_GIT=1 salta (ex.: hel1, que é onde se
 # committa e tem sempre o working tree à frente → não faz sentido puxar).
 if [ "${SKIP_GIT:-0}" = 1 ]; then

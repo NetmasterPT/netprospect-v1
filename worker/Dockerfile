@@ -17,8 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # --- Node deps (inclui lighthouse/chrome-launcher/puppeteer-core) ---
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm cache clean --force
+COPY package.json ./
+RUN npm install --omit=dev && npm cache clean --force
 
 # --- WPScan (gem) — só usado on-demand ---
 RUN gem install wpscan --no-document

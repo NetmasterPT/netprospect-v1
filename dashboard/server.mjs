@@ -1996,6 +1996,78 @@ app.post('/api/fleet/metrics/:host', async (req, res) => {
   res.json({ ok: true, host, fields: Object.keys(h).length });
 });
 
+// --- Prometheus /metrics — expõe a telemetria da frota p/ o Prometheus da stack de observabilidade.
+// Fonte: Redis (rápido, sem NATS). Host (CPU/RAM/disco/rede/IO/latências) + unidades (docker/lxc/vm/
+// serviço/storage) + throughput por host + workers vivos. Ver docs/observability.md.
+const DC_OF = (h) => /^hel1|^np-(server|db)/.test(h || '') ? 'HEL1' : /^de|^np-wk-de/.test(h || '') ? 'DE1' : /laptop/.test(h || '') ? 'Laptop' : /oracle/.test(h || '') ? 'Oracle' : 'Outro';
+app.get('/metrics', async (req, res) => {
+  res.type('text/plain; version=0.0.4');
+  const out = [];
+  const seen = new Set();
+  const M = (name, help, type) => { if (!seen.has(name)) { out.push(`# HELP ${name} ${help}`); out.push(`# TYPE ${name} ${type}`); seen.add(name); } };
+  const esc = (v) => String(v).replace(/[\\"\n]/g, '_');
+  const g = (name, labels, val) => { if (val == null || val === '' || !isFinite(+val)) return; const l = Object.entries(labels).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}="${esc(v)}"`).join(','); out.push(`${name}{${l}} ${+val}`); };
+  try {
+    const r = await redisClient();
+    if (!r || !_redisUp) return res.send('# NetProspect: Redis offline\n');
+    const now = Date.now(); const curH = Math.floor(now / 3600000);
+    // Hosts = quem reporta métricas (infra) ∪ quem tem workers vivos.
+    const mh = await r.zRangeByScore('np:host:index', now - 900000, '+inf').catch(() => []);
+    const wkIds = await r.zRangeByScore('np:wk:index', now - 90000, '+inf').catch(() => []);
+    const wkHosts = {};
+    for (const id of wkIds) { const h = await r.hGetAll(`np:wk:${id}`).catch(() => ({})); if (h.host) wkHosts[h.host] = (wkHosts[h.host] || 0) + 1; }
+    const hosts = [...new Set([...mh, ...Object.keys(wkHosts)])];
+    M('np_up', 'Dashboard/telemetria online', 'gauge'); out.push('np_up 1');
+    M('np_workers_up', 'Workers vivos (heartbeat <90s)', 'gauge'); out.push(`np_workers_up ${wkIds.length}`);
+    M('np_host_cpu_percent', 'CPU do host (%)', 'gauge');
+    M('np_host_mem_used_bytes', 'RAM usada do host', 'gauge');
+    M('np_host_mem_total_bytes', 'RAM total do host', 'gauge');
+    M('np_host_disk_used_bytes', 'Disco / usado', 'gauge');
+    M('np_host_disk_total_bytes', 'Disco / total', 'gauge');
+    M('np_host_load1', 'Load average 1m', 'gauge');
+    M('np_host_cores', 'Núcleos (vCPU)', 'gauge');
+    M('np_host_net_rx_mbps', 'Rede recebida (MB/s)', 'gauge');
+    M('np_host_net_tx_mbps', 'Rede enviada (MB/s)', 'gauge');
+    M('np_host_io_read_mbps', 'Disco leitura (MB/s)', 'gauge');
+    M('np_host_io_write_mbps', 'Disco escrita (MB/s)', 'gauge');
+    M('np_host_latency_ms', 'Latência a um serviço (ms)', 'gauge');
+    M('np_host_uptime_seconds', 'Uptime do host (s)', 'gauge');
+    M('np_host_metrics_age_seconds', 'Idade do último snapshot de métricas (s)', 'gauge');
+    M('np_host_workers', 'Workers NP vivos neste host', 'gauge');
+    M('np_host_jobs_done_1h', 'Jobs concluídos na última hora (host)', 'gauge');
+    M('np_host_units', 'Unidades a correr no host, por tipo', 'gauge');
+    for (const host of hosts) {
+      const dc = DC_OF(host);
+      const m = await r.hGetAll(`np:host:${host}:metrics`).catch(() => ({}));
+      if (m && Object.keys(m).length) {
+        g('np_host_cpu_percent', { host, dc }, m.cpu);
+        if (m.mem_used) g('np_host_mem_used_bytes', { host, dc }, +m.mem_used * 1048576);
+        if (m.mem_total) g('np_host_mem_total_bytes', { host, dc }, +m.mem_total * 1048576);
+        if (m.disk_used) g('np_host_disk_used_bytes', { host, dc }, +m.disk_used * 1073741824);
+        if (m.disk_total) g('np_host_disk_total_bytes', { host, dc }, +m.disk_total * 1073741824);
+        g('np_host_load1', { host, dc }, m.load);
+        g('np_host_cores', { host, dc }, m.cores);
+        g('np_host_net_rx_mbps', { host, dc }, m.net_rx); g('np_host_net_tx_mbps', { host, dc }, m.net_tx);
+        g('np_host_io_read_mbps', { host, dc }, m.io_read); g('np_host_io_write_mbps', { host, dc }, m.io_write);
+        g('np_host_latency_ms', { host, dc, target: 'directus' }, m.lat_directus);
+        g('np_host_latency_ms', { host, dc, target: 'postgres' }, m.lat_pg);
+        g('np_host_latency_ms', { host, dc, target: 'minio' }, m.lat_minio);
+        g('np_host_uptime_seconds', { host, dc }, m.uptime);
+        if (m.reported) g('np_host_metrics_age_seconds', { host, dc }, Math.round((now - +m.reported) / 1000));
+      }
+      g('np_host_workers', { host, dc }, wkHosts[host] || 0);
+      const doneH = await r.get(`np:host:${host}:done:${curH}`).catch(() => null);
+      if (doneH != null) g('np_host_jobs_done_1h', { host, dc }, +doneH || 0);
+      try {
+        const cs = JSON.parse((await r.get(`np:host:${host}:containers`)) || '[]');
+        const byKind = {}; for (const c of cs) { const k = c.kind || 'container'; byKind[k] = (byKind[k] || 0) + 1; }
+        for (const k in byKind) g('np_host_units', { host, dc, kind: k }, byKind[k]);
+      } catch { /* */ }
+    }
+  } catch (e) { out.push(`# erro: ${String(e.message).replace(/\n/g, ' ')}`); }
+  res.send(out.join('\n') + '\n');
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => { ensureFleetDir(); console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`); });

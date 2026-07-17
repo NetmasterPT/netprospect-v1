@@ -1,0 +1,43 @@
+groups:
+  - name: netprospect
+    rules:
+      - alert: NetProspectDashboardDown
+        expr: up{job="netprospect"} == 0
+        for: 2m
+        labels: { severity: critical, service: netprospect }
+        annotations: { summary: "Dashboard NetProspect em baixo (scrape falha)" }
+      - alert: NetProspectNoWorkers
+        expr: np_workers_up == 0
+        for: 5m
+        labels: { severity: critical, service: netprospect }
+        annotations: { summary: "Nenhum worker NetProspect vivo" }
+      - alert: NetProspectHostMetricsStale
+        expr: np_host_metrics_age_seconds > 1200
+        for: 5m
+        labels: { severity: warning, service: netprospect }
+        annotations: { summary: "Host {{ $labels.host }} sem telemetria há >20min" }
+      - alert: NetProspectHostHighCPU
+        expr: np_host_cpu_percent > 90
+        for: 10m
+        labels: { severity: warning, service: netprospect }
+        annotations: { summary: "CPU alto em {{ $labels.host }} ({{ $value | printf \"%.0f\" }}%)" }
+      - alert: NetProspectHostHighMem
+        expr: 100 * np_host_mem_used_bytes / np_host_mem_total_bytes > 90
+        for: 10m
+        labels: { severity: warning, service: netprospect }
+        annotations: { summary: "RAM alta em {{ $labels.host }} ({{ $value | printf \"%.0f\" }}%)" }
+      - alert: NetProspectHostDiskFull
+        expr: 100 * np_host_disk_used_bytes / np_host_disk_total_bytes > 90
+        for: 15m
+        labels: { severity: warning, service: netprospect }
+        annotations: { summary: "Disco cheio em {{ $labels.host }} ({{ $value | printf \"%.0f\" }}%)" }
+      - alert: NetProspectHighDirectusLatency
+        expr: np_host_latency_ms{target="directus"} > 500
+        for: 10m
+        labels: { severity: warning, service: netprospect }
+        annotations: { summary: "Latência ao Directus alta em {{ $labels.host }} ({{ $value | printf \"%.0f\" }}ms)" }
+      - alert: NetProspectHostOverloaded
+        expr: np_host_load1 / np_host_cores > 4
+        for: 10m
+        labels: { severity: warning, service: netprospect }
+        annotations: { summary: "Load/core alto em {{ $labels.host }} ({{ $value | printf \"%.1f\" }}×)" }

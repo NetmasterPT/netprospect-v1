@@ -1,0 +1,42 @@
+{
+  "title": "NetProspect — Frota",
+  "uid": "netprospect-fleet",
+  "tags": ["netprospect"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "refresh": "30s",
+  "time": { "from": "now-6h", "to": "now" },
+  "templating": {
+    "list": [
+      { "name": "datasource", "type": "datasource", "query": "prometheus", "current": {}, "hide": 0 },
+      { "name": "host", "type": "query", "datasource": "${datasource}", "query": "label_values(np_host_cpu_percent, host)", "includeAll": true, "multi": true, "current": { "text": "All", "value": "$__all" } }
+    ]
+  },
+  "panels": [
+    { "type": "stat", "title": "Workers vivos", "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": "${datasource}", "targets": [{ "expr": "np_workers_up", "refId": "A" }],
+      "fieldConfig": { "defaults": { "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } } } },
+    { "type": "stat", "title": "Hosts a reportar", "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "datasource": "${datasource}", "targets": [{ "expr": "count(np_host_cpu_percent)", "refId": "A" }] },
+    { "type": "stat", "title": "Jobs/h (frota)", "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "datasource": "${datasource}", "targets": [{ "expr": "sum(np_host_jobs_done_1h)", "refId": "A" }] },
+    { "type": "stat", "title": "Unidades (total)", "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "datasource": "${datasource}", "targets": [{ "expr": "sum(np_host_units)", "refId": "A" }] },
+    { "type": "timeseries", "title": "CPU por host (%)", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "datasource": "${datasource}", "fieldConfig": { "defaults": { "unit": "percent", "max": 100 } },
+      "targets": [{ "expr": "np_host_cpu_percent{host=~\"$host\"}", "legendFormat": "{{host}}", "refId": "A" }] },
+    { "type": "timeseries", "title": "RAM usada por host (%)", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "datasource": "${datasource}", "fieldConfig": { "defaults": { "unit": "percent", "max": 100 } },
+      "targets": [{ "expr": "100 * np_host_mem_used_bytes{host=~\"$host\"} / np_host_mem_total_bytes{host=~\"$host\"}", "legendFormat": "{{host}}", "refId": "A" }] },
+    { "type": "timeseries", "title": "Disco / usado por host (%)", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
+      "datasource": "${datasource}", "fieldConfig": { "defaults": { "unit": "percent", "max": 100 } },
+      "targets": [{ "expr": "100 * np_host_disk_used_bytes{host=~\"$host\"} / np_host_disk_total_bytes{host=~\"$host\"}", "legendFormat": "{{host}}", "refId": "A" }] },
+    { "type": "timeseries", "title": "Latências (ms)", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "datasource": "${datasource}", "fieldConfig": { "defaults": { "unit": "ms" } },
+      "targets": [{ "expr": "np_host_latency_ms{host=~\"$host\"}", "legendFormat": "{{host}} → {{target}}", "refId": "A" }] },
+    { "type": "timeseries", "title": "Throughput por host (jobs/h)", "gridPos": { "h": 8, "w": 12, "x": 0, "y": 20 },
+      "datasource": "${datasource}", "targets": [{ "expr": "np_host_jobs_done_1h{host=~\"$host\"}", "legendFormat": "{{host}}", "refId": "A" }] },
+    { "type": "timeseries", "title": "Load / core por host", "gridPos": { "h": 8, "w": 12, "x": 12, "y": 20 },
+      "datasource": "${datasource}", "targets": [{ "expr": "np_host_load1{host=~\"$host\"} / np_host_cores{host=~\"$host\"}", "legendFormat": "{{host}}", "refId": "A" }] }
+  ]
+}

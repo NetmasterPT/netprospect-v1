@@ -1617,8 +1617,11 @@ async function viewServers() {
   const dynStats = (list) => { const d1 = list.reduce((a, v) => a + v.done1h, 0), f = list.reduce((a, v) => a + v.fail24h, 0); return `<div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(d1)}/h</div><div class="muted" style="font-size:10px">throughput</div></div><div><div class="tnum" style="font-size:16px;font-weight:800;color:${f ? 'var(--np-warn)' : ''}">${fmt(f)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div>`; };
   const dynCap = (list) => capBlock({ cap1h: sumCaps(list, 'cap1h'), cap24h: sumCaps(list, 'cap24h'), cap30d: sumCaps(list, 'cap30d') });
   const vmBtns = (list) => list.map((v) => `<button class="np-btn np-btn--sm" onclick="event.stopPropagation();openVm('${esc(v.host)}')" title="${v.infra ? 'infra · ' + ((v.cap && v.cap.containers) ? v.cap.containers.length : 0) + ' containers' : esc(v.roles.join('/')) + ' · ' + v.workers.length + ' workers'}">${vmBtnInner(v)}</button>`).join('');
+  // Host físico do DC = o nó Proxmox (nome termina em -pve). As suas métricas de SO SÃO as do servidor.
+  const pveOf = (list) => list.find((v) => /-pve$/.test(v.host || ''));
+  const pveMetrics = (list) => { const p = pveOf(list); return (p && p.cap) ? `<div class="muted" style="font-size:9px;margin-top:12px;text-transform:uppercase;letter-spacing:.04em">Servidor físico (Proxmox) · ${esc(p.host)}</div>${hostMetricsBlock(p.cap)}` : ''; };
   if (fleetPatchable('servers', sig)) {
-    for (const dc of dcNames) { const k = idsafe(dc); setHTML('sv_' + k + '_load', dynLoad(dcs[dc])); setHTML('sv_' + k + '_stats', dynStats(dcs[dc])); setHTML('sv_' + k + '_cap', dynCap(dcs[dc])); setHTML('sv_' + k + '_vms', vmBtns(dcs[dc])); }
+    for (const dc of dcNames) { const k = idsafe(dc); setHTML('sv_' + k + '_load', dynLoad(dcs[dc])); setHTML('sv_' + k + '_stats', dynStats(dcs[dc])); setHTML('sv_' + k + '_cap', dynCap(dcs[dc])); setHTML('sv_' + k + '_pve', pveMetrics(dcs[dc])); setHTML('sv_' + k + '_vms', vmBtns(dcs[dc])); }
     return;
   }
   const card = (dc) => { const list = dcs[dc]; const k = idsafe(dc); const workers = list.reduce((a, v) => a + v.workers.length, 0); return `<section class="np-card"><div class="np-card-b">
@@ -1626,6 +1629,7 @@ async function viewServers() {
     <div id="sv_${k}_load" style="margin-top:10px">${dynLoad(list)}</div>
     <div id="sv_${k}_stats" style="display:flex;gap:16px;margin-top:10px">${dynStats(list)}</div>
     <div id="sv_${k}_cap">${dynCap(list)}</div>
+    <div id="sv_${k}_pve">${pveMetrics(list)}</div>
     <div class="muted" style="font-size:9px;margin-top:12px;text-transform:uppercase;letter-spacing:.04em">VMs</div>
     <div id="sv_${k}_vms" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${vmBtns(list)}</div>
     <div onclick="openServer('${esc(dc)}')" style="cursor:pointer;text-align:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--np-border);font-size:11px;color:var(--np-brand-ink,#2563eb)">ver servidor ›</div>
@@ -1681,9 +1685,11 @@ window.openServer = async (dc) => {
       ${hostMetricsBlock(v.cap)}
       <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${inner}</div>
     </div>`; };
+  const pve = vms.find((v) => /-pve$/.test(v.host || ''));
   dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(dc)}</div><div class="muted" style="font-size:12px">${vms.length} VMs · ${workers} workers</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
     <div style="padding:16px 18px">
       ${loadBar(totLoad, totCores)}
+      ${pve && pve.cap ? `<div class="np-sec-t">Servidor físico (Proxmox) · <a href="#" onclick="openVm('${esc(pve.host)}');return false" style="color:var(--np-brand-ink,#2563eb)">${esc(pve.host)}</a></div>${hostMetricsBlock(pve.cap)}` : ''}
       <div class="np-sec-t">Capacidade agregada (usado / total · livre)</div>${capBlock(cap)}
       <div class="np-sec-t">VMs (${vms.length})</div>
       <div style="display:flex;flex-direction:column;gap:8px">${vms.map(vmRow).join('')}</div>

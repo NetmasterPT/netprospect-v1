@@ -1418,6 +1418,22 @@ function fleetPatchable(key, sig) {
 }
 // Junta a capacidade/telemetria por host (d.hosts do backend) aos objetos VM do groupByHost.
 const mergeHostCaps = (vms, hosts) => { for (const v of vms) v.cap = (hosts && hosts[v.host]) || null; return vms; };
+// TODAS as VMs = as que têm workers (groupByHost) + as de INFRA (só reportam métricas, ex.: np-db/minio).
+function allVms(d) {
+  const vms = mergeHostCaps(groupByHost(d.workers || []), d.hosts);
+  const seen = new Set(vms.map((v) => v.host));
+  for (const hn in (d.hosts || {})) {
+    if (seen.has(hn)) continue;
+    const H = d.hosts[hn];
+    vms.push({ host: hn, dc: DC_OF(hn), workers: [], roles: [], versions: [], conc: null, maxacks: null, replicas: 0,
+      load: H.load ?? null, cores: H.cores ?? null, done1h: 0, done24h: 0, fail24h: 0, cap: H, infra: true });
+  }
+  return vms;
+}
+// Chips dos containers Docker de um host (para as VMs de infra) — nome + ponto de estado (verde=running).
+const containerChips = (cs) => (cs && cs.length)
+  ? cs.map((c) => { const up = /running/i.test(c.state || '') || /^Up/i.test(c.status || ''); const col = up ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; return `<span class="np-chip" style="height:16px;font-size:9px" title="${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${esc(c.name)}</span>`; }).join(' ')
+  : '<span class="muted" style="font-size:10px">sem containers reportados</span>';
 // Soma capacidades (usado/total/livre) de uma janela por um conjunto de VMs (aditivo).
 function sumCaps(vms, win) {
   let used = 0, total = 0, any = false, anyTotal = false;
@@ -1468,25 +1484,29 @@ const vmBusy = (v) => v.workers.some((w) => w.cur);
 const vmBtnInner = (v) => `${esc(v.host)}${vmBusy(v) ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''} <span class="muted tnum" style="font-size:10px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : ''}</span>`;
 async function viewVms() {
   renderNav('vms');
-  const head = `<div class="np-head"><div><div class="np-eyebrow">Frota</div><h1 class="np-h1">VMs</h1><div class="np-sub">Máquinas com workers · capacidade 1h/24h/30d · telemetria de host · click → drawer · atualiza 10 s</div></div></div>`;
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Frota</div><h1 class="np-h1">VMs</h1><div class="np-sub">Máquinas com workers + infra (só telemetria) · capacidade · containers · click → drawer · atualiza 10 s</div></div></div>`;
   let d; try { d = await api('/api/workers'); } catch (e) { if (!REFRESHING) $('#view').innerHTML = head + errCard(e); return; }
-  if (!d.telemetry || !(d.workers || []).length) { if (!REFRESHING) $('#view').innerHTML = head + `<div class="np-empty">Nenhum worker a reportar.</div>`; return; }
-  const vms = mergeHostCaps(groupByHost(d.workers), d.hosts).sort((a, b) => a.host.localeCompare(b.host));
-  const sig = vms.map((v) => v.host + '#' + v.workers.length).join(',');
-  const statInner = (v) => `<span class="np-badge ${v.fail24h ? 'warn' : 'ok'}" style="height:20px">${fmt(v.done1h)}/h</span>`;
+  const vms = allVms(d).sort((a, b) => a.host.localeCompare(b.host));
+  if (!vms.length) { if (!REFRESHING) $('#view').innerHTML = head + `<div class="np-empty">Nenhuma VM a reportar (workers ou agente de métricas).</div>`; return; }
+  const sig = vms.map((v) => v.host + '#' + v.workers.length + (v.infra ? 'i' : '')).join(',');
+  const nCont = (v) => (v.cap && v.cap.containers) ? v.cap.containers.length : 0;
+  const statInner = (v) => v.infra ? `<span class="np-badge info" style="height:20px" title="máquina de infra — só reporta telemetria">infra</span>` : `<span class="np-badge ${v.fail24h ? 'warn' : 'ok'}" style="height:20px">${fmt(v.done1h)}/h</span>`;
   const wkBtns = (v) => v.workers.map((w) => `<button class="np-btn np-btn--sm" onclick="event.stopPropagation();openWorker('${esc(w.id)}')" title="${esc(w.role)}${w.cur ? ' · ' + esc(w.cur) : ''}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('');
+  const contInner = (v) => containerChips(v.cap && v.cap.containers);
   if (fleetPatchable('vms', sig)) {
-    for (const v of vms) { const k = idsafe(v.host); setHTML('vm_' + k + '_stat', statInner(v)); setHTML('vm_' + k + '_load', loadBar(v.load, v.cores)); setHTML('vm_' + k + '_cap', capBlock(v.cap)); setHTML('vm_' + k + '_met', hostMetricsBlock(v.cap)); setHTML('vm_' + k + '_wk', wkBtns(v)); }
+    for (const v of vms) { const k = idsafe(v.host); setHTML('vm_' + k + '_stat', statInner(v)); setHTML('vm_' + k + '_load', loadBar(v.load, v.cores)); setHTML('vm_' + k + '_cap', v.workers.length ? capBlock(v.cap) : ''); setHTML('vm_' + k + '_met', hostMetricsBlock(v.cap)); setHTML('vm_' + k + '_wk', wkBtns(v)); setHTML('vm_' + k + '_cont', contInner(v)); }
     return;
   }
-  const card = (v) => { const k = idsafe(v.host); return `<section class="np-card"><div class="np-card-b">
-    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="cursor:pointer;min-width:0" onclick="openVm('${esc(v.host)}')"><div style="font-weight:800;font-size:14px">${esc(v.host)} <span style="font-size:11px;color:var(--np-brand-ink,#2563eb)">›</span></div><div class="muted" style="font-size:11px">${esc(v.dc)} · ${v.workers.length} workers · ${esc(v.roles.join(', '))}</div></div>
+  const card = (v) => { const k = idsafe(v.host); const sub = v.infra ? `${nCont(v)} containers` : `${v.workers.length} workers · ${esc(v.roles.join(', '))}`;
+    const wkSec = v.workers.length ? `<div class="muted" style="font-size:9px;margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Workers</div><div id="vm_${k}_wk" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${wkBtns(v)}</div>` : '';
+    const contSec = (v.cap && v.cap.containers) ? `<div class="muted" style="font-size:9px;margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Containers</div><div id="vm_${k}_cont" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${contInner(v)}</div>` : '';
+    return `<section class="np-card"><div class="np-card-b">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="cursor:pointer;min-width:0" onclick="openVm('${esc(v.host)}')"><div style="font-weight:800;font-size:14px">${esc(v.host)} <span style="font-size:11px;color:var(--np-brand-ink,#2563eb)">›</span></div><div class="muted" style="font-size:11px">${esc(v.dc)} · ${sub}</div></div>
       <span id="vm_${k}_stat">${statInner(v)}</span></div>
     <div id="vm_${k}_load" style="margin-top:10px">${loadBar(v.load, v.cores)}</div>
-    <div id="vm_${k}_cap">${capBlock(v.cap)}</div>
+    <div id="vm_${k}_cap">${v.workers.length ? capBlock(v.cap) : ''}</div>
     <div id="vm_${k}_met">${hostMetricsBlock(v.cap)}</div>
-    <div class="muted" style="font-size:9px;margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Workers</div>
-    <div id="vm_${k}_wk" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${wkBtns(v)}</div>
+    ${wkSec}${contSec}
   </div></section>`; };
   $('#view').innerHTML = head + `<div id="fleet-vms" class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">${vms.map(card).join('')}</div>`;
 }
@@ -1494,16 +1514,16 @@ async function viewServers() {
   renderNav('servers');
   const head = `<div class="np-head"><div><div class="np-eyebrow">Frota</div><h1 class="np-h1">Servidores</h1><div class="np-sub">Datacenters → VMs → workers · capacidade 1h/24h/30d · click → drawer · atualiza 10 s</div></div></div>`;
   let d; try { d = await api('/api/workers'); } catch (e) { if (!REFRESHING) $('#view').innerHTML = head + errCard(e); return; }
-  const vms = mergeHostCaps(groupByHost(d.workers || []), d.hosts);
+  const vms = allVms(d);
   const dcs = {};
   for (const v of vms) (dcs[v.dc] = dcs[v.dc] || []).push(v);
   const dcNames = Object.keys(dcs).sort(); // ordenação estável por nome do DC
   for (const dc of dcNames) dcs[dc].sort((a, b) => a.host.localeCompare(b.host));
-  const sig = dcNames.map((dc) => dc + ':' + dcs[dc].map((v) => v.host + '#' + v.workers.length).join(',')).join('|');
+  const sig = dcNames.map((dc) => dc + ':' + dcs[dc].map((v) => v.host + '#' + v.workers.length + (v.infra ? 'i' : '')).join(',')).join('|');
   const dynLoad = (list) => loadBar(+list.reduce((a, v) => a + (v.load || 0), 0).toFixed(2), list.reduce((a, v) => a + (v.cores || 0), 0));
   const dynStats = (list) => { const d1 = list.reduce((a, v) => a + v.done1h, 0), f = list.reduce((a, v) => a + v.fail24h, 0); return `<div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(d1)}/h</div><div class="muted" style="font-size:10px">throughput</div></div><div><div class="tnum" style="font-size:16px;font-weight:800;color:${f ? 'var(--np-warn)' : ''}">${fmt(f)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div>`; };
   const dynCap = (list) => capBlock({ cap1h: sumCaps(list, 'cap1h'), cap24h: sumCaps(list, 'cap24h'), cap30d: sumCaps(list, 'cap30d') });
-  const vmBtns = (list) => list.map((v) => `<button class="np-btn np-btn--sm" onclick="event.stopPropagation();openVm('${esc(v.host)}')" title="${esc(v.roles.join('/'))} · ${v.workers.length} workers">${vmBtnInner(v)}</button>`).join('');
+  const vmBtns = (list) => list.map((v) => `<button class="np-btn np-btn--sm" onclick="event.stopPropagation();openVm('${esc(v.host)}')" title="${v.infra ? 'infra · ' + ((v.cap && v.cap.containers) ? v.cap.containers.length : 0) + ' containers' : esc(v.roles.join('/')) + ' · ' + v.workers.length + ' workers'}">${vmBtnInner(v)}</button>`).join('');
   if (fleetPatchable('servers', sig)) {
     for (const dc of dcNames) { const k = idsafe(dc); setHTML('sv_' + k + '_load', dynLoad(dcs[dc])); setHTML('sv_' + k + '_stats', dynStats(dcs[dc])); setHTML('sv_' + k + '_cap', dynCap(dcs[dc])); setHTML('sv_' + k + '_vms', vmBtns(dcs[dc])); }
     return;
@@ -1524,19 +1544,27 @@ window.openVm = async (host) => {
   const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
   dw.innerHTML = `<div class="np-empty">A carregar…</div>`;
   let d; try { d = await api('/api/workers'); } catch (e) { dw.innerHTML = `<div class="np-empty">Erro: ${esc(e.message)}</div>`; return; }
-  const v = mergeHostCaps(groupByHost(d.workers || []), d.hosts).find((x) => x.host === host);
-  if (!v) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">VM ${esc(host)} sem workers a reportar.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
-  const jobs = Object.keys(v.conc || {}).sort();
-  const cfg = jobs.length ? `<table style="width:100%;font-size:11px;margin-top:6px;border-collapse:collapse">${jobs.map((j) => `<tr><td style="padding:2px 4px">${esc(j)}</td><td class="tnum" style="text-align:right;padding:2px 6px">conc ${v.conc[j]}</td><td class="tnum" style="text-align:right;padding:2px 4px;color:var(--np-text-2)">maxack ${(v.maxacks || {})[j] ?? '—'}</td></tr>`).join('')}</table>` : '<span class="muted">—</span>';
-  const ver = v.versions.length <= 1 ? (v.versions[0] || '?') : '⚠ ' + v.versions.join(' / ');
-  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(v.host)}</div><div class="muted" style="font-size:12px">${esc(v.dc)} · ${v.workers.length} workers · ${esc(v.roles.join(', '))}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
-    <div style="padding:16px 18px">
-      ${loadBar(v.load, v.cores)}
-      <div class="np-sec-t">Capacidade (usado / total · livre)</div>${capBlock(v.cap)}
-      ${hostMetricsBlock(v.cap)}
+  const v = allVms(d).find((x) => x.host === host);
+  if (!v) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">VM ${esc(host)} sem dados a reportar.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
+  const cs = (v.cap && v.cap.containers) || [];
+  const contSec = `<div class="np-sec-t">Containers (${cs.length})</div><div style="display:flex;flex-wrap:wrap;gap:4px">${containerChips(cs)}</div>`;
+  let wkCfg = '';
+  if (v.workers.length) {
+    const jobs = Object.keys(v.conc || {}).sort();
+    const cfg = jobs.length ? `<table style="width:100%;font-size:11px;margin-top:6px;border-collapse:collapse">${jobs.map((j) => `<tr><td style="padding:2px 4px">${esc(j)}</td><td class="tnum" style="text-align:right;padding:2px 6px">conc ${v.conc[j]}</td><td class="tnum" style="text-align:right;padding:2px 4px;color:var(--np-text-2)">maxack ${(v.maxacks || {})[j] ?? '—'}</td></tr>`).join('')}</table>` : '<span class="muted">—</span>';
+    const ver = v.versions.length <= 1 ? (v.versions[0] || '?') : '⚠ ' + v.versions.join(' / ');
+    wkCfg = `<div class="np-sec-t">Capacidade (usado / total · livre)</div>${capBlock(v.cap)}
       <div class="np-sec-t">Workers (${v.workers.length})</div>
       <div style="display:flex;flex-wrap:wrap;gap:4px">${v.workers.map((w) => `<button class="np-btn np-btn--sm" onclick="openWorker('${esc(w.id)}')" title="${esc(w.role)}${w.cur ? ' · ' + esc(w.cur) : ''}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('')}</div>
-      <div class="np-sec-t">Config <span class="np-badge" style="height:15px;font-size:9px" title="versão do código dos workers">${esc(ver)}</span></div>${cfg}
+      <div class="np-sec-t">Config <span class="np-badge" style="height:15px;font-size:9px" title="versão do código dos workers">${esc(ver)}</span></div>${cfg}`;
+  }
+  const sub = v.infra ? `${esc(v.dc)} · infra · ${cs.length} containers` : `${esc(v.dc)} · ${v.workers.length} workers · ${esc(v.roles.join(', '))}`;
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(v.host)}</div><div class="muted" style="font-size:12px">${sub}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+    <div style="padding:16px 18px">
+      ${loadBar(v.load, v.cores)}
+      ${hostMetricsBlock(v.cap)}
+      ${contSec}
+      ${wkCfg}
       <div style="margin-top:12px"><button class="np-btn np-btn--sm" title="Editar o .env deste host (auto-deploy por pull)" onclick="editHostEnv('${esc(host)}')">⚙ Editar .env</button></div>
     </div>`;
 };
@@ -1545,21 +1573,26 @@ window.openServer = async (dc) => {
   const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
   dw.innerHTML = `<div class="np-empty">A carregar…</div>`;
   let d; try { d = await api('/api/workers'); } catch (e) { dw.innerHTML = `<div class="np-empty">Erro: ${esc(e.message)}</div>`; return; }
-  const vms = mergeHostCaps(groupByHost(d.workers || []), d.hosts).filter((v) => v.dc === dc).sort((a, b) => a.host.localeCompare(b.host));
+  const vms = allVms(d).filter((v) => v.dc === dc).sort((a, b) => a.host.localeCompare(b.host));
   if (!vms.length) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">${esc(dc)} sem VMs a reportar.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
   const workers = vms.reduce((a, v) => a + v.workers.length, 0);
   const totLoad = +vms.reduce((a, v) => a + (v.load || 0), 0).toFixed(2), totCores = vms.reduce((a, v) => a + (v.cores || 0), 0);
-  const cap = { cap1h: sumCaps(vms, 'cap1h'), cap24h: sumCaps(vms, 'cap24h'), cap30d: sumCaps(vms, 'cap30d') };
+  const withWk = vms.filter((v) => v.workers.length);
+  const cap = { cap1h: sumCaps(withWk, 'cap1h'), cap24h: sumCaps(withWk, 'cap24h'), cap30d: sumCaps(withWk, 'cap30d') };
+  const vmRow = (v) => { const inner = v.workers.length
+      ? v.workers.map((w) => `<button class="np-btn np-btn--sm" style="font-size:9px;padding:1px 6px" onclick="openWorker('${esc(w.id)}')" title="${esc(w.role)}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('')
+      : containerChips(v.cap && v.cap.containers);
+    return `<div style="border:1px solid var(--np-border);border-radius:8px;padding:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><button class="np-btn np-btn--sm" onclick="openVm('${esc(v.host)}')">${esc(v.host)} ›</button><span class="tnum muted" style="font-size:11px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : '—'}${v.infra ? ' · infra' : ' · ' + fmt(v.done1h) + '/h'}</span></div>
+      ${v.workers.length ? capBlock(v.cap) : ''}
+      <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${inner}</div>
+    </div>`; };
   dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(dc)}</div><div class="muted" style="font-size:12px">${vms.length} VMs · ${workers} workers</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
     <div style="padding:16px 18px">
       ${loadBar(totLoad, totCores)}
       <div class="np-sec-t">Capacidade agregada (usado / total · livre)</div>${capBlock(cap)}
       <div class="np-sec-t">VMs (${vms.length})</div>
-      <div style="display:flex;flex-direction:column;gap:8px">${vms.map((v) => `<div style="border:1px solid var(--np-border);border-radius:8px;padding:8px">
-        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><button class="np-btn np-btn--sm" onclick="openVm('${esc(v.host)}')">${esc(v.host)} ›</button><span class="tnum muted" style="font-size:11px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : '—'} · ${fmt(v.done1h)}/h</span></div>
-        ${capBlock(v.cap)}
-        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${v.workers.map((w) => `<button class="np-btn np-btn--sm" style="font-size:9px;padding:1px 6px" onclick="openWorker('${esc(w.id)}')" title="${esc(w.role)}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('')}</div>
-      </div>`).join('')}</div>
+      <div style="display:flex;flex-direction:column;gap:8px">${vms.map(vmRow).join('')}</div>
     </div>`;
 };
 // Editor do .env de um host (auto-deploy por pull). Grava no store central do np-server; o agente

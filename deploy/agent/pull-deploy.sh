@@ -67,6 +67,8 @@ else log "sem alterações"; fi
 #    Em LXC (ex.: hel1) o /proc é do host da máquina, não do contentor — igual ao load já reportado.
 net_bytes()     { awk 'NR>2 && $1!~/^lo:/ {gsub(/:/,"",$1); rx+=$2; tx+=$10} END{printf "%d %d", rx+0, tx+0}' /proc/net/dev 2>/dev/null; }
 disk_sectors()  { awk '$3 ~ /^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$/ {r+=$6; w+=$10} END{printf "%d %d", r+0, w+0}' /proc/diskstats 2>/dev/null; }
+# Lista os containers Docker deste host (JSON) → o dashboard mostra-os na página VMs como "workers" da VM.
+containers_json() { command -v docker >/dev/null 2>&1 || { printf '[]'; return; }; docker ps --format '{{.Names}}\t{{.State}}\t{{.Status}}' 2>/dev/null | awk -F'\t' 'BEGIN{printf "["}{if(NR>1)printf ",";gsub(/["\\]/,"",$1);gsub(/["\\]/,"",$2);gsub(/["\\]/,"",$3);printf "{\"name\":\"%s\",\"state\":\"%s\",\"status\":\"%s\"}",$1,$2,$3}END{printf "]"}'; }
 http_ms()       { [ -z "$1" ] && return 0; local t; t=$(curl -fsS --max-time 5 -o /dev/null -w '%{time_total}' "$1" 2>/dev/null) || return 0; awk "BEGIN{printf \"%.0f\", $t*1000}"; }
 tcp_ms()        { { [ -z "$1" ] || [ -z "$2" ]; } && return 0; local s e; s=$(date +%s%N); if timeout 5 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null; then e=$(date +%s%N); exec 3>&- 2>/dev/null; awk "BEGIN{printf \"%.0f\", ($e-$s)/1000000}"; fi; }
 collect_metrics() {
@@ -91,11 +93,12 @@ collect_metrics() {
   local load cores uptime
   load=$(awk '{print $1}' /proc/loadavg); cores=$(nproc 2>/dev/null || echo 0); uptime=$(awk '{printf "%d", $1}' /proc/uptime)
   # Latências (ms) — opcionais (vazias se o alvo não estiver configurado).
-  local lat_directus lat_pg lat_minio
+  local lat_directus lat_pg lat_minio containers
   lat_directus=$(http_ms "$DIRECTUS_PING_URL"); lat_minio=$(http_ms "$MINIO_HEALTH_URL"); lat_pg=$(tcp_ms "$PG_HOST" "$PG_PORT")
+  containers=$(containers_json)
   local body
-  body=$(printf '{"cpu":%s,"load":%s,"cores":%s,"mem_used":%s,"mem_total":%s,"disk_used":%s,"disk_total":%s,"io_read":%s,"io_write":%s,"net_rx":%s,"net_tx":%s,"uptime":%s%s%s%s}' \
-    "$cpu" "${load:-0}" "${cores:-0}" "$mem_used" "$mem_total" "$disk_used" "$disk_total" "$io_read" "$io_write" "$net_rx" "$net_tx" "$uptime" \
+  body=$(printf '{"cpu":%s,"load":%s,"cores":%s,"mem_used":%s,"mem_total":%s,"disk_used":%s,"disk_total":%s,"io_read":%s,"io_write":%s,"net_rx":%s,"net_tx":%s,"uptime":%s,"containers":%s%s%s%s}' \
+    "$cpu" "${load:-0}" "${cores:-0}" "$mem_used" "$mem_total" "$disk_used" "$disk_total" "$io_read" "$io_write" "$net_rx" "$net_tx" "$uptime" "$containers" \
     "${lat_directus:+,\"lat_directus\":$lat_directus}" "${lat_pg:+,\"lat_pg\":$lat_pg}" "${lat_minio:+,\"lat_minio\":$lat_minio}")
   if curl -fsS --max-time 15 -X POST ${FLEET_PULL_TOKEN:+-H "Authorization: Bearer $FLEET_PULL_TOKEN"} \
        -H "Content-Type: application/json" -d "$body" "$SERVER_URL/api/fleet/metrics/$FLEET_HOST" -o /dev/null 2>>"$LOG"; then

@@ -1065,6 +1065,9 @@ async function hostCapacity(rr, hosts) {
     H.cap24h = mk(used24, perH != null ? perH * 24 : null);
     H.cap30d = mk(used30, perH != null ? perH * 720 : null);
     try { const m = await rr.hGetAll(`np:host:${hn}:metrics`); H.metrics = (m && Object.keys(m).length) ? m : null; } catch { H.metrics = null; }
+    try { const cs = await rr.get(`np:host:${hn}:containers`); H.containers = cs ? JSON.parse(cs) : null; } catch { H.containers = null; }
+    // Hosts de infra (sem workers) não têm load/cores dos heartbeats → tira-os das métricas.
+    if (H.metrics) { if (H.cores == null && H.metrics.cores) H.cores = +H.metrics.cores; if (H.load == null && H.metrics.load) H.load = +H.metrics.load; }
   }
 }
 // /api/queues — estado da stream + profundidade por consumer (a antiga /api/workers).
@@ -1223,7 +1226,12 @@ app.get('/api/workers', async (req, res) => {
         if (w.load != null) hosts[hn].load = w.load;
       }
     }
-    await hostCapacity(r, hosts); // preenche cap1h/24h/30d + métricas por host
+    // Hosts que reportam MÉTRICAS mas não têm workers (infra: np-server/np-db/de-minio/de-analytics).
+    try {
+      const mh = await r.zRangeByScore('np:host:index', Date.now() - 900000, '+inf').catch(() => []); // ativos <15min
+      for (const hn of mh) if (!hosts[hn]) hosts[hn] = { host: hn, slots: 0, workers: [], cores: null, load: null, infra: true };
+    } catch { /* */ }
+    await hostCapacity(r, hosts); // preenche cap1h/24h/30d + métricas + containers por host
     workers.sort((a, b) => (b.beat || 0) - (a.beat || 0));
     res.json({ workers, hosts, telemetry: true });
   } catch (e) { res.status(502).json({ error: e.message }); }
@@ -1966,6 +1974,12 @@ app.post('/api/fleet/metrics/:host', async (req, res) => {
     await r.del(`np:host:${host}:metrics`); // limpa campos obsoletos antes de re-escrever
     await r.hSet(`np:host:${host}:metrics`, h);
     await r.expire(`np:host:${host}:metrics`, 900); // 15 min
+    await r.zAdd('np:host:index', { score: Date.now(), value: host }); // registo → hosts SEM workers (infra) aparecem na frota
+    // Containers Docker do host (docker ps) → mostrados na página VMs como "workers" da VM.
+    if (Array.isArray(body.containers)) {
+      const cs = body.containers.slice(0, 80).map((c) => ({ name: String(c && c.name || '').slice(0, 64), state: String(c && c.state || '').slice(0, 16), status: String(c && c.status || '').slice(0, 60) })).filter((c) => c.name);
+      await r.set(`np:host:${host}:containers`, JSON.stringify(cs), { EX: 900 });
+    }
   } catch (e) { return res.status(502).json({ error: e.message }); }
   res.json({ ok: true, host, fields: Object.keys(h).length });
 });

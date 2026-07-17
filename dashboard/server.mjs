@@ -979,7 +979,7 @@ const CONSUMER_ROLES = {
   enrich: 'base', contacts: 'base', verify: 'verify', discover: 'base', dns: 'base', geoip: 'base',
   fetch: 'base', fingerprint: 'base', social: 'base', locality: 'base', emailauth: 'base', traffic: 'base',
   score: 'base', subdomains: 'base', ssl: 'base', whois: 'base', dnsprovider: 'base',
-  campaign_generate: 'base', campaign_send: 'base',
+  campaign_generate: 'ai', campaign_send: 'base',
   audit_ondemand: 'browser', audit_qualified: 'browser', audit_rest: 'browser',
   industry: 'base', lighthouse_desktop: 'browser', lighthouse_mobile: 'browser', gmb: 'residential',
   nuclei: 'security', wpscan: 'security', ssllabs: 'base', fetch_residential: 'residential',

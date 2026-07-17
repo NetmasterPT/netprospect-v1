@@ -133,10 +133,15 @@ services:
     restart: unless-stopped
     environment:
       COLLECTOR_OTLP_ENABLED: 'true'
+      # Limita o store em memória (all-in-one) — os workers geram muitos traces mesmo com amostragem.
+      MEMORY_MAX_TRACES: '50000'
     ports:
       - '${LAN_IP}:16686:16686'       # UI
       - '${TAILNET_IP}:16686:16686'
       - '127.0.0.1:16686:16686'
+      # OTLP HTTP na tailnet → os workers remotos (de1/oracle) exportam traces para cá.
+      - '${TAILNET_IP}:4318:4318'
+      - '127.0.0.1:4318:4318'
 
   # Adminer — gestão manual da base de dados (liga ao PostgreSQL do np-db). Login com as credenciais PG.
   adminer:

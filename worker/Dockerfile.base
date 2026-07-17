@@ -22,4 +22,4 @@ COPY config ./config
 ENV NODE_ENV=production \
     WORKER_ROLES=base
 # GeoIP/Tranco por bind-mount (ro) em /app/data/{geoip,tranco}.
-CMD ["node", "worker/worker.mjs"]
+CMD ["node", "--import", "./worker/tracing.mjs", "worker/worker.mjs"]

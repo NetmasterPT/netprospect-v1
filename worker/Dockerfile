@@ -40,4 +40,4 @@ ENV NODE_ENV=production \
     CHROME_PATH=/usr/bin/chromium \
     NUCLEI_BIN=nuclei
 # GeoIP + Tranco vêm por bind-mount (ro): /app/data/{geoip,tranco}.
-CMD ["node", "worker/worker.mjs"]
+CMD ["node", "--import", "./worker/tracing.mjs", "worker/worker.mjs"]

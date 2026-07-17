@@ -42,6 +42,9 @@
     "socks": "^2.8.9",
     "tldts": "^7.4.7",
     "undici": "^8.7.0",
-    "whoiser": "^2.0.0-beta.10"
+    "whoiser": "^2.0.0-beta.10",
+    "@opentelemetry/sdk-node": "^0.54.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.52.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.54.0"
   }
 }

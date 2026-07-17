@@ -1436,16 +1436,17 @@ const pairOf = (s) => { const p = String(s || '').split('/'); return [parseSize(
 // Decode UTF-8 de base64 (logs dos containers).
 function b64utf8(b64) { try { const bin = atob(b64 || ''); const bytes = Uint8Array.from(bin, (ch) => ch.charCodeAt(0)); return new TextDecoder().decode(bytes); } catch { return ''; } }
 // Unidade (container/serviço) está "a correr"? container: running/Up · serviço: active/running.
-const unitUp = (c) => /running|^active|healthy|^Up/i.test(c && c.state || '') || /running|healthy|^Up/i.test(c && c.status || '');
+const unitUp = (c) => /running|^active|healthy|online|^Up/i.test(c && c.state || '') || /running|healthy|online|^Up/i.test(c && c.status || '');
 const cpuSecFmt = (s) => { const n = +s; return n >= 3600 ? (n / 3600).toFixed(1) + ' h' : n >= 60 ? (n / 60).toFixed(0) + ' min' : n + ' s'; };
-const kindLabel = (k) => k === 'service' ? 'serviço systemd' : k === 'lxc' ? 'container LXC' : k === 'vm' ? 'VM (Proxmox)' : 'container Docker';
+const kindLabel = (k) => ({ service: 'serviço systemd', lxc: 'container LXC', vm: 'VM (Proxmox)', storage: 'storage (Proxmox)', zfs: 'pool ZFS', datastore: 'datastore (PBS)' }[k] || 'container Docker');
 // Bloco de recursos de uma unidade. container(docker) → CPU%/RAM/rede/IO; serviço → RAM+CPU acumulado (cgroup);
 // lxc/vm → RAM + CPU% (pvesh).
 function containerStatsBlock(c) {
   if (!c) return '';
   if (c.kind && c.kind !== 'container') {
     const mb = c.memb ? +c.memb : null; const bars = [];
-    if (mb) bars.push(`<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;font-size:10px"><span class="muted">RAM</span><span class="tnum">${fmtBytes(mb)}</span></div></div>`);
+    const memLabel = (c.kind === 'storage' || c.kind === 'zfs' || c.kind === 'datastore') ? 'Uso' : 'RAM';
+    if (mb) bars.push(`<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;font-size:10px"><span class="muted">${memLabel}</span><span class="tnum">${fmtBytes(mb)}</span></div></div>`);
     const chips = []; const cpuPct = c.cpu ? parseFloat(c.cpu) : null;
     if (cpuPct != null && !isNaN(cpuPct)) chips.push(`<span class="np-chip" style="font-size:10px" title="CPU instantâneo (pvesh)">CPU ${esc(c.cpu)}</span>`);
     else if (c.cpuSec) chips.push(`<span class="np-chip" style="font-size:10px" title="tempo de CPU acumulado (cgroup)">CPU ${cpuSecFmt(c.cpuSec)} total</span>`);
@@ -1469,7 +1470,7 @@ const containerMini = (c) => { if (!c) return ''; const cpu = c.cpu ? parseFloat
 const contForWorker = (hosts, w) => { const cs = ((hosts || {})[w.host] || {}).containers || []; return cs.find((c) => c.id && (c.id === w.id || w.id.startsWith(c.id) || c.id.startsWith(w.id))) || null; };
 // Botões das unidades (container/serviço/lxc/vm) de um host — nome + ponto de estado; não-container = tracejado.
 const containerChips = (host, cs) => (cs && cs.length)
-  ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = c.kind === 'lxc' ? 'LXC·' : c.kind === 'vm' ? 'VM·' : ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}</button>`; }).join(' ')
+  ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = { lxc: 'LXC·', vm: 'VM·', storage: 'disco·', zfs: 'zfs·', datastore: 'ds·' }[c.kind] || ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}</button>`; }).join(' ')
   : '<span class="muted" style="font-size:10px">sem unidades reportadas</span>';
 // Drawer de um container (mostra-o "como um worker": host, imagem, estado, uptime, portas).
 window.openContainer = async (host, name) => {

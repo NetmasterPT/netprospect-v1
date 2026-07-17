@@ -1,0 +1,10 @@
+[Unit]
+Description=NetProspect Proxmox metrics reporter — reporta a cada 5 min
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

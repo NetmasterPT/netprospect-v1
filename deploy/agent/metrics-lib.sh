@@ -94,6 +94,8 @@ collect_and_post() {
   local lat_directus lat_pg lat_minio units
   lat_directus=$(http_ms "${DIRECTUS_PING_URL:-}"); lat_minio=$(http_ms "${MINIO_HEALTH_URL:-}"); lat_pg=$(tcp_ms "${PG_HOST:-}" "${PG_PORT:-5432}")
   units=$(merge_json_arrays "$(containers_json)" "$(services_json)")
+  # Hook opcional: se o reporter definir extra_units_json (ex.: Proxmox → LXC/VMs), junta-se aqui.
+  if declare -F extra_units_json >/dev/null 2>&1; then units=$(merge_json_arrays "$units" "$(extra_units_json)"); fi
   local body
   body=$(printf '{"cpu":%s,"load":%s,"cores":%s,"mem_used":%s,"mem_total":%s,"disk_used":%s,"disk_total":%s,"io_read":%s,"io_write":%s,"net_rx":%s,"net_tx":%s,"uptime":%s,"containers":%s%s%s%s}' \
     "$cpu" "${load:-0}" "${cores:-0}" "$mem_used" "$mem_total" "$disk_used" "$disk_total" "$io_read" "$io_write" "$net_rx" "$net_tx" "$uptime" "$units" \

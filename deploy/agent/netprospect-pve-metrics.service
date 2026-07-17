@@ -1,0 +1,11 @@
+[Unit]
+Description=NetProspect Proxmox metrics reporter (host + serviços + LXC/VMs → dashboard)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=npmetrics
+Group=npmetrics
+# Path do reporter neste host (ex.: /opt/np/proxmox-report.sh). Config em /etc/netprospect-metrics.env.
+ExecStart=/opt/np/proxmox-report.sh

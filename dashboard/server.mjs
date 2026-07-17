@@ -1711,7 +1711,10 @@ SELECT
   count(*) FILTER (WHERE s.security_findings IS NOT NULL)::int AS nuclei,
   count(*) FILTER (WHERE s.wp_vuln_count IS NOT NULL)::int AS wpscan,
   count(*) FILTER (WHERE s.gmb_checked_at IS NOT NULL)::int AS gmb
-FROM sites s GROUP BY bucket`;
+-- Denominador = leads QUALIFICADOS e VIVOS. Sites mortos (is_live=false) ou desqualificados não podem
+-- completar os jobs (tal como os não-WP não podem ter wpscan → wp_total), logo não contam para a % de
+-- cobertura. is_live é refrescado pelo fetch; um site que volte a responder reentra automaticamente.
+FROM sites s WHERE s.qualified AND s.is_live GROUP BY bucket`;
 app.get('/api/coverage', async (req, res) => {
   try {
     const data = await cached('np:coverage:v1', async () => {
@@ -1762,7 +1765,8 @@ SELECT
   count(*) FILTER (WHERE security_findings IS NOT NULL AND security_findings::text NOT IN ('null','[]','{}'))::int AS security,
   count(*) FILTER (WHERE wp_vuln_count IS NOT NULL)::int AS wpscan,
   count(*) FILTER (WHERE domain_expiry IS NOT NULL)::int AS whois
-FROM sites GROUP BY bucket`;
+-- Mesmo denominador da cobertura de jobs: só leads qualificados e vivos (ver COVERAGE_SQL).
+FROM sites WHERE qualified AND is_live GROUP BY bucket`;
 app.get('/api/data-coverage', async (req, res) => {
   try {
     const data = await cached('np:datacoverage:v1', async () => {

@@ -67,8 +67,26 @@ else log "sem alterações"; fi
 #    Em LXC (ex.: hel1) o /proc é do host da máquina, não do contentor — igual ao load já reportado.
 net_bytes()     { awk 'NR>2 && $1!~/^lo:/ {gsub(/:/,"",$1); rx+=$2; tx+=$10} END{printf "%d %d", rx+0, tx+0}' /proc/net/dev 2>/dev/null; }
 disk_sectors()  { awk '$3 ~ /^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$/ {r+=$6; w+=$10} END{printf "%d %d", r+0, w+0}' /proc/diskstats 2>/dev/null; }
-# Lista os containers Docker deste host (JSON) → o dashboard mostra-os na página VMs como "workers" da VM.
-containers_json() { command -v docker >/dev/null 2>&1 || { printf '[]'; return; }; docker ps --format '{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}' 2>/dev/null | awk -F'\t' 'BEGIN{printf "["}{if(NR>1)printf ",";for(i=1;i<=5;i++)gsub(/["\\]/,"",$i);printf "{\"name\":\"%s\",\"state\":\"%s\",\"status\":\"%s\",\"image\":\"%s\",\"ports\":\"%s\"}",$1,$2,$3,$4,$5}END{printf "]"}'; }
+# Containers Docker deste host (JSON) → o dashboard mostra-os na página VMs/Workers, navegáveis.
+# Inclui id (= HOSTNAME do container = id do worker, p/ cruzar), stats de recurso (docker stats:
+# CPU/RAM/rede/blkIO) e um tail dos logs em BASE64 (evita escaping de conteúdo arbitrário em JSON).
+esc_json() { printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'; }
+containers_json() {
+  command -v docker >/dev/null 2>&1 || { printf '[]'; return; }
+  declare -A ST
+  while IFS=$'\t' read -r cid cpu mem net blk; do ST["$cid"]="$cpu|$mem|$net|$blk"; done < <(docker stats --no-stream --format '{{.ID}}\t{{.CPUPerc}}\t{{.MemUsage}}\t{{.NetIO}}\t{{.BlockIO}}' 2>/dev/null)
+  local first=1 cid name state status image ports s cpu mem net blk logb64
+  printf '['
+  while IFS=$'\t' read -r cid name state status image ports; do
+    s="${ST[$cid]:-|||}"; IFS='|' read -r cpu mem net blk <<< "$s"
+    logb64=$(docker logs --tail 14 "$cid" 2>&1 | tail -c 4000 | base64 -w0 2>/dev/null)
+    [ "$first" = 1 ] && first=0 || printf ','
+    printf '{"id":"%s","name":"%s","state":"%s","status":"%s","image":"%s","ports":"%s","cpu":"%s","mem":"%s","net":"%s","blk":"%s","logb64":"%s"}' \
+      "$(esc_json "$cid")" "$(esc_json "$name")" "$(esc_json "$state")" "$(esc_json "$status")" "$(esc_json "$image")" "$(esc_json "$ports")" \
+      "$(esc_json "$cpu")" "$(esc_json "$mem")" "$(esc_json "$net")" "$(esc_json "$blk")" "$logb64"
+  done < <(docker ps --format '{{.ID}}\t{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}' 2>/dev/null)
+  printf ']'
+}
 http_ms()       { [ -z "$1" ] && return 0; local t; t=$(curl -fsS --max-time 5 -o /dev/null -w '%{time_total}' "$1" 2>/dev/null) || return 0; awk "BEGIN{printf \"%.0f\", $t*1000}"; }
 tcp_ms()        { { [ -z "$1" ] || [ -z "$2" ]; } && return 0; local s e; s=$(date +%s%N); if timeout 5 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null; then e=$(date +%s%N); exec 3>&- 2>/dev/null; awk "BEGIN{printf \"%.0f\", ($e-$s)/1000000}"; fi; }
 collect_metrics() {

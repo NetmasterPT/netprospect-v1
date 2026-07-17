@@ -273,7 +273,7 @@ async function captureServerEvent(req, event, distinctId, properties = {}) {
 }
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '4mb' })); // 4mb: as métricas de host trazem stats + tail de logs por container
 app.use('/vendor', express.static(path.join(__dirname, 'node_modules')));
 app.get('/api/posthog-config', (req, res) => {
   res.json({
@@ -1245,8 +1245,15 @@ app.get('/api/workers/:id', async (req, res) => {
     const logs = await r.lRange(`np:wk:${req.params.id}:log`, 0, 120).catch(() => []);
     const durs = (await r.lRange(`np:wk:${req.params.id}:dur`, 0, -1).catch(() => [])).map(Number).filter(Number.isFinite);
     let conc = null; try { conc = h.conc ? JSON.parse(h.conc) : null; } catch { /* */ }
+    // Stats do container deste worker (docker stats/logs, reportados pelo agente do host). O id do worker
+    // (HOSTNAME) = id do container do docker ps → cruza-se por id.
+    let container = null;
+    try {
+      const cs = h.host ? JSON.parse((await r.get(`np:host:${h.host}:containers`)) || '[]') : [];
+      container = cs.find((c) => c.id && (c.id === req.params.id || req.params.id.startsWith(c.id) || c.id.startsWith(req.params.id))) || null;
+    } catch { /* */ }
     res.json({ id: h.id, role: h.role || '?', host: h.host || '', pid: h.pid || '', consumers: (h.consumers || '').split(',').filter(Boolean),
-      started: +h.started || null, beat: +h.beat || null, cur: h.cur || null, curStarted: +h.cur_started || null, conc,
+      started: +h.started || null, beat: +h.beat || null, cur: h.cur || null, curStarted: +h.cur_started || null, conc, container,
       avgMs: durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null, ...(await workerCounts(r, req.params.id)), logs });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
@@ -1977,7 +1984,8 @@ app.post('/api/fleet/metrics/:host', async (req, res) => {
     await r.zAdd('np:host:index', { score: Date.now(), value: host }); // registo → hosts SEM workers (infra) aparecem na frota
     // Containers Docker do host (docker ps) → mostrados na página VMs como "workers" da VM.
     if (Array.isArray(body.containers)) {
-      const cs = body.containers.slice(0, 80).map((c) => ({ name: String(c && c.name || '').slice(0, 64), state: String(c && c.state || '').slice(0, 16), status: String(c && c.status || '').slice(0, 60), image: String(c && c.image || '').slice(0, 90), ports: String(c && c.ports || '').slice(0, 140) })).filter((c) => c.name);
+      const S = (v, n) => String(v == null ? '' : v).slice(0, n);
+      const cs = body.containers.slice(0, 80).map((c) => ({ id: S(c && c.id, 16), name: S(c && c.name, 64), state: S(c && c.state, 16), status: S(c && c.status, 60), image: S(c && c.image, 90), ports: S(c && c.ports, 160), cpu: S(c && c.cpu, 12), mem: S(c && c.mem, 40), net: S(c && c.net, 40), blk: S(c && c.blk, 40), logb64: S(c && c.logb64, 8000) })).filter((c) => c.name);
       await r.set(`np:host:${host}:containers`, JSON.stringify(cs), { EX: 900 });
     }
   } catch (e) { return res.status(502).json({ error: e.message }); }

@@ -62,6 +62,11 @@ const AUDIT_CONC = Math.max(1, parseInt(process.env.AUDIT_CONC || '1', 10));
 //                timeout → redelivery infinita. TEM de ficar baixo.
 const NUCLEI_JOB_CONC = Math.max(1, parseInt(process.env.NUCLEI_JOB_CONC || '6', 10));
 const LIGHTHOUSE_CONC = Math.max(1, parseInt(process.env.LIGHTHOUSE_CONC || '2', 10));
+// Retry para handlers que devolvem 'retry' (ex.: lighthouse instável): re-tenta até este nº de
+// entregas (alinhado com maxDeliver=3 do lighthouse) e depois ack gracioso; backoff dá tempo à
+// carga baixar antes da re-tentativa.
+const RETRY_MAX_DELIVERIES = Math.max(1, parseInt(process.env.RETRY_MAX_DELIVERIES || '3', 10));
+const RETRY_BACKOFF_MS = Math.max(1000, parseInt(process.env.RETRY_BACKOFF_MS || '45000', 10));
 const INDUSTRY_CONC = Math.max(1, parseInt(process.env.INDUSTRY_CONC || '1', 10));
 // GMB corre no portátil (IP residencial); conc baixa por defeito p/ não afogar o daily-driver.
 const GMB_CONC = Math.max(1, parseInt(process.env.GMB_CONC || '2', 10));
@@ -154,7 +159,15 @@ function makeHeavyFineHandlers(ctx, audit, js) {
       const _full = await putReport(site.id, kind, audit.lh.leanLhr(r.lhr));
       await upsertReport(client, site.id, kind, { score: r.performance ?? r.seo_score, summary: audit.lh.lighthouseSummary(r), report: { ...audit.lh.trimLhr(r.lhr), _full } });
       await rescore({ domain: site.domain, siteId: site.id });
-    } catch (e) { log(`lighthouse ${formFactor} ${site.domain}: ${e.message}`); }
+    } catch (e) {
+      // Chrome/Lighthouse é instável SOB CARGA no hel1 (aborta com "performance mark has not been
+      // set" / "pageStacks is not iterable"). Antes fazíamos ack silencioso → o site ficava marcado
+      // como auditado SEM score e nunca era re-tentado (cobertura "0 pendentes" oca). Agora devolve
+      // 'retry' → o consumeLoop faz nak com backoff (re-tenta quando a carga baixa); ao fim das
+      // tentativas faz ack gracioso (sem órfão, sem score — cobertura honesta).
+      log(`lighthouse ${formFactor} ${site.domain}: ${e.message}`);
+      return 'retry';
+    }
     return 'ack';
   }
   async function nuclei(job) {
@@ -359,6 +372,15 @@ async function consumeLoop(js, durable, concurrency, fn) {
       try {
         const outcome = await fn(job);
         if (outcome === 'term') { m.term(); taskEnd(durable, started, false); return; }
+        // 'retry' (opt-in do handler, ex.: lighthouse instável): re-tenta com backoff enquanto houver
+        // tentativas; na ÚLTIMA faz ack gracioso (não deixa órfão no workqueue) — sem dados escritos,
+        // por isso a cobertura fica honesta (o site aparece como sem-score, não como "feito").
+        if (outcome === 'retry') {
+          const dc = m.info?.deliveryCount || 1; // 1-based; NATS maxDeliver do lighthouse = 3
+          if (dc < RETRY_MAX_DELIVERIES) { m.nak(RETRY_BACKOFF_MS); taskEnd(durable, started, false); log(`↻ ${durable} ${job?.domain}: retry ${dc}/${RETRY_MAX_DELIVERIES}`); logLine(`↻ ${durable} ${label}: retry ${dc}/${RETRY_MAX_DELIVERIES}`); }
+          else { m.ack(); taskEnd(durable, started, false); log(`✗ ${durable} ${job?.domain}: desisto após ${dc} tentativas (sem dados)`); logLine(`✗ ${durable} ${label}: desisto após ${dc}`); }
+          return;
+        }
         m.ack(); taskEnd(durable, started, true); logLine(`✓ ${durable} ${label} (${Date.now() - started}ms)`);
       } catch (e) {
         const msg = e?.errors ? JSON.stringify(e.errors) : (e?.message || String(e));

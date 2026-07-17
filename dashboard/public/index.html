@@ -1573,6 +1573,25 @@ function hostMetricsBlock(H) {
   const lats = [latChip('Directus', m.lat_directus), latChip('PG', m.lat_pg), latChip('NAS', m.lat_minio)].join('');
   return `<div style="margin-top:8px;border-top:1px dashed var(--np-border);padding-top:8px"><div class="muted" style="font-size:9px;text-transform:uppercase;letter-spacing:.04em">Telemetria de host · ${age}</div>${bars}<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${chips.join('')}${lats}</div></div>`;
 }
+// Resumo de storage do nó Proxmox (pools ZFS + nº de storages + total de snapshots) — chips para o
+// card/drawer do Servidor. Fonte: as unidades kind=zfs/storage + a contagem de snapshots no status.
+function pveStorageChips(H) {
+  const cs = (H && H.containers) || [];
+  const zfs = cs.filter((c) => c.kind === 'zfs'), stor = cs.filter((c) => c.kind === 'storage');
+  const snaps = cs.reduce((a, c) => { const m = /(\d+) snap/.exec(c.status || ''); return a + (m ? +m[1] : 0); }, 0);
+  const chips = [];
+  for (const z of zfs) { const up = /online/i.test(z.state || ''); const pct = (/\(([^)]+)\)/.exec(z.status || '') || [, ''])[1]; chips.push(`<span class="np-chip" style="font-size:10px" title="pool ZFS ${esc(z.status || '')}">ZFS ${esc(z.name)} <b style="color:${up ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'}">${up ? esc(z.state) : '⚠ ' + esc(z.state)}</b> ${esc(pct)}</span>`); }
+  if (stor.length) chips.push(`<span class="np-chip" style="font-size:10px" title="storages Proxmox">${stor.length} storages</span>`);
+  if (snaps) chips.push(`<span class="np-chip" style="font-size:10px" title="snapshots de VMs/CTs">${snaps} snapshots</span>`);
+  return chips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${chips.join('')}</div>` : '';
+}
+// Matriz de latência: chips ordenados (nó → ms), cor por limiar. Do host para os outros nós da frota.
+function latMatrixBlock(H) {
+  const lm = H && H.latmatrix; if (!lm || !Object.keys(lm).length) return '';
+  const entries = Object.entries(lm).sort((a, b) => a[1] - b[1]);
+  const chips = entries.map(([host, ms]) => { const col = ms < 20 ? 'var(--np-ok-mark)' : ms < 80 ? 'var(--np-warn,#d97706)' : 'var(--np-bad,#dc2626)'; return `<span class="np-chip" style="font-size:10px" title="latência (ping) para ${esc(host)}">${esc(host)} <b style="color:${col}">${ms}ms</b></span>`; }).join('');
+  return `<div class="np-sec-t">Latência para outros nós (${entries.length})</div><div style="display:flex;gap:4px;flex-wrap:wrap;max-height:220px;overflow:auto">${chips}</div>`;
+}
 const vmBusy = (v) => v.workers.some((w) => w.cur);
 const vmBtnInner = (v) => `${esc(v.host)}${vmBusy(v) ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''} <span class="muted tnum" style="font-size:10px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : ''}</span>`;
 async function viewVms() {
@@ -1619,7 +1638,7 @@ async function viewServers() {
   const vmBtns = (list) => list.map((v) => `<button class="np-btn np-btn--sm" onclick="event.stopPropagation();openVm('${esc(v.host)}')" title="${v.infra ? 'infra · ' + ((v.cap && v.cap.containers) ? v.cap.containers.length : 0) + ' containers' : esc(v.roles.join('/')) + ' · ' + v.workers.length + ' workers'}">${vmBtnInner(v)}</button>`).join('');
   // Host físico do DC = o nó Proxmox (nome termina em -pve). As suas métricas de SO SÃO as do servidor.
   const pveOf = (list) => list.find((v) => /-pve$/.test(v.host || ''));
-  const pveMetrics = (list) => { const p = pveOf(list); return (p && p.cap) ? `<div class="muted" style="font-size:9px;margin-top:12px;text-transform:uppercase;letter-spacing:.04em">Servidor físico (Proxmox) · ${esc(p.host)}</div>${hostMetricsBlock(p.cap)}` : ''; };
+  const pveMetrics = (list) => { const p = pveOf(list); return (p && p.cap) ? `<div class="muted" style="font-size:9px;margin-top:12px;text-transform:uppercase;letter-spacing:.04em">Servidor físico (Proxmox) · ${esc(p.host)}</div>${hostMetricsBlock(p.cap)}${pveStorageChips(p.cap)}` : ''; };
   if (fleetPatchable('servers', sig)) {
     for (const dc of dcNames) { const k = idsafe(dc); setHTML('sv_' + k + '_load', dynLoad(dcs[dc])); setHTML('sv_' + k + '_stats', dynStats(dcs[dc])); setHTML('sv_' + k + '_cap', dynCap(dcs[dc])); setHTML('sv_' + k + '_pve', pveMetrics(dcs[dc])); setHTML('sv_' + k + '_vms', vmBtns(dcs[dc])); }
     return;
@@ -1660,6 +1679,8 @@ window.openVm = async (host) => {
     <div style="padding:16px 18px">
       ${loadBar(v.load, v.cores)}
       ${hostMetricsBlock(v.cap)}
+      ${/-pve$/.test(v.host || '') ? pveStorageChips(v.cap) : ''}
+      ${latMatrixBlock(v.cap)}
       ${contSec}
       ${wkCfg}
       <div style="margin-top:12px"><button class="np-btn np-btn--sm" title="Editar o .env deste host (auto-deploy por pull)" onclick="editHostEnv('${esc(host)}')">⚙ Editar .env</button></div>
@@ -1689,7 +1710,7 @@ window.openServer = async (dc) => {
   dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(dc)}</div><div class="muted" style="font-size:12px">${vms.length} VMs · ${workers} workers</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
     <div style="padding:16px 18px">
       ${loadBar(totLoad, totCores)}
-      ${pve && pve.cap ? `<div class="np-sec-t">Servidor físico (Proxmox) · <a href="#" onclick="openVm('${esc(pve.host)}');return false" style="color:var(--np-brand-ink,#2563eb)">${esc(pve.host)}</a></div>${hostMetricsBlock(pve.cap)}` : ''}
+      ${pve && pve.cap ? `<div class="np-sec-t">Servidor físico (Proxmox) · <a href="#" onclick="openVm('${esc(pve.host)}');return false" style="color:var(--np-brand-ink,#2563eb)">${esc(pve.host)}</a></div>${hostMetricsBlock(pve.cap)}${pveStorageChips(pve.cap)}` : ''}
       <div class="np-sec-t">Capacidade agregada (usado / total · livre)</div>${capBlock(cap)}
       <div class="np-sec-t">VMs (${vms.length})</div>
       <div style="display:flex;flex-direction:column;gap:8px">${vms.map(vmRow).join('')}</div>

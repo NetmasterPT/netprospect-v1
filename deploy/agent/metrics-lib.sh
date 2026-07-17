@@ -79,6 +79,32 @@ timers_json() {
   printf ']'
 }
 
+# Matriz de latência: pede ao dashboard a lista de nós (/api/fleet/targets) e faz ping (ICMP) a cada um em
+# paralelo (python). Devolve um mapa JSON {host: ms}. Vazio se sem python/targets. Exclui-se a si próprio.
+latency_matrix() {
+  command -v python3 >/dev/null 2>&1 || { printf '{}'; return; }
+  curl -fsS --max-time 8 "${SERVER_URL}/api/fleet/targets" 2>/dev/null | FLEET_HOST="${FLEET_HOST:-}" python3 -c '
+import sys, json, subprocess, re, os
+from concurrent.futures import ThreadPoolExecutor
+try: targets = json.load(sys.stdin)
+except Exception: print("{}"); sys.exit()
+me = os.environ.get("FLEET_HOST", "")
+def ping(t):
+    addr = t.get("addr"); host = t.get("host")
+    if not addr or not host or host == me: return None
+    try:
+        r = subprocess.run(["ping", "-c", "1", "-W", "1", addr], capture_output=True, text=True, timeout=3)
+        m = re.search(r"time=([\d.]+)", r.stdout)
+        return (host, round(float(m.group(1)))) if m else None
+    except Exception: return None
+out = {}
+with ThreadPoolExecutor(max_workers=24) as ex:
+    for res in ex.map(ping, targets[:80]):
+        if res: out[res[0]] = res[1]
+print(json.dumps(out))
+' 2>/dev/null || printf '{}'
+}
+
 # Junta dois arrays JSON "[...]" num só.
 merge_json_arrays() {
   local ai="${1#[}"; ai="${ai%]}"; local bi="${2#[}"; bi="${bi%]}"
@@ -110,15 +136,19 @@ collect_and_post() {
   swap_total=$(((swapt + 0) / 1024)); swap_used=$((((swapt + 0) - (swapf + 0)) / 1024))
   read -r disk_total disk_used < <(df -P -k / | awk 'NR==2{printf "%.0f %.0f", $2/1048576, $3/1048576}')
   load=$(awk '{print $1}' /proc/loadavg); cores=$(nproc 2>/dev/null || echo 0); uptime=$(awk '{printf "%d", $1}' /proc/uptime)
-  local lat_directus lat_pg lat_minio units
+  local lat_directus lat_pg lat_minio units np_ip addr latmatrix
   lat_directus=$(http_ms "${DIRECTUS_PING_URL:-}"); lat_minio=$(http_ms "${MINIO_HEALTH_URL:-}"); lat_pg=$(tcp_ms "${PG_HOST:-}" "${PG_PORT:-5432}")
+  # IP deste host (o src usado para chegar ao np-server) → alvo pingável para a matriz de latência.
+  np_ip=$(printf '%s' "${SERVER_URL:-}" | sed -E 's#^https?://([^:/]+).*#\1#')
+  addr=$(ip route get "$np_ip" 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}' | head -1)
+  latmatrix=$(latency_matrix); [ -z "$latmatrix" ] && latmatrix='{}'
   units=$(merge_json_arrays "$(containers_json)" "$(services_json)")
   units=$(merge_json_arrays "$units" "$(timers_json)")
   # Hook opcional: se o reporter definir extra_units_json (ex.: Proxmox → LXC/VMs), junta-se aqui.
   if declare -F extra_units_json >/dev/null 2>&1; then units=$(merge_json_arrays "$units" "$(extra_units_json)"); fi
   local body
-  body=$(printf '{"cpu":%s,"load":%s,"cores":%s,"mem_used":%s,"mem_total":%s,"swap_used":%s,"swap_total":%s,"disk_used":%s,"disk_total":%s,"io_read":%s,"io_write":%s,"net_rx":%s,"net_tx":%s,"uptime":%s,"containers":%s%s%s%s}' \
-    "$cpu" "${load:-0}" "${cores:-0}" "$mem_used" "$mem_total" "${swap_used:-0}" "${swap_total:-0}" "$disk_used" "$disk_total" "$io_read" "$io_write" "$net_rx" "$net_tx" "$uptime" "$units" \
+  body=$(printf '{"cpu":%s,"load":%s,"cores":%s,"mem_used":%s,"mem_total":%s,"swap_used":%s,"swap_total":%s,"disk_used":%s,"disk_total":%s,"io_read":%s,"io_write":%s,"net_rx":%s,"net_tx":%s,"uptime":%s,"addr":"%s","latmatrix":%s,"containers":%s%s%s%s}' \
+    "$cpu" "${load:-0}" "${cores:-0}" "$mem_used" "$mem_total" "${swap_used:-0}" "${swap_total:-0}" "$disk_used" "$disk_total" "$io_read" "$io_write" "$net_rx" "$net_tx" "$uptime" "${addr:-}" "$latmatrix" "$units" \
     "${lat_directus:+,\"lat_directus\":$lat_directus}" "${lat_pg:+,\"lat_pg\":$lat_pg}" "${lat_minio:+,\"lat_minio\":$lat_minio}")
   if [ "${METRICS_DRYRUN:-0}" = 1 ]; then printf '%s\n' "$body"; return 0; fi
   curl -fsS --max-time 20 -X POST ${FLEET_PULL_TOKEN:+-H "Authorization: Bearer $FLEET_PULL_TOKEN"} \

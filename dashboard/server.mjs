@@ -1066,6 +1066,7 @@ async function hostCapacity(rr, hosts) {
     H.cap30d = mk(used30, perH != null ? perH * 720 : null);
     try { const m = await rr.hGetAll(`np:host:${hn}:metrics`); H.metrics = (m && Object.keys(m).length) ? m : null; } catch { H.metrics = null; }
     try { const cs = await rr.get(`np:host:${hn}:containers`); H.containers = cs ? JSON.parse(cs) : null; } catch { H.containers = null; }
+    try { const lm = await rr.get(`np:host:${hn}:latmatrix`); H.latmatrix = lm ? JSON.parse(lm) : null; } catch { H.latmatrix = null; }
     // Hosts de infra (sem workers) não têm load/cores dos heartbeats → tira-os das métricas.
     if (H.metrics) { if (H.cores == null && H.metrics.cores) H.cores = +H.metrics.cores; if (H.load == null && H.metrics.load) H.load = +H.metrics.load; }
   }
@@ -1974,7 +1975,7 @@ app.get('/api/fleet/pull/:host', (req, res) => {
 // hosts silenciosos aparecem "sem dados" na página Servidores). Mesmo token que o pull do .env.
 // Só campos conhecidos (whitelist) e limitados em tamanho → não guardamos lixo arbitrário.
 const METRIC_FIELDS = ['cpu', 'load', 'cores', 'mem_used', 'mem_total', 'swap_used', 'swap_total', 'disk_used', 'disk_total',
-  'io_read', 'io_write', 'net_rx', 'net_tx', 'lat_directus', 'lat_pg', 'lat_minio', 'uptime', 'ts'];
+  'io_read', 'io_write', 'net_rx', 'net_tx', 'lat_directus', 'lat_pg', 'lat_minio', 'uptime', 'ts', 'addr'];
 app.post('/api/fleet/metrics/:host', async (req, res) => {
   const host = req.params.host;
   if (!HOST_RE.test(host)) return res.status(400).json({ error: 'host inválido' });
@@ -1993,6 +1994,11 @@ app.post('/api/fleet/metrics/:host', async (req, res) => {
     await r.hSet(`np:host:${host}:metrics`, h);
     await r.expire(`np:host:${host}:metrics`, 900); // 15 min
     await r.zAdd('np:host:index', { score: Date.now(), value: host }); // registo → hosts SEM workers (infra) aparecem na frota
+    // Matriz de latência entre nós (o host mediu ping a cada outro nó) — guarda o mapa {host: ms}.
+    if (body.latmatrix && typeof body.latmatrix === 'object' && !Array.isArray(body.latmatrix)) {
+      const lm = {}; for (const k of Object.keys(body.latmatrix).slice(0, 100)) { const v = +body.latmatrix[k]; if (isFinite(v)) lm[String(k).slice(0, 64)] = v; }
+      await r.set(`np:host:${host}:latmatrix`, JSON.stringify(lm), { EX: 900 });
+    }
     // Containers Docker do host (docker ps) → mostrados na página VMs como "workers" da VM.
     if (Array.isArray(body.containers)) {
       const S = (v, n) => String(v == null ? '' : v).slice(0, n);
@@ -2001,6 +2007,17 @@ app.post('/api/fleet/metrics/:host', async (req, res) => {
     }
   } catch (e) { return res.status(502).json({ error: e.message }); }
   res.json({ ok: true, host, fields: Object.keys(h).length });
+});
+// Lista de nós da frota (host + IP reportado) → cada agente pinga estes para a matriz de latência.
+app.get('/api/fleet/targets', async (req, res) => {
+  try {
+    const r = await redisClient();
+    if (!r || !_redisUp) return res.json([]);
+    const hs = await r.zRangeByScore('np:host:index', Date.now() - 900000, '+inf').catch(() => []);
+    const out = [];
+    for (const h of hs) { const m = await r.hGetAll(`np:host:${h}:metrics`).catch(() => ({})); if (m && m.addr) out.push({ host: h, addr: m.addr }); }
+    res.json(out);
+  } catch (e) { res.status(502).json({ error: e.message }); }
 });
 
 // --- Bridge Alertmanager → ntfy: recebe os webhooks do Alertmanager e publica notificações formatadas

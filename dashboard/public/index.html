@@ -1435,9 +1435,19 @@ function parseSize(s) { const m = String(s == null ? '' : s).trim().match(/^([\d
 const pairOf = (s) => { const p = String(s || '').split('/'); return [parseSize(p[0]), parseSize(p[1])]; };
 // Decode UTF-8 de base64 (logs dos containers).
 function b64utf8(b64) { try { const bin = atob(b64 || ''); const bytes = Uint8Array.from(bin, (ch) => ch.charCodeAt(0)); return new TextDecoder().decode(bytes); } catch { return ''; } }
-// Bloco de recursos de um container (docker stats): CPU% + RAM (barra) + rede/IO (chips, acumulados).
+// Unidade (container/serviço) está "a correr"? container: running/Up · serviço: active/running.
+const unitUp = (c) => /running|^active|healthy|^Up/i.test(c && c.state || '') || /running|healthy|^Up/i.test(c && c.status || '');
+const cpuSecFmt = (s) => { const n = +s; return n >= 3600 ? (n / 3600).toFixed(1) + ' h' : n >= 60 ? (n / 60).toFixed(0) + ' min' : n + ' s'; };
+// Bloco de recursos de uma unidade. container → docker stats (CPU%/RAM/rede/IO); serviço → cgroup (RAM + CPU acumulado).
 function containerStatsBlock(c) {
   if (!c) return '';
+  if (c.kind === 'service') {
+    const mb = c.memb ? +c.memb : null; const bars = [];
+    if (mb) bars.push(`<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;font-size:10px"><span class="muted">RAM</span><span class="tnum">${fmtBytes(mb)}</span></div></div>`);
+    const chips = [];
+    if (c.cpuSec) chips.push(`<span class="np-chip" style="font-size:10px" title="tempo de CPU acumulado (cgroup)">CPU ${cpuSecFmt(c.cpuSec)} total</span>`);
+    return bars.join('') + (chips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${chips.join('')}</div>` : '<span class="muted" style="font-size:10px">sem contabilidade de recursos (cgroup)</span>');
+  }
   const cpu = c.cpu ? parseFloat(c.cpu) : null;
   const [mu, ml] = pairOf(c.mem), [rx, tx] = pairOf(c.net), [br, bw] = pairOf(c.blk);
   const bars = [];
@@ -1454,10 +1464,10 @@ const containerLogsBlock = (c) => { const t = b64utf8(c && c.logb64).trim(); ret
 const containerMini = (c) => { if (!c) return ''; const cpu = c.cpu ? parseFloat(c.cpu) : null; const [mu, ml] = pairOf(c.mem); const chips = []; if (cpu != null && !isNaN(cpu)) chips.push(`CPU ${cpu.toFixed(1)}%`); if (mu != null) chips.push(`RAM ${fmtBytes(mu)}${ml ? ' / ' + fmtBytes(ml) : ''}`); return chips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">${chips.map((t) => `<span class="np-chip" style="font-size:10px" title="recursos do container (docker stats)">${t}</span>`).join('')}</div>` : ''; };
 // Encontra o container de um worker (id do worker = id do container) nos hosts reportados.
 const contForWorker = (hosts, w) => { const cs = ((hosts || {})[w.host] || {}).containers || []; return cs.find((c) => c.id && (c.id === w.id || w.id.startsWith(c.id) || c.id.startsWith(w.id))) || null; };
-// Botões dos containers Docker de um host — nome + ponto de estado (verde=running); click → openContainer.
+// Botões das unidades (container/serviço) de um host — nome + ponto de estado; serviço tem contorno tracejado.
 const containerChips = (host, cs) => (cs && cs.length)
-  ? cs.map((c) => { const up = /running/i.test(c.state || '') || /^Up/i.test(c.status || ''); const col = up ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; return `<button class="np-btn np-btn--sm" style="font-size:9px" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${esc(c.name)}</button>`; }).join(' ')
-  : '<span class="muted" style="font-size:10px">sem containers reportados</span>';
+  ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const svc = c.kind === 'service'; return `<button class="np-btn np-btn--sm" style="font-size:9px${svc ? ';border-style:dashed' : ''}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${svc ? 'serviço systemd' : 'container docker'} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${esc(c.name)}</button>`; }).join(' ')
+  : '<span class="muted" style="font-size:10px">sem containers/serviços reportados</span>';
 // Drawer de um container (mostra-o "como um worker": host, imagem, estado, uptime, portas).
 window.openContainer = async (host, name) => {
   const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
@@ -1465,18 +1475,18 @@ window.openContainer = async (host, name) => {
   let d; try { d = await api('/api/workers'); } catch (e) { dw.innerHTML = `<div class="np-empty">Erro: ${esc(e.message)}</div>`; return; }
   const H = (d.hosts || {})[host] || {};
   const c = (H.containers || []).find((x) => x.name === name);
-  if (!c) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">Container ${esc(name)} já não está a correr em ${esc(host)}.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
-  const up = /running/i.test(c.state || '') || /^Up/i.test(c.status || '');
+  if (!c) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">${esc(name)} já não está a correr em ${esc(host)}.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
+  const up = unitUp(c); const svc = c.kind === 'service';
   const kv = (k, v) => `<div class="k">${k}</div><div class="v">${v}</div>`;
   const ports = (c.ports || '').split(',').map((p) => p.trim()).filter(Boolean);
   const stats = containerStatsBlock(c);
-  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(c.name)}</div><div class="muted" style="font-size:12px">container em <a href="#" onclick="openVm('${esc(host)}');return false" style="color:var(--np-brand-ink,#2563eb)">${esc(host)}</a></div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(c.name)}</div><div class="muted" style="font-size:12px">${svc ? 'serviço systemd' : 'container docker'} em <a href="#" onclick="openVm('${esc(host)}');return false" style="color:var(--np-brand-ink,#2563eb)">${esc(host)}</a></div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
     <div style="padding:16px 18px">
-      <div class="np-kv">${kv('Estado', `<span class="np-badge ${up ? 'ok' : 'warn'}" style="height:18px">${esc(c.state || '?')}</span>`)}${kv('Status', esc(c.status || '—'))}${kv('Imagem', `<span class="np-mono" style="font-size:11px">${esc(c.image || '—')}</span>`)}${kv('Host', esc(host))}</div>
+      <div class="np-kv">${kv('Tipo', svc ? 'serviço systemd' : 'container Docker')}${kv('Estado', `<span class="np-badge ${up ? 'ok' : 'warn'}" style="height:18px">${esc(c.state || '?')}${c.status && svc ? ' · ' + esc(c.status) : ''}</span>`)}${!svc ? kv('Status', esc(c.status || '—')) : ''}${kv(svc ? 'Descrição' : 'Imagem', `<span class="np-mono" style="font-size:11px">${esc(c.image || '—')}</span>`)}${kv('Host', esc(host))}</div>
       ${stats ? `<div class="np-sec-t">Recursos</div>${stats}` : ''}
       ${ports.length ? `<div class="np-sec-t">Portas</div><div style="display:flex;flex-wrap:wrap;gap:4px">${ports.map((p) => `<span class="np-chip" style="font-size:10px">${esc(p)}</span>`).join('')}</div>` : ''}
       <div class="np-sec-t">Logs (tail)</div>${containerLogsBlock(c)}
-      <div class="muted" style="font-size:11px;margin-top:12px">Snapshot (<code>docker ps/stats/logs</code>) reportado pelo agente (~5 min). Rede/IO são acumulados desde o arranque do container.</div>
+      <div class="muted" style="font-size:11px;margin-top:12px">Snapshot (<code>${svc ? 'systemctl / journalctl' : 'docker ps/stats/logs'}</code>) reportado pelo agente (~5 min).${svc ? ' CPU = tempo acumulado (cgroup).' : ' Rede/IO acumulados desde o arranque.'}</div>
     </div>`;
 };
 // Soma capacidades (usado/total/livre) de uma janela por um conjunto de VMs (aditivo).
@@ -1544,7 +1554,7 @@ async function viewVms() {
   }
   const card = (v) => { const k = idsafe(v.host); const sub = v.infra ? `${nCont(v)} containers` : `${v.workers.length} workers · ${esc(v.roles.join(', '))}`;
     const wkSec = v.workers.length ? `<div class="muted" style="font-size:9px;margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Workers</div><div id="vm_${k}_wk" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${wkBtns(v)}</div>` : '';
-    const contSec = (v.cap && v.cap.containers) ? `<div class="muted" style="font-size:9px;margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Containers</div><div id="vm_${k}_cont" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${contInner(v)}</div>` : '';
+    const contSec = (v.cap && v.cap.containers) ? `<div class="muted" style="font-size:9px;margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Containers / serviços</div><div id="vm_${k}_cont" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${contInner(v)}</div>` : '';
     return `<section class="np-card"><div class="np-card-b">
     <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="cursor:pointer;min-width:0" onclick="openVm('${esc(v.host)}')"><div style="font-weight:800;font-size:14px">${esc(v.host)} <span style="font-size:11px;color:var(--np-brand-ink,#2563eb)">›</span></div><div class="muted" style="font-size:11px">${esc(v.dc)} · ${sub}</div></div>
       <span id="vm_${k}_stat">${statInner(v)}</span></div>
@@ -1592,7 +1602,7 @@ window.openVm = async (host) => {
   const v = allVms(d).find((x) => x.host === host);
   if (!v) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">VM ${esc(host)} sem dados a reportar.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
   const cs = (v.cap && v.cap.containers) || [];
-  const contSec = `<div class="np-sec-t">Containers (${cs.length})</div><div style="display:flex;flex-wrap:wrap;gap:4px">${containerChips(v.host, cs)}</div>`;
+  const contSec = `<div class="np-sec-t">Containers / serviços (${cs.length})</div><div style="display:flex;flex-wrap:wrap;gap:4px">${containerChips(v.host, cs)}</div>`;
   let wkCfg = '';
   if (v.workers.length) {
     const jobs = Object.keys(v.conc || {}).sort();
@@ -1842,7 +1852,7 @@ async function viewWorkers() {
     <div id="wk_${k}_logs" class="np-mono" style="background:var(--np-surface-2);border-radius:6px;padding:6px 8px;font-size:10.5px;margin-top:3px;white-space:pre-wrap;max-height:64px;overflow:hidden">${logsInner(w.logs3)}</div>
   </div></section>`; };
   const statsCard = `<section class="np-card" style="margin-bottom:14px"><div class="np-card-b"><div id="wk_summary">${summaryInner()}</div></div></section>`;
-  const infraCard = infraHosts.length ? `<section class="np-card" style="margin-top:14px"><div class="np-card-b"><div class="np-card-h" style="padding:0 0 8px"><h2 style="font-size:14px">Containers (VMs de infra)</h2><span class="muted" style="font-size:12px">máquinas sem workers NP · click → detalhe</span></div><div id="wk_infra">${infraSection()}</div></div></section>` : '';
+  const infraCard = infraHosts.length ? `<section class="np-card" style="margin-top:14px"><div class="np-card-b"><div class="np-card-h" style="padding:0 0 8px"><h2 style="font-size:14px">Containers / serviços (VMs de infra)</h2><span class="muted" style="font-size:12px">máquinas sem workers NP · click → detalhe</span></div><div id="wk_infra">${infraSection()}</div></div></section>` : '';
   $('#view').innerHTML = head + statsCard + `<div id="fleet-workers" class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">${ws.map(card).join('')}</div>` + infraCard;
 }
 window.openWorker = async (id) => {

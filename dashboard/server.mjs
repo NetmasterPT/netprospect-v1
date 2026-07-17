@@ -2044,6 +2044,22 @@ app.post('/api/alertmanager-webhook', async (req, res) => {
   }
   res.json({ ok: true, received: alerts.length, sent });
 });
+// --- Alertmanager PULL: o monitor de saúde consulta AQUI os alertas ATIVOS (fonte de verdade =
+// Prometheus→Alertmanager) em vez de fazer os curls exaustivos a /api/queues|workers|logs à mão. ---
+const ALERTMANAGER_URL = (process.env.ALERTMANAGER_URL || 'http://100.96.102.84:9093').replace(/\/$/, '');
+app.get('/api/alerts', async (req, res) => {
+  try {
+    const r = await fetch(`${ALERTMANAGER_URL}/api/v2/alerts?active=true&silenced=false&inhibited=false`);
+    if (!r.ok) return res.status(502).json({ ok: false, error: `Alertmanager HTTP ${r.status}` });
+    const raw = await r.json();
+    const alerts = (Array.isArray(raw) ? raw : []).filter((a) => (a.status?.state || 'active') === 'active').map((a) => ({
+      name: a.labels?.alertname, severity: a.labels?.severity, service: a.labels?.service,
+      host: a.labels?.host, consumer: a.labels?.consumer, instance: a.labels?.instance,
+      summary: a.annotations?.summary || a.annotations?.description || '', startsAt: a.startsAt,
+    }));
+    res.json({ ok: true, count: alerts.length, alerts, source: ALERTMANAGER_URL, ts: Date.now() });
+  } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
 // --- Prometheus /metrics — expõe a telemetria da frota p/ o Prometheus da stack de observabilidade.
 // Fonte: Redis (rápido, sem NATS). Host (CPU/RAM/disco/rede/IO/latências) + unidades (docker/lxc/vm/
 // serviço/storage) + throughput por host + workers vivos. Ver docs/observability.md.

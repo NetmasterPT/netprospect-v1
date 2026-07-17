@@ -37,7 +37,7 @@ containers_json() {
 service_list() {
   if [ -n "${REPORT_SERVICES:-}" ]; then printf '%s\n' ${REPORT_SERVICES}; return; fi
   systemctl list-units --type=service --state=running --no-legend --plain 2>/dev/null | awk '{print $1}' | sed 's/\.service$//' \
-    | grep -vE '^(systemd-|user@|user-runtime|session-|dbus|polkit|getty@|serial-getty@|console-|emergency|rescue|dracut|kmod|ldconfig|apt-daily|man-db|e2scrub|fstrim|logrotate|motd|snapd\.seeded|networkd-dispatcher|multipathd|unattended|packagekit|accounts-daemon|rtkit|udisks| modprobe|cloud-|qemu-guest)' | head -25
+    | grep -vE '^(systemd-|user@|user-runtime|session-|dbus|polkit|getty@|serial-getty@|container-getty@|console-|emergency|rescue|dracut|kmod|ldconfig|apt-daily|man-db|e2scrub|fstrim|logrotate|motd|snapd\.seeded|networkd-dispatcher|multipathd|unattended|packagekit|accounts-daemon|rtkit|udisks| modprobe|cloud-|qemu-guest)' | head -25
 }
 
 # Serviços systemd → pseudo-unidades (kind=service). RAM=MemoryCurrent (atual), CPU=CPUUsageNSec (acumulado

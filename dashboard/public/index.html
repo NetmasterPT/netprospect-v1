@@ -1663,7 +1663,7 @@ async function viewQueues() {
     <td class="tnum" style="text-align:right">${fmt(c.ackPending)}</td>
     <td class="tnum" style="text-align:right;${c.redelivered ? 'color:var(--np-warn)' : 'color:var(--np-text-3)'}">${fmt(c.redelivered)}</td>
     <td class="tnum" style="text-align:right;font-weight:${c.orphans ? '800' : '400'};color:${c.orphans ? 'var(--np-bad,#dc2626)' : 'var(--np-text-3)'}" title="Mensagens presas que esgotaram o maxDeliver (relança/limpa no drawer)">${fmt(c.orphans || 0)}</td>
-    <td class="tnum" style="text-align:right;color:var(--np-text-3)">${fmt(c.waiting)}</td><td class="tnum" style="text-align:right;font-weight:600;color:${c.rate?'var(--np-ok-mark)':'var(--np-text-3)'}">${c.rate!=null?fmt(c.rate):'—'}</td><td class="tnum" style="text-align:right;color:var(--np-text-3)">${c.eta!=null?c.eta+'h':(c.pending&&c.rate===0?'∞':'')}</td></tr>`;
+    <td class="tnum" style="text-align:right;color:var(--np-text-3)" title="workers à espera de job (capacidade livre) — não é backlog">${fmt(c.waiting)}</td><td class="tnum" style="text-align:right;font-weight:600;color:${c.rate?'var(--np-ok-mark)':'var(--np-text-3)'}">${c.rate!=null?fmt(c.rate):'—'}</td><td class="tnum" style="text-align:right;color:var(--np-text-3)">${c.eta!=null?c.eta+'h':(c.pending&&c.rate===0?'∞':'')}</td></tr>`;
   const active = d.consumers.filter((c) => c.pending + c.ackPending > 0), idle = d.consumers.filter((c) => c.pending + c.ackPending === 0);
   $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Filas</h1><div class="np-sub">Fila NATS JetStream <b>NP_JOBS</b> · clica numa fila para ver/gerir os jobs · atualiza a cada 10 s</div></div></div>
     <div class="np-kpis">
@@ -1671,7 +1671,7 @@ async function viewQueues() {
       ${kpi('activity', 'Em fila (por entregar)', totPending)}${kpi('power', 'A processar agora', totProc)}${kpi('clock', 'Re-tentativas (nak)', totRedeliv)}${kpi('trash', 'Órfãos (presos)', totOrph)}${kpi('activity', 'Throughput (/h)', totRate)}
     </div>
     <section class="np-card"><div class="np-card-h"><h2>Filas / consumers (${d.consumers.length})</h2><span class="muted" style="font-size:12px">${active.length} com trabalho · ${idle.length} vazias</span></div>
-      <div class="np-tablewrap"><table class="np-table"><thead><tr><th>Fila</th><th>Role</th><th>Subject</th><th>Profundidade</th><th style="text-align:right">Em fila</th><th style="text-align:right">A processar</th><th style="text-align:right">Retry</th><th style="text-align:right" title="Mensagens presas (esgotaram maxDeliver)">Órfãos</th><th style="text-align:right">Idle</th><th style="text-align:right">/h</th><th style="text-align:right">ETA</th></tr></thead>
+      <div class="np-tablewrap"><table class="np-table"><thead><tr><th>Fila</th><th>Role</th><th>Subject</th><th>Profundidade</th><th style="text-align:right">Em fila</th><th style="text-align:right">A processar</th><th style="text-align:right">Retry</th><th style="text-align:right" title="Mensagens presas (esgotaram maxDeliver)">Órfãos</th><th style="text-align:right" title="Workers ociosos à espera de job nesta fila (capacidade livre). 0 = workers todos ocupados. NÃO é backlog nem precisa de limpeza.">À espera</th><th style="text-align:right">/h</th><th style="text-align:right">ETA</th></tr></thead>
       <tbody>${[...active, ...idle].map(row).join('')}</tbody></table></div></section>`;
 }
 window.openQueue = async (name) => {

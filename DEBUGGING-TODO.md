@@ -44,6 +44,25 @@ quando estás a testar algo novo, marca `[resolvido]` quando fechares.
      para o utilizador decidir a política de retry (desistir de vez · max-N tentativas · janela de tempo ·
      cadência tipo 1×/dia). É o objetivo: retentar os transitórios, cortar os que ficam em loop.
 
+- [ ] **Deploy-watch: detetar rebuilds + vigiar as VMs após a mudança (AÇÃO a cada ronda)** — o agente de
+  pull de cada host faz `git pull` / puxa o `.env` central / recria os containers quando deteta mudanças.
+  O monitor tem de **apanhar esses deploys e vigiar activamente a VM afetada durante ~3 rondas**, a testar o
+  resultado (arranque, roles/consumers, logs, load, throughput, falhas). Procedimento completo e ficheiro de
+  estado em [`docs/deploy-watch.md`](docs/deploy-watch.md). Cada ronda:
+  1. **Detetar deploy** por host (via `/api/workers` + `/api/fleet/env/<host>`, sem SSH): `started` recuou /
+     uptime caiu (**RECREATE**); `version` mudou (rebuild de imagem); **hash do env store** mudou (deploy a
+     caminho); ou o conjunto de `consumers` mudou (roles novos). Comparar com a baseline da ronda anterior
+     guardada em `docs/deploy-watch.md`.
+  2. **Pôr sob observação** o host afetado por **K=3 rondas (~45 min)**, guardando a baseline pré-deploy.
+  3. **Validar** a cada ronda: worker volta e estabiliza (`beat<90s`, uptime a crescer e não a resetar =
+     não crash-loop); `consumers` batem com o `WORKER_ROLES` esperado; `fail1h/24h` não dispara vs baseline;
+     load são; logs sem `✗`/stack-trace/`Cannot find`/`SyntaxError` novos após o restart; `done1h` a recuperar.
+  4. **Veredicto:** saudável K rondas → **VALIDADO** (sai da observação); **regressão** (crash-loop, pico de
+     falhas, erro novo, consumers errados) → abrir incidente + reportar na conversa.
+  5. **Reescrever a baseline** em `docs/deploy-watch.md` no fim da ronda.
+  Genérico sobre QUALQUER host que apareça — inclui os futuros `de-minio`, `de-analytics`, `np-server`,
+  `np-db` quando entrarem no dashboard como VMs (mesmo modelo: git + `.env` central + agente a recriar).
+
 ## Conhecido/esperado (NÃO reportar como bug)
 
 - **verify "pool exhausted — sem quota"** — a quota da API é 100/dia; os `↻ verify` são esperados até

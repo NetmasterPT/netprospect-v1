@@ -340,11 +340,11 @@ let STATS = null;
 // Submenus do nav (ordem preservada). Cada item = [id, ícone, label, countKey?] (countKey lê t[key]).
 const NAV_GROUPS = [
   ['Geral', [['overview', 'overview', 'Visão Geral'], ['outreach', 'send', 'Outreach'], ['config', 'sliders', 'Configuração']]],
+  ['Frota', [['servers', 'globe', 'Servidores'], ['vms', 'server', 'VMs'], ['workers', 'sparkles', 'Workers'], ['queues', 'activity', 'Filas'], ['coverage', 'check', 'Cobertura Jobs'], ['logs', 'clock', 'Logs']]],
   ['Dataset', [['directory', 'directory', 'Negócios', 'sites'], ['isps', 'globe', 'ISPs'], ['triggers', 'activity', 'Gatilhos'], ['data-coverage', 'check', 'Cobertura Dados']]],
   ['CRM', [['contacts', 'contacts', 'Contactos', 'contacts'], ['clients', 'briefcase', 'Clientes']]],
   ['Prospecção', [['subscriptions', 'briefcase', 'Subscrições'], ['icps', 'contacts', 'ICPs'], ['segments', 'segments', 'Segmentos']]],
   ['Canal Email', [['campaigns', 'send', 'Campanhas'], ['templates', 'mail', 'Templates']]],
-  ['Frota', [['servers', 'globe', 'Servidores'], ['vms', 'server', 'VMs'], ['workers', 'sparkles', 'Workers'], ['queues', 'activity', 'Filas'], ['coverage', 'check', 'Cobertura Jobs'], ['logs', 'clock', 'Logs']]],
   ['AI', [['chat', 'sparkles', 'Chat'], ['agents', 'sparkles', 'Agentes']]],
 ];
 const navCollapsedSet = () => { try { return new Set(JSON.parse(localStorage.getItem('np-nav-groups') || '[]')); } catch (e) { return new Set(); } };

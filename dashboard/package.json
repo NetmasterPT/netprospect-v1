@@ -13,6 +13,9 @@
     "pg": "^8.13.1",
     "nats": "^2.29.3",
     "redis": "^6.1.0",
-    "posthog-js": "^1.402.0"
+    "posthog-js": "^1.402.0",
+    "@opentelemetry/sdk-node": "^0.54.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.52.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.54.0"
   }
 }

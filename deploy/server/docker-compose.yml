@@ -90,6 +90,10 @@ services:
       POSTHOG_PUBLIC_HOST: ${POSTHOG_PUBLIC_HOST:-}
       # Token dos agentes de pull (auto-deploy por host). Vazio = só tailnet-gated. Ver runbook.
       FLEET_PULL_TOKEN: ${FLEET_PULL_TOKEN:-}
+      # Tracing (OpenTelemetry) → colector Jaeger (all-in-one) na mesma rede. OTEL_ENABLED=0 desliga
+      # (fail-soft: se as libs/colector falharem o dashboard corre na mesma). Ver docs/observability.md.
+      OTEL_ENABLED: ${OTEL_ENABLED:-1}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://jaeger:4318}
     ports:
       - '${LAN_IP}:3001:3000'
       - '${TAILNET_IP}:3001:3000'
@@ -121,3 +125,27 @@ services:
       - '${LAN_IP}:6379:6379'
       - '${TAILNET_IP}:6379:6379'
       - '127.0.0.1:6379:6379'
+
+  # Tracing distribuído (OpenTelemetry) — Jaeger all-in-one recebe OTLP (do dashboard/workers) e serve a UI.
+  # O menu "Observabilidade → OpenTelemetry" abre a UI (:16686). OTLP fica interno (mesma rede compose).
+  jaeger:
+    image: jaegertracing/all-in-one:1.62.0
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: 'true'
+    ports:
+      - '${LAN_IP}:16686:16686'       # UI
+      - '${TAILNET_IP}:16686:16686'
+      - '127.0.0.1:16686:16686'
+
+  # Adminer — gestão manual da base de dados (liga ao PostgreSQL do np-db). Login com as credenciais PG.
+  adminer:
+    image: adminer:4
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: ${PG_HOST:-100.77.60.44}
+      ADMINER_DESIGN: dracula
+    ports:
+      - '${LAN_IP}:8080:8080'
+      - '${TAILNET_IP}:8080:8080'
+      - '127.0.0.1:8080:8080'

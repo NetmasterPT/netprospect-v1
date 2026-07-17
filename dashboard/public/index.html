@@ -1646,6 +1646,19 @@ window.openWorker = async (id) => {
 };
 
 // --- /queues: profundidade por consumer + click → gerir jobs da fila ---
+// Duração média legível (ms → "820 ms" / "12.4 s" / "1.3 min").
+function fmtDur(ms) { if (ms == null) return '—'; if (ms < 1000) return Math.round(ms) + ' ms'; if (ms < 60000) return (ms / 1000).toFixed(1) + ' s'; return (ms / 60000).toFixed(1) + ' min'; }
+// Célula de capacidade: usado / total (topo) + disponível (baixo). '—' quando não há duração média ainda.
+function capCell(cap) {
+  if (!cap) return '<td class="tnum" style="text-align:right;color:var(--np-text-3)">—</td>';
+  const t = cap.total;
+  if (t == null) return `<td class="tnum" style="text-align:right"><div>${fmt(cap.used)}<span class="muted"> usados</span></div><div class="muted" style="font-size:10px">sem duração média</div></td>`;
+  const util = t > 0 ? Math.min(100, Math.round(100 * cap.used / t)) : 0;
+  const col = util >= 90 ? 'var(--np-bad,#dc2626)' : util >= 60 ? 'var(--np-warn,#d97706)' : 'var(--np-ok-mark,#16a34a)';
+  return `<td class="tnum" style="text-align:right" title="usados ${fmt(cap.used)} · total ${fmt(t)} · livres ${fmt(cap.avail)} (${util}% usado)">
+    <div><b style="color:var(--np-brand-ink,#2563eb)">${fmt(cap.used)}</b> <span class="muted">/ ${fmt(t)}</span></div>
+    <div style="font-size:10px;color:${col}">${fmt(cap.avail)} livre · ${util}%</div></td>`;
+}
 async function viewQueues() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
   renderNav('queues');
@@ -1663,7 +1676,8 @@ async function viewQueues() {
     <td class="tnum" style="text-align:right">${fmt(c.ackPending)}</td>
     <td class="tnum" style="text-align:right;${c.redelivered ? 'color:var(--np-warn)' : 'color:var(--np-text-3)'}">${fmt(c.redelivered)}</td>
     <td class="tnum" style="text-align:right;font-weight:${c.orphans ? '800' : '400'};color:${c.orphans ? 'var(--np-bad,#dc2626)' : 'var(--np-text-3)'}" title="Mensagens presas que esgotaram o maxDeliver (relança/limpa no drawer)">${fmt(c.orphans || 0)}</td>
-    <td class="tnum" style="text-align:right;color:var(--np-text-3)" title="workers à espera de job (capacidade livre) — não é backlog">${fmt(c.waiting)}</td><td class="tnum" style="text-align:right;font-weight:600;color:${c.rate?'var(--np-ok-mark)':'var(--np-text-3)'}">${c.rate!=null?fmt(c.rate):'—'}</td><td class="tnum" style="text-align:right;color:var(--np-text-3)">${c.eta!=null?c.eta+'h':(c.pending&&c.rate===0?'∞':'')}</td></tr>`;
+    <td class="tnum" style="text-align:right;color:var(--np-text-3)" title="workers à espera de job (capacidade livre) — não é backlog">${fmt(c.waiting)}</td><td class="tnum" style="text-align:right;font-weight:600;color:${c.rate?'var(--np-ok-mark)':'var(--np-text-3)'}">${c.rate!=null?fmt(c.rate):'—'}</td><td class="tnum" style="text-align:right;color:var(--np-text-3)">${c.eta!=null?c.eta+'h':(c.pending&&c.rate===0?'∞':'')}</td>
+    <td class="tnum" style="text-align:right" title="duração média de um job deste tipo${c.slots?' · '+c.slots+' slots de paralelização na frota':''}">${fmtDur(c.avgMs)}</td>${capCell(c.cap1h)}${capCell(c.cap24h)}${capCell(c.cap30d)}</tr>`;
   const active = d.consumers.filter((c) => c.pending + c.ackPending > 0), idle = d.consumers.filter((c) => c.pending + c.ackPending === 0);
   $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Filas</h1><div class="np-sub">Fila NATS JetStream <b>NP_JOBS</b> · clica numa fila para ver/gerir os jobs · atualiza a cada 10 s</div></div></div>
     <div class="np-kpis">
@@ -1671,7 +1685,7 @@ async function viewQueues() {
       ${kpi('activity', 'Em fila (por entregar)', totPending)}${kpi('power', 'A processar agora', totProc)}${kpi('clock', 'Re-tentativas (nak)', totRedeliv)}${kpi('trash', 'Órfãos (presos)', totOrph)}${kpi('activity', 'Throughput (/h)', totRate)}
     </div>
     <section class="np-card"><div class="np-card-h"><h2>Filas / consumers (${d.consumers.length})</h2><span class="muted" style="font-size:12px">${active.length} com trabalho · ${idle.length} vazias</span></div>
-      <div class="np-tablewrap"><table class="np-table"><thead><tr><th>Fila</th><th>Role</th><th>Subject</th><th>Profundidade</th><th style="text-align:right">Em fila</th><th style="text-align:right">A processar</th><th style="text-align:right">Retry</th><th style="text-align:right" title="Mensagens presas (esgotaram maxDeliver)">Órfãos</th><th style="text-align:right" title="Workers ociosos à espera de job nesta fila (capacidade livre). 0 = workers todos ocupados. NÃO é backlog nem precisa de limpeza.">À espera</th><th style="text-align:right">/h</th><th style="text-align:right">ETA</th></tr></thead>
+      <div class="np-tablewrap"><table class="np-table"><thead><tr><th>Fila</th><th>Role</th><th>Subject</th><th>Profundidade</th><th style="text-align:right">Em fila</th><th style="text-align:right">A processar</th><th style="text-align:right">Retry</th><th style="text-align:right" title="Mensagens presas (esgotaram maxDeliver)">Órfãos</th><th style="text-align:right" title="Workers ociosos à espera de job nesta fila (capacidade livre). 0 = workers todos ocupados. NÃO é backlog nem precisa de limpeza.">À espera</th><th style="text-align:right">/h</th><th style="text-align:right">ETA</th><th style="text-align:right" title="Duração média de um job deste tipo (rolling)">Dur. média</th><th style="text-align:right" title="Capacidade última 1h: usados / total teórico · livres (total = slots × 3600s / duração média)">Cap. 1h</th><th style="text-align:right" title="Capacidade últimas 24h: usados / total · livres">Cap. 24h</th><th style="text-align:right" title="Capacidade últimos 30 dias: usados / total · livres (acumula desde agora — sem histórico retroativo)">Cap. 30d</th></tr></thead>
       <tbody>${[...active, ...idle].map(row).join('')}</tbody></table></div></section>`;
 }
 window.openQueue = async (name) => {

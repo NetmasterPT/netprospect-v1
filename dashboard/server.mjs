@@ -984,6 +984,54 @@ const CONSUMER_ROLES = {
   industry: 'ai', lighthouse_desktop: 'browser', lighthouse_mobile: 'browser', gmb: 'browser',
   nuclei: 'security', wpscan: 'security',
 };
+// Calcula, por tipo de job (consumer), a DURAÇÃO MÉDIA e a CAPACIDADE (usada/total/disponível) em
+// 3 janelas (1h/24h/30d). Fonte: contadores por-tipo no Redis (np:job:<c>:done:<h> horário 26h,
+// :dday:<d> diário 32d, :dur durações). slots = paralelização efetiva da frota = min(Σ conc dos
+// workers vivos, maxAckPending). total = slots × (período / duração-média); disponível = total − usada.
+async function addQueueCapacity(rr, consumers) {
+  // 1) slots por consumer = soma da concorrência reportada pelos workers vivos (heartbeat <90s).
+  const conc = {};
+  try {
+    const ids = await rr.zRangeByScore('np:wk:index', Date.now() - 90000, '+inf').catch(() => []);
+    for (const id of ids) {
+      const h = await rr.hGetAll(`np:wk:${id}`).catch(() => ({}));
+      let cj = {}; try { cj = JSON.parse(h.conc || '{}'); } catch { /* */ }
+      for (const k in cj) conc[k] = (conc[k] || 0) + (+cj[k] || 0);
+    }
+  } catch { /* */ }
+  const now = Date.now();
+  const curH = Math.floor(now / 3600000), curD = Math.floor(now / 86400000);
+  const frac = (now % 3600000) / 3600000; // fração decorrida da hora atual (p/ trailing-60min)
+  // 2) chaves a ler em lote: 25 horas (curH..curH-24) + 30 dias por consumer.
+  const keys = [];
+  for (const c of consumers) {
+    for (let i = 0; i <= 24; i++) keys.push(`np:job:${c.name}:done:${curH - i}`);
+    for (let i = 0; i < 30; i++) keys.push(`np:job:${c.name}:dday:${curD - i}`);
+  }
+  let vals = [];
+  try { vals = keys.length ? await rr.mGet(keys) : []; } catch { vals = []; }
+  const map = {}; keys.forEach((k, i) => { map[k] = +vals[i] || 0; });
+  for (const c of consumers) {
+    // duração média (rolling) das últimas N conclusões deste tipo
+    let durs = []; try { durs = (await rr.lRange(`np:job:${c.name}:dur`, 0, 199)).map(Number).filter((x) => x >= 0); } catch { /* */ }
+    const avgMs = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null;
+    c.avgMs = avgMs;
+    // usada por janela (concluídos)
+    const usedH = map[`np:job:${c.name}:done:${curH}`] + map[`np:job:${c.name}:done:${curH - 1}`] * (1 - frac); // trailing 60min
+    let used24 = 0; for (let i = 0; i < 24; i++) used24 += map[`np:job:${c.name}:done:${curH - i}`];
+    let used30 = 0; for (let i = 0; i < 30; i++) used30 += map[`np:job:${c.name}:dday:${curD - i}`];
+    // slots efetivos: Σ conc da frota, limitado pelo teto maxAckPending (quando existir)
+    const cap = c.maxAckPending || 0;
+    const slots = cap > 0 ? Math.min(conc[c.name] || 0, cap) : (conc[c.name] || 0);
+    c.slots = slots;
+    // total teórico por janela = slots × (segundos da janela / duração-média-segundos)
+    const perH = avgMs > 0 ? slots * 3600000 / avgMs : null;
+    const mk = (used, total) => ({ used: Math.round(used), total: total != null ? Math.round(total) : null, avail: total != null ? Math.max(0, Math.round(total - used)) : null });
+    c.cap1h = mk(usedH, perH);
+    c.cap24h = mk(used24, perH != null ? perH * 24 : null);
+    c.cap30d = mk(used30, perH != null ? perH * 720 : null);
+  }
+}
 // /api/queues — estado da stream + profundidade por consumer (a antiga /api/workers).
 app.get('/api/queues', async (req, res) => {
   try {
@@ -999,7 +1047,7 @@ app.get('/api/queues', async (req, res) => {
       // (esgotaram maxDeliver → presas no workqueue até MaxAge). Invisíveis nas colunas normais.
       const orphans = Math.max(0, (subjMsgs[subject] || 0) - pending - ackPending);
       consumers.push({
-        name, role: CONSUMER_ROLES[name] || '?', subject,
+        name, role: CONSUMER_ROLES[name] || '?', subject, maxAckPending: ci.config?.max_ack_pending || 0,
         pending, ackPending, orphans, redelivered: ci.num_redelivered || 0, waiting: ci.num_waiting || 0, delivered: ci.delivered?.consumer_seq || 0, acked: ci.ack_floor?.consumer_seq || 0,
       });
     }
@@ -1014,8 +1062,10 @@ app.get('/api/queues', async (req, res) => {
             for (const c of consumers) { const pv = prev.byName?.[c.name]; if (pv != null) { c.rate = Math.max(0, Math.round((c.delivered - pv) / dt * 3600)); c.eta = c.rate > 0 ? +(c.pending / c.rate).toFixed(1) : null; } }
           }
           if (!prev || now - prev.ts >= 20000) { const byName = {}; for (const c of consumers) byName[c.name] = c.delivered; await rr.set('np:qstats:prev', JSON.stringify({ ts: now, byName }), { EX: 300 }).catch(() => {}); }
+          // --- Capacidade por tipo de job (duração média + usada/total/disponível em 1h/24h/30d) ---
+          await addQueueCapacity(rr, consumers);
         }
-      } catch { /* rate opcional */ }
+      } catch { /* rate/capacidade opcionais */ }
       consumers.sort((a, b) => (b.pending + b.ackPending) - (a.pending + a.ackPending) || a.name.localeCompare(b.name));
     const byRole = {};
     for (const c of consumers) {

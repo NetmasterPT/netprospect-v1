@@ -1,0 +1,10 @@
+[Unit]
+Description=NetProspect metrics reporter — reporta telemetria de host a cada 5 min
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

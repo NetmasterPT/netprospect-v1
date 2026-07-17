@@ -1,0 +1,9 @@
+[Unit]
+Description=NetProspect metrics reporter (telemetria de host → dashboard)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# Path do script neste host (ex.: /root/metrics-report.sh ou /usr/local/bin/metrics-report.sh).
+ExecStart=/root/metrics-report.sh

@@ -1687,25 +1687,32 @@ SELECT
   count(*)::int AS total,
   -- wp_total: sites WordPress/WooCommerce por bucket → denominador do wpscan (não-WP não pode ter wpscan).
   count(*) FILTER (WHERE s.primary_platform IN (SELECT id FROM platforms WHERE slug IN ('wordpress','woocommerce')))::int AS wp_total,
-  -- Cada métrica = O JOB CORREU para o site (não "tem resultado"). Marcador por job:
+  -- COBERTURA DE JOBS = "o job CORREU" (≠ "tem dado útil", que é a página Cobertura de Dados).
+  -- Marcador por job: timestamp dedicado (checked_at/whois_checked_at/…) OU coluna-sentinela que o
+  -- handler grava SEMPRE que corre, mesmo em vazio (tech_detected=[] · social=[] · hostnames=[] ·
+  -- traffic_bucket='unranked' · ssl_grade='F' · security_findings=[] · wp_vuln_count=0). Os jobs do
+  -- FAN-OUT do fetch sem marcador próprio (dns/geoip/locality/industry — gravam NULL em vazio ou só em
+  -- sucesso) usam checked_at (correram com o fetch); o dnsprovider usa whois_checked_at (coorte
+  -- domain-health, corre com o whois). NÃO usar aqui colunas que ficam NULL quando o job corre mas não
+  -- acha nada (isso é "dado", vai para a Cobertura de Dados).
   count(*) FILTER (WHERE s.checked_at IS NOT NULL)::int AS enrich,
   count(*) FILTER (WHERE s.http_status IS NOT NULL)::int AS fetch,
   count(*) FILTER (WHERE s.checked_at IS NOT NULL)::int AS dns,
   count(*) FILTER (WHERE s.checked_at IS NOT NULL)::int AS geoip,
   count(*) FILTER (WHERE s.tech_detected IS NOT NULL)::int AS fingerprint,
   count(*) FILTER (WHERE s.social IS NOT NULL)::int AS social,
-  count(*) FILTER (WHERE s.tech_detected IS NOT NULL)::int AS locality,
+  count(*) FILTER (WHERE s.checked_at IS NOT NULL)::int AS locality,
   count(*) FILTER (WHERE s.spf_status IS NOT NULL)::int AS emailauth,
   count(*) FILTER (WHERE s.traffic_bucket IS NOT NULL)::int AS traffic,
-  count(*) FILTER (WHERE s.tech_detected IS NOT NULL)::int AS subdomains,
+  count(*) FILTER (WHERE s.hostnames IS NOT NULL)::int AS subdomains,
   count(*) FILTER (WHERE s.ssl_grade IS NOT NULL)::int AS ssl,
-  count(*) FILTER (WHERE s.dns_provider IS NOT NULL)::int AS dnsprovider,
+  count(*) FILTER (WHERE s.whois_checked_at IS NOT NULL)::int AS dnsprovider,
   count(*) FILTER (WHERE s.whois_checked_at IS NOT NULL)::int AS whois,
   count(*) FILTER (WHERE s.contacts_checked_at IS NOT NULL)::int AS contacts,
   count(*) FILTER (WHERE s.contacts_checked_at IS NOT NULL AND s.id NOT IN (SELECT site FROM unv))::int AS verify,
   count(*) FILTER (WHERE s.lead_score_at IS NOT NULL)::int AS score,
-  count(*) FILTER (WHERE s.cheap_checked_at IS NOT NULL)::int AS audit,
-  count(*) FILTER (WHERE s.industry IS NOT NULL)::int AS industry,
+  count(*) FILTER (WHERE s.audit_checked_at IS NOT NULL)::int AS audit,
+  count(*) FILTER (WHERE s.checked_at IS NOT NULL)::int AS industry,
   count(*) FILTER (WHERE s.mobile_score IS NOT NULL)::int AS lighthouse_mobile,
   count(*) FILTER (WHERE s.perf_desktop IS NOT NULL)::int AS lighthouse_desktop,
   count(*) FILTER (WHERE s.security_findings IS NOT NULL)::int AS nuclei,
@@ -1753,7 +1760,7 @@ SELECT
   count(*) FILTER (WHERE industry IS NOT NULL)::int AS industry,
   count(*) FILTER (WHERE ip_country IS NOT NULL)::int AS geoip,
   count(*) FILTER (WHERE ssl_grade IS NOT NULL)::int AS ssl,
-  count(*) FILTER (WHERE tech_detected IS NOT NULL)::int AS tech,
+  count(*) FILTER (WHERE tech_detected IS NOT NULL AND tech_detected::text NOT IN ('[]','{}','null'))::int AS tech,
   count(*) FILTER (WHERE cms_version IS NOT NULL)::int AS cms_version,
   count(*) FILTER (WHERE dns_provider IS NOT NULL)::int AS dns_provider,
   count(*) FILTER (WHERE spf_status IS NOT NULL)::int AS spf,

@@ -1977,7 +1977,7 @@ app.post('/api/fleet/metrics/:host', async (req, res) => {
     await r.zAdd('np:host:index', { score: Date.now(), value: host }); // registo → hosts SEM workers (infra) aparecem na frota
     // Containers Docker do host (docker ps) → mostrados na página VMs como "workers" da VM.
     if (Array.isArray(body.containers)) {
-      const cs = body.containers.slice(0, 80).map((c) => ({ name: String(c && c.name || '').slice(0, 64), state: String(c && c.state || '').slice(0, 16), status: String(c && c.status || '').slice(0, 60) })).filter((c) => c.name);
+      const cs = body.containers.slice(0, 80).map((c) => ({ name: String(c && c.name || '').slice(0, 64), state: String(c && c.state || '').slice(0, 16), status: String(c && c.status || '').slice(0, 60), image: String(c && c.image || '').slice(0, 90), ports: String(c && c.ports || '').slice(0, 140) })).filter((c) => c.name);
       await r.set(`np:host:${host}:containers`, JSON.stringify(cs), { EX: 900 });
     }
   } catch (e) { return res.status(502).json({ error: e.message }); }

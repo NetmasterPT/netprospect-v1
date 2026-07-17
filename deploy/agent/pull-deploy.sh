@@ -68,7 +68,7 @@ else log "sem alterações"; fi
 net_bytes()     { awk 'NR>2 && $1!~/^lo:/ {gsub(/:/,"",$1); rx+=$2; tx+=$10} END{printf "%d %d", rx+0, tx+0}' /proc/net/dev 2>/dev/null; }
 disk_sectors()  { awk '$3 ~ /^(sd[a-z]+|vd[a-z]+|xvd[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+)$/ {r+=$6; w+=$10} END{printf "%d %d", r+0, w+0}' /proc/diskstats 2>/dev/null; }
 # Lista os containers Docker deste host (JSON) → o dashboard mostra-os na página VMs como "workers" da VM.
-containers_json() { command -v docker >/dev/null 2>&1 || { printf '[]'; return; }; docker ps --format '{{.Names}}\t{{.State}}\t{{.Status}}' 2>/dev/null | awk -F'\t' 'BEGIN{printf "["}{if(NR>1)printf ",";gsub(/["\\]/,"",$1);gsub(/["\\]/,"",$2);gsub(/["\\]/,"",$3);printf "{\"name\":\"%s\",\"state\":\"%s\",\"status\":\"%s\"}",$1,$2,$3}END{printf "]"}'; }
+containers_json() { command -v docker >/dev/null 2>&1 || { printf '[]'; return; }; docker ps --format '{{.Names}}\t{{.State}}\t{{.Status}}\t{{.Image}}\t{{.Ports}}' 2>/dev/null | awk -F'\t' 'BEGIN{printf "["}{if(NR>1)printf ",";for(i=1;i<=5;i++)gsub(/["\\]/,"",$i);printf "{\"name\":\"%s\",\"state\":\"%s\",\"status\":\"%s\",\"image\":\"%s\",\"ports\":\"%s\"}",$1,$2,$3,$4,$5}END{printf "]"}'; }
 http_ms()       { [ -z "$1" ] && return 0; local t; t=$(curl -fsS --max-time 5 -o /dev/null -w '%{time_total}' "$1" 2>/dev/null) || return 0; awk "BEGIN{printf \"%.0f\", $t*1000}"; }
 tcp_ms()        { { [ -z "$1" ] || [ -z "$2" ]; } && return 0; local s e; s=$(date +%s%N); if timeout 5 bash -c "exec 3<>/dev/tcp/$1/$2" 2>/dev/null; then e=$(date +%s%N); exec 3>&- 2>/dev/null; awk "BEGIN{printf \"%.0f\", ($e-$s)/1000000}"; fi; }
 collect_metrics() {

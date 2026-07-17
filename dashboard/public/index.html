@@ -1430,10 +1430,28 @@ function allVms(d) {
   }
   return vms;
 }
-// Chips dos containers Docker de um host (para as VMs de infra) — nome + ponto de estado (verde=running).
-const containerChips = (cs) => (cs && cs.length)
-  ? cs.map((c) => { const up = /running/i.test(c.state || '') || /^Up/i.test(c.status || ''); const col = up ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; return `<span class="np-chip" style="height:16px;font-size:9px" title="${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${esc(c.name)}</span>`; }).join(' ')
+// Botões dos containers Docker de um host — nome + ponto de estado (verde=running); click → openContainer.
+const containerChips = (host, cs) => (cs && cs.length)
+  ? cs.map((c) => { const up = /running/i.test(c.state || '') || /^Up/i.test(c.status || ''); const col = up ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; return `<button class="np-btn np-btn--sm" style="font-size:9px" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${esc(c.name)}</button>`; }).join(' ')
   : '<span class="muted" style="font-size:10px">sem containers reportados</span>';
+// Drawer de um container (mostra-o "como um worker": host, imagem, estado, uptime, portas).
+window.openContainer = async (host, name) => {
+  const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
+  dw.innerHTML = `<div class="np-empty">A carregar…</div>`;
+  let d; try { d = await api('/api/workers'); } catch (e) { dw.innerHTML = `<div class="np-empty">Erro: ${esc(e.message)}</div>`; return; }
+  const H = (d.hosts || {})[host] || {};
+  const c = (H.containers || []).find((x) => x.name === name);
+  if (!c) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">Container ${esc(name)} já não está a correr em ${esc(host)}.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
+  const up = /running/i.test(c.state || '') || /^Up/i.test(c.status || '');
+  const kv = (k, v) => `<div class="k">${k}</div><div class="v">${v}</div>`;
+  const ports = (c.ports || '').split(',').map((p) => p.trim()).filter(Boolean);
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(c.name)}</div><div class="muted" style="font-size:12px">container em <a href="#" onclick="openVm('${esc(host)}');return false" style="color:var(--np-brand-ink,#2563eb)">${esc(host)}</a></div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+    <div style="padding:16px 18px">
+      <div class="np-kv">${kv('Estado', `<span class="np-badge ${up ? 'ok' : 'warn'}" style="height:18px">${esc(c.state || '?')}</span>`)}${kv('Status', esc(c.status || '—'))}${kv('Imagem', `<span class="np-mono" style="font-size:11px">${esc(c.image || '—')}</span>`)}${kv('Host', esc(host))}</div>
+      ${ports.length ? `<div class="np-sec-t">Portas</div><div style="display:flex;flex-wrap:wrap;gap:4px">${ports.map((p) => `<span class="np-chip" style="font-size:10px">${esc(p)}</span>`).join('')}</div>` : ''}
+      <div class="muted" style="font-size:11px;margin-top:12px">Snapshot do <code>docker ps</code> reportado pelo agente (~5 min). Não é um worker NetProspect — sem contadores/logs de jobs.</div>
+    </div>`;
+};
 // Soma capacidades (usado/total/livre) de uma janela por um conjunto de VMs (aditivo).
 function sumCaps(vms, win) {
   let used = 0, total = 0, any = false, anyTotal = false;
@@ -1492,7 +1510,7 @@ async function viewVms() {
   const nCont = (v) => (v.cap && v.cap.containers) ? v.cap.containers.length : 0;
   const statInner = (v) => v.infra ? `<span class="np-badge info" style="height:20px" title="máquina de infra — só reporta telemetria">infra</span>` : `<span class="np-badge ${v.fail24h ? 'warn' : 'ok'}" style="height:20px">${fmt(v.done1h)}/h</span>`;
   const wkBtns = (v) => v.workers.map((w) => `<button class="np-btn np-btn--sm" onclick="event.stopPropagation();openWorker('${esc(w.id)}')" title="${esc(w.role)}${w.cur ? ' · ' + esc(w.cur) : ''}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('');
-  const contInner = (v) => containerChips(v.cap && v.cap.containers);
+  const contInner = (v) => containerChips(v.host, v.cap && v.cap.containers);
   if (fleetPatchable('vms', sig)) {
     for (const v of vms) { const k = idsafe(v.host); setHTML('vm_' + k + '_stat', statInner(v)); setHTML('vm_' + k + '_load', loadBar(v.load, v.cores)); setHTML('vm_' + k + '_cap', v.workers.length ? capBlock(v.cap) : ''); setHTML('vm_' + k + '_met', hostMetricsBlock(v.cap)); setHTML('vm_' + k + '_wk', wkBtns(v)); setHTML('vm_' + k + '_cont', contInner(v)); }
     return;
@@ -1547,7 +1565,7 @@ window.openVm = async (host) => {
   const v = allVms(d).find((x) => x.host === host);
   if (!v) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">VM ${esc(host)} sem dados a reportar.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
   const cs = (v.cap && v.cap.containers) || [];
-  const contSec = `<div class="np-sec-t">Containers (${cs.length})</div><div style="display:flex;flex-wrap:wrap;gap:4px">${containerChips(cs)}</div>`;
+  const contSec = `<div class="np-sec-t">Containers (${cs.length})</div><div style="display:flex;flex-wrap:wrap;gap:4px">${containerChips(v.host, cs)}</div>`;
   let wkCfg = '';
   if (v.workers.length) {
     const jobs = Object.keys(v.conc || {}).sort();
@@ -1581,7 +1599,7 @@ window.openServer = async (dc) => {
   const cap = { cap1h: sumCaps(withWk, 'cap1h'), cap24h: sumCaps(withWk, 'cap24h'), cap30d: sumCaps(withWk, 'cap30d') };
   const vmRow = (v) => { const inner = v.workers.length
       ? v.workers.map((w) => `<button class="np-btn np-btn--sm" style="font-size:9px;padding:1px 6px" onclick="openWorker('${esc(w.id)}')" title="${esc(w.role)}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('')
-      : containerChips(v.cap && v.cap.containers);
+      : containerChips(v.host, v.cap && v.cap.containers);
     return `<div style="border:1px solid var(--np-border);border-radius:8px;padding:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><button class="np-btn np-btn--sm" onclick="openVm('${esc(v.host)}')">${esc(v.host)} ›</button><span class="tnum muted" style="font-size:11px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : '—'}${v.infra ? ' · infra' : ' · ' + fmt(v.done1h) + '/h'}</span></div>
       ${v.workers.length ? capBlock(v.cap) : ''}
@@ -1770,7 +1788,11 @@ async function viewWorkers() {
   if (!d.telemetry) { if (!REFRESHING) $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Telemetria desligada.</b> <span class="muted">Os workers reportam via Redis — já configurado por omissão no compose; falta um rebuild dos workers (<code>docker compose up -d --build worker-base worker</code>) para começarem a reportar.</span></div></div>`; return; }
   if (!d.workers.length) { if (!REFRESHING) $('#view').innerHTML = head + `<div class="np-empty">Nenhum worker a reportar. Arranca com <code>docker compose up -d worker-base</code> (ou a frota remota de verificação).</div>`; return; }
   const ws = d.workers.slice().sort((a, b) => (a.host || '').localeCompare(b.host || '') || a.id.localeCompare(b.id)); // ordenação estável
-  const sig = ws.map((w) => w.id).join(',');
+  // Containers das VMs de INFRA (sem workers NP) — mostrados aqui como "workers" (click → openContainer).
+  const infraHosts = Object.keys(d.hosts || {}).filter((h) => d.hosts[h].infra && (d.hosts[h].containers || []).length).sort()
+    .map((h) => ({ host: h, dc: DC_OF(h), containers: d.hosts[h].containers }));
+  const sig = ws.map((w) => w.id).join(',') + '|inf:' + infraHosts.map((x) => x.host).join(',');
+  const infraSection = () => infraHosts.map((x) => `<div style="margin-bottom:10px"><div class="muted" style="font-size:11px;margin-bottom:4px"><b>${esc(x.host)}</b> · ${esc(x.dc)} · ${x.containers.length} containers</div><div style="display:flex;flex-wrap:wrap;gap:4px">${containerChips(x.host, x.containers)}</div></div>`).join('');
   const curInner = (w) => w.cur ? `<div style="font-size:12.5px"><span class="np-dot" style="background:var(--np-ok-mark);display:inline-block;margin-right:6px"></span><b>${esc(w.cur)}</b> <span class="muted">(${w.curStarted ? durMs(Date.now() - w.curStarted) : ''})</span></div>` : `<div class="muted" style="font-size:12.5px">idle</div>`;
   const statsInner = (w) => `<div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(w.done24h)}</div><div class="muted" style="font-size:10px">feitas 24h · ${fmt(w.done1h)}/h</div></div><div><div class="tnum" style="font-size:16px;font-weight:800;color:${w.fail24h ? 'var(--np-warn)' : ''}">${fmt(w.fail24h)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div><div><div class="tnum" style="font-size:16px;font-weight:800">${durMs(w.avgMs)}</div><div class="muted" style="font-size:10px">dur. média</div></div>`;
   const logsInner = (logs) => (logs && logs.length) ? logs.map(esc).join('\n') : '<span class="muted">(sem logs recentes)</span>';
@@ -1778,6 +1800,7 @@ async function viewWorkers() {
   if (fleetPatchable('workers', sig)) {
     setHTML('wk_summary', summaryInner());
     for (const w of ws) { const k = idsafe(w.id); setHTML('wk_' + k + '_cur', curInner(w)); setHTML('wk_' + k + '_cap', workerCapBlock(w)); setHTML('wk_' + k + '_stats', statsInner(w)); setHTML('wk_' + k + '_logs', logsInner(w.logs3)); }
+    if (infraHosts.length) setHTML('wk_infra', infraSection());
     return;
   }
   const card = (w) => { const k = idsafe(w.id); const caps = (w.consumers || []).map((c) => `<span class="np-chip" style="height:16px;font-size:9px">${esc(c)}</span>`).join(' ') || '<span class="muted" style="font-size:10px">—</span>'; return `<section class="np-card" style="cursor:pointer" onclick="openWorker('${esc(w.id)}')"><div class="np-card-b">
@@ -1791,7 +1814,8 @@ async function viewWorkers() {
     <div id="wk_${k}_logs" class="np-mono" style="background:var(--np-surface-2);border-radius:6px;padding:6px 8px;font-size:10.5px;margin-top:3px;white-space:pre-wrap;max-height:64px;overflow:hidden">${logsInner(w.logs3)}</div>
   </div></section>`; };
   const statsCard = `<section class="np-card" style="margin-bottom:14px"><div class="np-card-b"><div id="wk_summary">${summaryInner()}</div></div></section>`;
-  $('#view').innerHTML = head + statsCard + `<div id="fleet-workers" class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">${ws.map(card).join('')}</div>`;
+  const infraCard = infraHosts.length ? `<section class="np-card" style="margin-top:14px"><div class="np-card-b"><div class="np-card-h" style="padding:0 0 8px"><h2 style="font-size:14px">Containers (VMs de infra)</h2><span class="muted" style="font-size:12px">máquinas sem workers NP · click → detalhe</span></div><div id="wk_infra">${infraSection()}</div></div></section>` : '';
+  $('#view').innerHTML = head + statsCard + `<div id="fleet-workers" class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">${ws.map(card).join('')}</div>` + infraCard;
 }
 window.openWorker = async (id) => {
   let w; try { w = await api('/api/workers/' + encodeURIComponent(id)); } catch (e) { return; }

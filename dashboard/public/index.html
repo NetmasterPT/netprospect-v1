@@ -1405,49 +1405,163 @@ const loadBar = (load, cores) => {
   return `<div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:8px;background:var(--np-border,#e5e7eb);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.min(100, pct)}%;background:${col}"></div></div><span class="tnum" style="font-size:11px;color:${col};white-space:nowrap">${load} / ${cores}c</span></div>`;
 };
 const errCard = (e) => `<div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`;
+// ---------- Frota: helpers partilhados (Servidores / VMs / Workers) ----------
+const idsafe = (s) => String(s || '').replace(/[^a-z0-9]/gi, '_');
+// Patch parcial: só re-escreve se o conteúdo mudou (não mexe na estrutura → mantém <details>/scroll/hover).
+const setHTML = (id, html) => { const el = document.getElementById(id); if (el && el.innerHTML !== html) el.innerHTML = html; };
+// Assinatura estrutural por página: se não mudou (mesmos DCs/hosts/workers) faz-se patch; senão rebuild.
+window.__fleetSig = window.__fleetSig || {};
+function fleetPatchable(key, sig) {
+  const same = window.__fleetSig[key] === sig && document.getElementById('fleet-' + key);
+  window.__fleetSig[key] = sig;
+  return REFRESHING && same;
+}
+// Junta a capacidade/telemetria por host (d.hosts do backend) aos objetos VM do groupByHost.
+const mergeHostCaps = (vms, hosts) => { for (const v of vms) v.cap = (hosts && hosts[v.host]) || null; return vms; };
+// Soma capacidades (usado/total/livre) de uma janela por um conjunto de VMs (aditivo).
+function sumCaps(vms, win) {
+  let used = 0, total = 0, any = false, anyTotal = false;
+  for (const v of vms) { const c = v.cap && v.cap[win]; if (!c) continue; any = true; used += c.used || 0; if (c.total != null) { total += c.total; anyTotal = true; } }
+  if (!any) return null;
+  return { used: Math.round(used), total: anyTotal ? Math.round(total) : null, avail: anyTotal ? Math.max(0, Math.round(total - used)) : null };
+}
+// Capacidade por-worker (do próprio worker: Σ conc × janela / avgMs vs done). 30d indisponível por-worker.
+function workerCap(w, win) {
+  const done = win === 'cap1h' ? w.done1h : win === 'cap24h' ? w.done24h : null;
+  if (win === 'cap30d') return null; // contadores diários são por host, não por worker
+  let slots = 0; if (w.conc) for (const k in w.conc) slots += (+w.conc[k] || 0);
+  const perH = w.avgMs > 0 && slots > 0 ? slots * 3600000 / w.avgMs : null;
+  const total = perH != null ? Math.round(win === 'cap24h' ? perH * 24 : perH) : null;
+  return { used: Math.round(done || 0), total, avail: total != null ? Math.max(0, total - (done || 0)) : null };
+}
+// Célula compacta de capacidade (1h/24h/30d) para cards/drawers — mesma leitura que as Filas.
+function capMini(label, cap) {
+  if (!cap || cap.total == null) return `<div style="flex:1;text-align:center;min-width:56px"><div class="muted" style="font-size:9px">${label}</div><div class="tnum muted" style="font-size:12px">${cap ? fmt(cap.used) + '<span style="font-size:9px"> us.</span>' : '—'}</div></div>`;
+  const util = cap.total > 0 ? Math.min(100, Math.round(100 * cap.used / cap.total)) : 0;
+  const col = util >= 90 ? 'var(--np-bad,#dc2626)' : util >= 60 ? 'var(--np-warn,#d97706)' : 'var(--np-ok-mark,#16a34a)';
+  return `<div style="flex:1;text-align:center;min-width:56px" title="${label}: usados ${fmt(cap.used)} / total ${fmt(cap.total)} · livres ${fmt(cap.avail)} (${util}% usado)"><div class="muted" style="font-size:9px">${label}</div><div class="tnum" style="font-size:12px;font-weight:700"><b>${fmt(cap.used)}</b><span class="muted">/${fmt(cap.total)}</span></div><div style="height:4px;background:var(--np-border);border-radius:2px;overflow:hidden;margin-top:2px"><div style="height:100%;width:${util}%;background:${col}"></div></div></div>`;
+}
+const capBlock = (H) => `<div style="display:flex;gap:8px;margin-top:10px">${capMini('1h', H && H.cap1h)}${capMini('24h', H && H.cap24h)}${capMini('30d', H && H.cap30d)}</div>`;
+// Barra de utilização genérica (RAM/disco/CPU) para a telemetria de host.
+function usageBar(label, used, total, unit, fmtv) {
+  if (used == null || total == null || !(total > 0)) return '';
+  const p = Math.min(100, Math.round(100 * used / total));
+  const col = p >= 90 ? 'var(--np-bad,#dc2626)' : p >= 70 ? 'var(--np-warn,#d97706)' : 'var(--np-ok-mark,#16a34a)';
+  const fv = fmtv || ((x) => x);
+  return `<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;font-size:10px"><span class="muted">${label}</span><span class="tnum" style="color:${col}">${fv(used)} / ${fv(total)} ${unit} · ${p}%</span></div><div style="height:5px;background:var(--np-border);border-radius:3px;overflow:hidden;margin-top:2px"><div style="height:100%;width:${p}%;background:${col}"></div></div></div>`;
+}
+const latChip = (label, ms) => { if (ms == null || ms === '') return ''; const v = +ms; const col = v < 50 ? 'var(--np-ok-mark,#16a34a)' : v < 200 ? 'var(--np-warn,#d97706)' : 'var(--np-bad,#dc2626)'; return `<span class="np-chip" style="font-size:10px" title="latência para ${label}">${label} <b style="color:${col}">${Math.round(v)}ms</b></span>`; };
+// Bloco de telemetria de host (reportada pelo agente de pull ~5 min): RAM/disco/CPU + rede/IO + latências.
+function hostMetricsBlock(H) {
+  const m = H && H.metrics;
+  if (!m) return `<div class="muted" style="font-size:10px;margin-top:8px;border-top:1px dashed var(--np-border);padding-top:8px">sem telemetria de host — o agente de pull ainda não reportou (≤ ~5 min após deploy)</div>`;
+  const num = (x) => (x == null || x === '' ? null : +x);
+  const age = m.reported ? timeAgo(Math.floor(+m.reported / 1000)) : '—';
+  const bars = [usageBar('CPU', num(m.cpu), 100, '%'), usageBar('RAM', num(m.mem_used), num(m.mem_total), 'MB', (x) => fmt(x)), usageBar('Disco', num(m.disk_used), num(m.disk_total), 'GB', (x) => fmt(x))].join('');
+  const chips = [];
+  if (num(m.net_rx) != null || num(m.net_tx) != null) chips.push(`<span class="np-chip" style="font-size:10px" title="rede ingress/egress">rede ↓${(num(m.net_rx) || 0).toFixed(1)} ↑${(num(m.net_tx) || 0).toFixed(1)} MB/s</span>`);
+  if (num(m.io_read) != null || num(m.io_write) != null) chips.push(`<span class="np-chip" style="font-size:10px" title="disco I/O leitura/escrita">I/O r${(num(m.io_read) || 0).toFixed(1)} w${(num(m.io_write) || 0).toFixed(1)} MB/s</span>`);
+  const lats = [latChip('Directus', m.lat_directus), latChip('PG', m.lat_pg), latChip('NAS', m.lat_minio)].join('');
+  return `<div style="margin-top:8px;border-top:1px dashed var(--np-border);padding-top:8px"><div class="muted" style="font-size:9px;text-transform:uppercase;letter-spacing:.04em">Telemetria de host · ${age}</div>${bars}<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${chips.join('')}${lats}</div></div>`;
+}
+const vmBusy = (v) => v.workers.some((w) => w.cur);
+const vmBtnInner = (v) => `${esc(v.host)}${vmBusy(v) ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''} <span class="muted tnum" style="font-size:10px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : ''}</span>`;
 async function viewVms() {
   renderNav('vms');
-  const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">VMs</h1><div class="np-sub">Máquinas com workers a correr · load do host · click num worker → logs · atualiza 10 s</div></div></div>`;
-  let d; try { d = await api('/api/workers'); } catch (e) { $('#view').innerHTML = head + errCard(e); return; }
-  if (!d.telemetry || !(d.workers || []).length) { $('#view').innerHTML = head + `<div class="np-empty">Nenhum worker a reportar.</div>`; return; }
-  const vms = groupByHost(d.workers).sort((a, b) => a.host.localeCompare(b.host));
-  const card = (v) => `<section class="np-card"><div class="np-card-b">
-    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div><div style="font-weight:800;font-size:14px">${esc(v.host)}</div><div class="muted" style="font-size:11px">${esc(v.dc)} · ${v.workers.length} workers · ${esc(v.roles.join(', '))}</div></div>
-      <span class="np-badge ${v.fail24h ? 'warn' : 'ok'}" style="height:20px">${fmt(v.done1h)}/h</span></div>
-    <div style="margin-top:10px">${loadBar(v.load, v.cores)}</div>
-    <div style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap">
-      <div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(v.done24h)}</div><div class="muted" style="font-size:10px">feitas 24h</div></div>
-      <div><div class="tnum" style="font-size:16px;font-weight:800;color:${v.fail24h ? 'var(--np-warn)' : ''}">${fmt(v.fail24h)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div></div>
-    <div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:4px">${v.workers.map((w) => `<button class="np-btn np-btn--sm" onclick="openWorker('${esc(w.id)}')" title="${esc(w.role)}${w.cur ? ' · ' + esc(w.cur) : ''}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('')}</div>
-  </div></section>`;
-  $('#view').innerHTML = head + `<div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">${vms.map(card).join('')}</div>`;
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Frota</div><h1 class="np-h1">VMs</h1><div class="np-sub">Máquinas com workers · capacidade 1h/24h/30d · telemetria de host · click → drawer · atualiza 10 s</div></div></div>`;
+  let d; try { d = await api('/api/workers'); } catch (e) { if (!REFRESHING) $('#view').innerHTML = head + errCard(e); return; }
+  if (!d.telemetry || !(d.workers || []).length) { if (!REFRESHING) $('#view').innerHTML = head + `<div class="np-empty">Nenhum worker a reportar.</div>`; return; }
+  const vms = mergeHostCaps(groupByHost(d.workers), d.hosts).sort((a, b) => a.host.localeCompare(b.host));
+  const sig = vms.map((v) => v.host + '#' + v.workers.length).join(',');
+  const statInner = (v) => `<span class="np-badge ${v.fail24h ? 'warn' : 'ok'}" style="height:20px">${fmt(v.done1h)}/h</span>`;
+  const wkBtns = (v) => v.workers.map((w) => `<button class="np-btn np-btn--sm" onclick="event.stopPropagation();openWorker('${esc(w.id)}')" title="${esc(w.role)}${w.cur ? ' · ' + esc(w.cur) : ''}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('');
+  if (fleetPatchable('vms', sig)) {
+    for (const v of vms) { const k = idsafe(v.host); setHTML('vm_' + k + '_stat', statInner(v)); setHTML('vm_' + k + '_load', loadBar(v.load, v.cores)); setHTML('vm_' + k + '_cap', capBlock(v.cap)); setHTML('vm_' + k + '_met', hostMetricsBlock(v.cap)); setHTML('vm_' + k + '_wk', wkBtns(v)); }
+    return;
+  }
+  const card = (v) => { const k = idsafe(v.host); return `<section class="np-card"><div class="np-card-b">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="cursor:pointer;min-width:0" onclick="openVm('${esc(v.host)}')"><div style="font-weight:800;font-size:14px">${esc(v.host)} <span style="font-size:11px;color:var(--np-brand-ink,#2563eb)">›</span></div><div class="muted" style="font-size:11px">${esc(v.dc)} · ${v.workers.length} workers · ${esc(v.roles.join(', '))}</div></div>
+      <span id="vm_${k}_stat">${statInner(v)}</span></div>
+    <div id="vm_${k}_load" style="margin-top:10px">${loadBar(v.load, v.cores)}</div>
+    <div id="vm_${k}_cap">${capBlock(v.cap)}</div>
+    <div id="vm_${k}_met">${hostMetricsBlock(v.cap)}</div>
+    <div class="muted" style="font-size:9px;margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Workers</div>
+    <div id="vm_${k}_wk" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${wkBtns(v)}</div>
+  </div></section>`; };
+  $('#view').innerHTML = head + `<div id="fleet-vms" class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">${vms.map(card).join('')}</div>`;
 }
 async function viewServers() {
   renderNav('servers');
-  const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Servidores</h1><div class="np-sub">Datacenters → VMs a correr workers · load agregado · atualiza 10 s</div></div></div>`;
-  let d; try { d = await api('/api/workers'); } catch (e) { $('#view').innerHTML = head + errCard(e); return; }
-  const vms = groupByHost(d.workers || []);
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Frota</div><h1 class="np-h1">Servidores</h1><div class="np-sub">Datacenters → VMs → workers · capacidade 1h/24h/30d · click → drawer · atualiza 10 s</div></div></div>`;
+  let d; try { d = await api('/api/workers'); } catch (e) { if (!REFRESHING) $('#view').innerHTML = head + errCard(e); return; }
+  const vms = mergeHostCaps(groupByHost(d.workers || []), d.hosts);
   const dcs = {};
   for (const v of vms) (dcs[v.dc] = dcs[v.dc] || []).push(v);
-  const card = ([dc, list]) => {
-    const workers = list.reduce((a, v) => a + v.workers.length, 0), done1h = list.reduce((a, v) => a + v.done1h, 0), fail24h = list.reduce((a, v) => a + v.fail24h, 0);
-    const totLoad = list.reduce((a, v) => a + (v.load || 0), 0), totCores = list.reduce((a, v) => a + (v.cores || 0), 0);
-    return `<section class="np-card"><div class="np-card-b">
-      <div style="font-weight:800;font-size:15px">${esc(dc)}</div><div class="muted" style="font-size:11px">${list.length} VMs · ${workers} workers</div>
-      <div style="margin-top:10px">${loadBar(+totLoad.toFixed(2), totCores)}</div>
-      <div style="display:flex;gap:16px;margin-top:10px"><div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(done1h)}/h</div><div class="muted" style="font-size:10px">throughput</div></div><div><div class="tnum" style="font-size:16px;font-weight:800;color:${fail24h ? 'var(--np-warn)' : ''}">${fmt(fail24h)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div></div>
-      <div style="margin-top:10px">${list.sort((a, b) => a.host.localeCompare(b.host)).map((v) => {
-        const ver = v.versions.length === 0 ? '<span class="muted" style="font-size:10px">v?</span>'
-          : v.versions.length === 1 ? `<span class="np-badge" style="height:15px;font-size:9px" title="versão do código dos workers">${esc(v.versions[0])}</span>`
-          : `<span class="np-badge" style="height:15px;font-size:9px;background:var(--np-warn)" title="VERSÕES MISTURADAS — há workers com código diferente">⚠ ${v.versions.map(esc).join(' / ')}</span>`;
-        const jobs = Object.keys(v.conc || {}).sort();
-        const cfg = jobs.length ? `<details style="margin-top:2px"><summary style="cursor:pointer;font-size:10px;color:var(--np-text-2)">config · ${v.replicas}w</summary><table style="width:100%;font-size:10px;margin:3px 0;border-collapse:collapse">${jobs.map((j) => `<tr><td style="padding:1px 4px">${esc(j)}</td><td class="tnum" style="text-align:right;padding:1px 6px">conc ${v.conc[j]}</td><td class="tnum" style="text-align:right;padding:1px 4px;color:var(--np-text-2)">maxack ${(v.maxacks || {})[j] ?? '—'}</td></tr>`).join('')}</table></details>` : '';
-        return `<div style="padding:5px 0;border-top:1px solid var(--np-border)"><div style="display:flex;justify-content:space-between;font-size:12px;gap:6px"><span onclick="location.hash='#/vms'" style="cursor:pointer;min-width:0">${esc(v.host)} <span class="muted">${esc(v.roles.join('/'))}</span></span><span class="tnum muted" style="white-space:nowrap">${v.load != null ? v.load + '/' + v.cores + 'c' : '—'}</span></div><div style="margin-top:3px;display:flex;gap:6px;align-items:center;flex-wrap:wrap">${ver}<button class="np-btn np-btn--sm" style="font-size:9px;padding:1px 6px" title="Editar o .env deste host (auto-deploy por pull)" onclick="event.stopPropagation();editHostEnv('${esc(v.host)}')">⚙ .env</button></div>${cfg}</div>`;
-      }).join('')}</div>
-    </div></section>`;
-  };
-  $('#view').innerHTML = head + `<div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">${Object.entries(dcs).map(card).join('')}</div>`;
+  const dcNames = Object.keys(dcs).sort(); // ordenação estável por nome do DC
+  for (const dc of dcNames) dcs[dc].sort((a, b) => a.host.localeCompare(b.host));
+  const sig = dcNames.map((dc) => dc + ':' + dcs[dc].map((v) => v.host + '#' + v.workers.length).join(',')).join('|');
+  const dynLoad = (list) => loadBar(+list.reduce((a, v) => a + (v.load || 0), 0).toFixed(2), list.reduce((a, v) => a + (v.cores || 0), 0));
+  const dynStats = (list) => { const d1 = list.reduce((a, v) => a + v.done1h, 0), f = list.reduce((a, v) => a + v.fail24h, 0); return `<div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(d1)}/h</div><div class="muted" style="font-size:10px">throughput</div></div><div><div class="tnum" style="font-size:16px;font-weight:800;color:${f ? 'var(--np-warn)' : ''}">${fmt(f)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div>`; };
+  const dynCap = (list) => capBlock({ cap1h: sumCaps(list, 'cap1h'), cap24h: sumCaps(list, 'cap24h'), cap30d: sumCaps(list, 'cap30d') });
+  const vmBtns = (list) => list.map((v) => `<button class="np-btn np-btn--sm" onclick="event.stopPropagation();openVm('${esc(v.host)}')" title="${esc(v.roles.join('/'))} · ${v.workers.length} workers">${vmBtnInner(v)}</button>`).join('');
+  if (fleetPatchable('servers', sig)) {
+    for (const dc of dcNames) { const k = idsafe(dc); setHTML('sv_' + k + '_load', dynLoad(dcs[dc])); setHTML('sv_' + k + '_stats', dynStats(dcs[dc])); setHTML('sv_' + k + '_cap', dynCap(dcs[dc])); setHTML('sv_' + k + '_vms', vmBtns(dcs[dc])); }
+    return;
+  }
+  const card = (dc) => { const list = dcs[dc]; const k = idsafe(dc); const workers = list.reduce((a, v) => a + v.workers.length, 0); return `<section class="np-card"><div class="np-card-b">
+    <div style="cursor:pointer" onclick="openServer('${esc(dc)}')"><div style="font-weight:800;font-size:15px">${esc(dc)} <span style="font-size:11px;color:var(--np-brand-ink,#2563eb)">ver ›</span></div><div class="muted" style="font-size:11px">${list.length} VMs · ${workers} workers</div></div>
+    <div id="sv_${k}_load" style="margin-top:10px">${dynLoad(list)}</div>
+    <div id="sv_${k}_stats" style="display:flex;gap:16px;margin-top:10px">${dynStats(list)}</div>
+    <div id="sv_${k}_cap">${dynCap(list)}</div>
+    <div class="muted" style="font-size:9px;margin-top:12px;text-transform:uppercase;letter-spacing:.04em">VMs</div>
+    <div id="sv_${k}_vms" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${vmBtns(list)}</div>
+    <div onclick="openServer('${esc(dc)}')" style="cursor:pointer;text-align:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--np-border);font-size:11px;color:var(--np-brand-ink,#2563eb)">ver servidor ›</div>
+  </div></section>`; };
+  $('#view').innerHTML = head + `<div id="fleet-servers" class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">${dcNames.map(card).join('')}</div>`;
 }
+// Drawer de uma VM (host): load + capacidade 1h/24h/30d + telemetria de host + workers (botões) + config/.env.
+window.openVm = async (host) => {
+  const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
+  dw.innerHTML = `<div class="np-empty">A carregar…</div>`;
+  let d; try { d = await api('/api/workers'); } catch (e) { dw.innerHTML = `<div class="np-empty">Erro: ${esc(e.message)}</div>`; return; }
+  const v = mergeHostCaps(groupByHost(d.workers || []), d.hosts).find((x) => x.host === host);
+  if (!v) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">VM ${esc(host)} sem workers a reportar.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
+  const jobs = Object.keys(v.conc || {}).sort();
+  const cfg = jobs.length ? `<table style="width:100%;font-size:11px;margin-top:6px;border-collapse:collapse">${jobs.map((j) => `<tr><td style="padding:2px 4px">${esc(j)}</td><td class="tnum" style="text-align:right;padding:2px 6px">conc ${v.conc[j]}</td><td class="tnum" style="text-align:right;padding:2px 4px;color:var(--np-text-2)">maxack ${(v.maxacks || {})[j] ?? '—'}</td></tr>`).join('')}</table>` : '<span class="muted">—</span>';
+  const ver = v.versions.length <= 1 ? (v.versions[0] || '?') : '⚠ ' + v.versions.join(' / ');
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(v.host)}</div><div class="muted" style="font-size:12px">${esc(v.dc)} · ${v.workers.length} workers · ${esc(v.roles.join(', '))}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+    <div style="padding:16px 18px">
+      ${loadBar(v.load, v.cores)}
+      <div class="np-sec-t">Capacidade (usado / total · livre)</div>${capBlock(v.cap)}
+      ${hostMetricsBlock(v.cap)}
+      <div class="np-sec-t">Workers (${v.workers.length})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px">${v.workers.map((w) => `<button class="np-btn np-btn--sm" onclick="openWorker('${esc(w.id)}')" title="${esc(w.role)}${w.cur ? ' · ' + esc(w.cur) : ''}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('')}</div>
+      <div class="np-sec-t">Config <span class="np-badge" style="height:15px;font-size:9px" title="versão do código dos workers">${esc(ver)}</span></div>${cfg}
+      <div style="margin-top:12px"><button class="np-btn np-btn--sm" title="Editar o .env deste host (auto-deploy por pull)" onclick="editHostEnv('${esc(host)}')">⚙ Editar .env</button></div>
+    </div>`;
+};
+// Drawer de um servidor (DC): load agregado + capacidade agregada + cada VM (com a sua capacidade + workers).
+window.openServer = async (dc) => {
+  const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
+  dw.innerHTML = `<div class="np-empty">A carregar…</div>`;
+  let d; try { d = await api('/api/workers'); } catch (e) { dw.innerHTML = `<div class="np-empty">Erro: ${esc(e.message)}</div>`; return; }
+  const vms = mergeHostCaps(groupByHost(d.workers || []), d.hosts).filter((v) => v.dc === dc).sort((a, b) => a.host.localeCompare(b.host));
+  if (!vms.length) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">${esc(dc)} sem VMs a reportar.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
+  const workers = vms.reduce((a, v) => a + v.workers.length, 0);
+  const totLoad = +vms.reduce((a, v) => a + (v.load || 0), 0).toFixed(2), totCores = vms.reduce((a, v) => a + (v.cores || 0), 0);
+  const cap = { cap1h: sumCaps(vms, 'cap1h'), cap24h: sumCaps(vms, 'cap24h'), cap30d: sumCaps(vms, 'cap30d') };
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(dc)}</div><div class="muted" style="font-size:12px">${vms.length} VMs · ${workers} workers</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+    <div style="padding:16px 18px">
+      ${loadBar(totLoad, totCores)}
+      <div class="np-sec-t">Capacidade agregada (usado / total · livre)</div>${capBlock(cap)}
+      <div class="np-sec-t">VMs (${vms.length})</div>
+      <div style="display:flex;flex-direction:column;gap:8px">${vms.map((v) => `<div style="border:1px solid var(--np-border);border-radius:8px;padding:8px">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><button class="np-btn np-btn--sm" onclick="openVm('${esc(v.host)}')">${esc(v.host)} ›</button><span class="tnum muted" style="font-size:11px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : '—'} · ${fmt(v.done1h)}/h</span></div>
+        ${capBlock(v.cap)}
+        <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${v.workers.map((w) => `<button class="np-btn np-btn--sm" style="font-size:9px;padding:1px 6px" onclick="openWorker('${esc(w.id)}')" title="${esc(w.role)}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('')}</div>
+      </div>`).join('')}</div>
+    </div>`;
+};
 // Editor do .env de um host (auto-deploy por pull). Grava no store central do np-server; o agente
 // do host puxa e recria só se mudou. Ver docs/runbook-laptop-autodeploy.md.
 window.editHostEnv = async (host) => {
@@ -1613,25 +1727,38 @@ async function viewDataCoverage() {
     <br>Compara com a <a href="#/coverage" style="color:var(--np-brand)">Cobertura de jobs</a>: se o job correu a ~100% mas o dado está baixo, é porque esse dado <b>não existe</b> para a maioria (não é trabalho em falta). <b>security</b>/<b>social</b> contam só quando há resultado real (não vazio).</div>
   </div></div>`;
 }
+// Capacidade por-worker (1h/24h; 30d é por host) — bloco compacto.
+const workerCapBlock = (w) => capBlock({ cap1h: workerCap(w, 'cap1h'), cap24h: workerCap(w, 'cap24h'), cap30d: null });
 async function viewWorkers() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
   renderNav('workers');
-  const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Workers</h1><div class="np-sub">Instâncias a correr (heartbeat &lt; 90 s) · telemetria via Redis · atualiza a cada 10 s</div></div></div>`;
-  let d; try { d = await api('/api/workers'); } catch (e) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
-  if (!d.telemetry) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Telemetria desligada.</b> <span class="muted">Os workers reportam via Redis — já configurado por omissão no compose; falta um rebuild dos workers (<code>docker compose up -d --build worker-base worker</code>) para começarem a reportar.</span></div></div>`; return; }
-  if (!d.workers.length) { $('#view').innerHTML = head + `<div class="np-empty">Nenhum worker a reportar. Arranca com <code>docker compose up -d worker-base</code> (ou a frota remota de verificação).</div>`; return; }
-  const ago = (ts) => (ts ? timeAgo(Math.floor(ts / 1000)) : '—');
-  const card = (w) => `<section class="np-card" style="cursor:pointer" onclick="openWorker('${esc(w.id)}')"><div class="np-card-b">
-    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div><div style="font-weight:800;font-size:14px">${esc(w.host || w.id)}</div><div class="muted" style="font-size:11.5px">${esc(w.id)} · ${(w.consumers || []).length} capacidades</div></div>
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Frota</div><h1 class="np-h1">Workers</h1><div class="np-sub">Instâncias a correr (heartbeat &lt; 90 s) · capacidades + capacidade + últimos logs · atualiza 10 s</div></div></div>`;
+  let d; try { d = await api('/api/workers'); } catch (e) { if (!REFRESHING) $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
+  if (!d.telemetry) { if (!REFRESHING) $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Telemetria desligada.</b> <span class="muted">Os workers reportam via Redis — já configurado por omissão no compose; falta um rebuild dos workers (<code>docker compose up -d --build worker-base worker</code>) para começarem a reportar.</span></div></div>`; return; }
+  if (!d.workers.length) { if (!REFRESHING) $('#view').innerHTML = head + `<div class="np-empty">Nenhum worker a reportar. Arranca com <code>docker compose up -d worker-base</code> (ou a frota remota de verificação).</div>`; return; }
+  const ws = d.workers.slice().sort((a, b) => (a.host || '').localeCompare(b.host || '') || a.id.localeCompare(b.id)); // ordenação estável
+  const sig = ws.map((w) => w.id).join(',');
+  const curInner = (w) => w.cur ? `<div style="font-size:12.5px"><span class="np-dot" style="background:var(--np-ok-mark);display:inline-block;margin-right:6px"></span><b>${esc(w.cur)}</b> <span class="muted">(${w.curStarted ? durMs(Date.now() - w.curStarted) : ''})</span></div>` : `<div class="muted" style="font-size:12.5px">idle</div>`;
+  const statsInner = (w) => `<div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(w.done24h)}</div><div class="muted" style="font-size:10px">feitas 24h · ${fmt(w.done1h)}/h</div></div><div><div class="tnum" style="font-size:16px;font-weight:800;color:${w.fail24h ? 'var(--np-warn)' : ''}">${fmt(w.fail24h)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div><div><div class="tnum" style="font-size:16px;font-weight:800">${durMs(w.avgMs)}</div><div class="muted" style="font-size:10px">dur. média</div></div>`;
+  const logsInner = (logs) => (logs && logs.length) ? logs.map(esc).join('\n') : '<span class="muted">(sem logs recentes)</span>';
+  const summaryInner = () => { const St = { workers: ws.length, done1h: ws.reduce((x, w) => x + (w.done1h || 0), 0), done24h: ws.reduce((x, w) => x + (w.done24h || 0), 0), fail24h: ws.reduce((x, w) => x + (w.fail24h || 0), 0) }; const byRole = {}; ws.forEach((w) => { const k = w.role || '?'; (byRole[k] = byRole[k] || { n: 0, done1h: 0 }); byRole[k].n++; byRole[k].done1h += (w.done1h || 0); }); const sk = (l, v, c) => `<div><div class="tnum" style="font-size:20px;font-weight:800;${c || ''}">${fmt(v)}</div><div class="muted" style="font-size:10.5px">${l}</div></div>`; return `<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">${sk('workers', St.workers)}${sk('feitas 1h', St.done1h)}${sk('feitas 24h', St.done24h)}${sk('falhas 24h', St.fail24h, St.fail24h ? 'color:var(--np-warn)' : '')}<div style="flex:1;min-width:200px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${Object.entries(byRole).sort((a, b) => b[1].done1h - a[1].done1h).map(([r, v]) => `<span class="np-chip" title="${fmt(v.done1h)}/h">${esc(r)} ·${v.n}w</span>`).join('')}</div></div>`; };
+  if (fleetPatchable('workers', sig)) {
+    setHTML('wk_summary', summaryInner());
+    for (const w of ws) { const k = idsafe(w.id); setHTML('wk_' + k + '_cur', curInner(w)); setHTML('wk_' + k + '_cap', workerCapBlock(w)); setHTML('wk_' + k + '_stats', statsInner(w)); setHTML('wk_' + k + '_logs', logsInner(w.logs3)); }
+    return;
+  }
+  const card = (w) => { const k = idsafe(w.id); const caps = (w.consumers || []).map((c) => `<span class="np-chip" style="height:16px;font-size:9px">${esc(c)}</span>`).join(' ') || '<span class="muted" style="font-size:10px">—</span>'; return `<section class="np-card" style="cursor:pointer" onclick="openWorker('${esc(w.id)}')"><div class="np-card-b">
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="min-width:0"><div style="font-weight:800;font-size:14px">${esc(w.host || w.id)}</div><div class="muted" style="font-size:11.5px">${esc(w.id.slice(0, 12))} · ${(w.consumers || []).length} capacidades</div></div>
       <span class="np-badge ${w.role === 'verify' ? 'info' : 'ok'}" style="height:20px">${esc(w.role)}</span></div>
-    ${w.cur ? `<div style="margin-top:10px;font-size:12.5px"><span class="np-dot" style="background:var(--np-ok-mark);display:inline-block;margin-right:6px"></span><b>${esc(w.cur)}</b> <span class="muted">(${w.curStarted ? durMs(Date.now() - w.curStarted) : ''})</span></div>` : `<div class="muted" style="margin-top:10px;font-size:12.5px">idle</div>`}
-    <div style="display:flex;gap:16px;margin-top:12px;flex-wrap:wrap">
-      <div><div class="tnum" style="font-size:18px;font-weight:800">${fmt(w.done24h)}</div><div class="muted" style="font-size:10.5px">feitas 24h · ${fmt(w.done1h)}/h</div></div>
-      <div><div class="tnum" style="font-size:18px;font-weight:800;color:${w.fail24h ? 'var(--np-warn)' : 'var(--np-text)'}">${fmt(w.fail24h)}</div><div class="muted" style="font-size:10.5px">falhas 24h</div></div>
-      <div><div class="tnum" style="font-size:18px;font-weight:800">${durMs(w.avgMs)}</div><div class="muted" style="font-size:10.5px">duração média</div></div>
-    </div><div class="muted" style="font-size:11px;margin-top:8px">último sinal ${ago(w.beat)}</div></div></section>`;
-  const St = { workers: d.workers.length, done1h: d.workers.reduce((x, w) => x + (w.done1h || 0), 0), done24h: d.workers.reduce((x, w) => x + (w.done24h || 0), 0), fail24h: d.workers.reduce((x, w) => x + (w.fail24h || 0), 0) }; const byRole = {}; d.workers.forEach((w) => { const k = w.role || '?'; (byRole[k] = byRole[k] || { n: 0, done1h: 0 }); byRole[k].n++; byRole[k].done1h += (w.done1h || 0); }); const sk = (l, v, c) => `<div><div class="tnum" style="font-size:20px;font-weight:800;${c||''}">${fmt(v)}</div><div class="muted" style="font-size:10.5px">${l}</div></div>`; const statsCard = `<section class="np-card" style="margin-bottom:14px"><div class="np-card-b"><div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">${sk('workers', St.workers)}${sk('feitas 1h', St.done1h)}${sk('feitas 24h', St.done24h)}${sk('falhas 24h', St.fail24h, St.fail24h?'color:var(--np-warn)':'')}<div style="flex:1;min-width:200px;display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">${Object.entries(byRole).sort((a,b)=>b[1].done1h-a[1].done1h).map(([r,v])=>`<span class="np-chip" title="${fmt(v.done1h)}/h">${esc(r)} ·${v.n}w</span>`).join('')}</div></div></div></section>`; 
-  $('#view').innerHTML = head + statsCard + `<div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">${d.workers.map(card).join('')}</div>`;
+    <div id="wk_${k}_cur" style="margin-top:10px">${curInner(w)}</div>
+    <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:3px">${caps}</div>
+    <div id="wk_${k}_cap">${workerCapBlock(w)}</div>
+    <div id="wk_${k}_stats" style="display:flex;gap:16px;margin-top:10px;flex-wrap:wrap">${statsInner(w)}</div>
+    <div class="muted" style="font-size:9px;margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Últimos logs</div>
+    <div id="wk_${k}_logs" class="np-mono" style="background:var(--np-surface-2);border-radius:6px;padding:6px 8px;font-size:10.5px;margin-top:3px;white-space:pre-wrap;max-height:64px;overflow:hidden">${logsInner(w.logs3)}</div>
+  </div></section>`; };
+  const statsCard = `<section class="np-card" style="margin-bottom:14px"><div class="np-card-b"><div id="wk_summary">${summaryInner()}</div></div></section>`;
+  $('#view').innerHTML = head + statsCard + `<div id="fleet-workers" class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(300px,1fr))">${ws.map(card).join('')}</div>`;
 }
 window.openWorker = async (id) => {
   let w; try { w = await api('/api/workers/' + encodeURIComponent(id)); } catch (e) { return; }
@@ -1640,6 +1767,7 @@ window.openWorker = async (id) => {
   dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(w.host || w.id)}</div><div class="muted" style="font-size:12px">${esc(w.role)} · ${esc(w.id)}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
     <div style="padding:16px 18px">
       <div class="np-kv">${kv('Tarefa atual', w.cur ? esc(w.cur) + ' <span class="muted">(' + (w.curStarted ? durMs(Date.now() - w.curStarted) : '') + ')</span>' : '<span class="muted">idle</span>')}${kv('Feitas (esta hora)', fmt(w.done1h))}${kv('Feitas (24h)', fmt(w.done24h))}${kv('Falhas (esta hora)', fmt(w.fail1h))}${kv('Falhas (24h)', fmt(w.fail24h))}${kv('Duração média', durMs(w.avgMs))}${kv('Role', esc(w.role))}${kv('Capacidades', (w.consumers || []).map((c) => `<span class="np-chip" style="height:18px">${esc(c)}</span>`).join(' ') || '—')}</div>
+      <div class="np-sec-t">Capacidade (usado / total · livre)</div>${workerCapBlock(w)}
       <div class="np-sec-t">Logs recentes</div>
       <div class="np-mono" style="background:var(--np-surface-2);border-radius:8px;padding:12px;font-size:11.5px;max-height:360px;overflow:auto;white-space:pre-wrap">${(w.logs || []).map(esc).join('\n') || '(sem logs recentes)'}</div>
     </div>`;

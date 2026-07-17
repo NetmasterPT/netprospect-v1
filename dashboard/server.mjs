@@ -1032,6 +1032,41 @@ async function addQueueCapacity(rr, consumers) {
     c.cap30d = mk(used30, perH != null ? perH * 720 : null);
   }
 }
+// Capacidade (usada/total/livre em 1h/24h/30d) POR HOST (FLEET_HOST) — análogo a addQueueCapacity mas
+// somando TODOS os tipos de job do host (contadores np:host:<host>:done/dday/dur, escritos no taskEnd).
+// slots = Σ conc de todos os workers vivos do host (paralelismo total da VM); avgMs = duração média
+// blended (mistura de tipos) → total = slots × janela/avgMs. Junta ainda o snapshot de telemetria do
+// agente de pull (np:host:<host>:metrics, HASH com TTL → ausência = "sem dados"). Muta `hosts` in-place.
+async function hostCapacity(rr, hosts) {
+  const names = Object.keys(hosts);
+  if (!names.length) return;
+  const now = Date.now();
+  const curH = Math.floor(now / 3600000), curD = Math.floor(now / 86400000);
+  const frac = (now % 3600000) / 3600000;
+  const keys = [];
+  for (const hn of names) {
+    for (let i = 0; i <= 24; i++) keys.push(`np:host:${hn}:done:${curH - i}`);
+    for (let i = 0; i < 30; i++) keys.push(`np:host:${hn}:dday:${curD - i}`);
+  }
+  let vals = []; try { vals = keys.length ? await rr.mGet(keys) : []; } catch { vals = []; }
+  const map = {}; keys.forEach((k, i) => { map[k] = +vals[i] || 0; });
+  for (const hn of names) {
+    const H = hosts[hn];
+    let durs = []; try { durs = (await rr.lRange(`np:host:${hn}:dur`, 0, 199)).map(Number).filter((x) => x >= 0); } catch { /* */ }
+    const avgMs = durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null;
+    H.avgMs = avgMs;
+    const usedH = map[`np:host:${hn}:done:${curH}`] + map[`np:host:${hn}:done:${curH - 1}`] * (1 - frac); // trailing 60min
+    let used24 = 0; for (let i = 0; i < 24; i++) used24 += map[`np:host:${hn}:done:${curH - i}`];
+    let used30 = 0; for (let i = 0; i < 30; i++) used30 += map[`np:host:${hn}:dday:${curD - i}`];
+    const slots = H.slots || 0;
+    const perH = avgMs > 0 ? slots * 3600000 / avgMs : null;
+    const mk = (used, total) => ({ used: Math.round(used), total: total != null ? Math.round(total) : null, avail: total != null ? Math.max(0, Math.round(total - used)) : null });
+    H.cap1h = mk(usedH, perH);
+    H.cap24h = mk(used24, perH != null ? perH * 24 : null);
+    H.cap30d = mk(used30, perH != null ? perH * 720 : null);
+    try { const m = await rr.hGetAll(`np:host:${hn}:metrics`); H.metrics = (m && Object.keys(m).length) ? m : null; } catch { H.metrics = null; }
+  }
+}
 // /api/queues — estado da stream + profundidade por consumer (a antiga /api/workers).
 app.get('/api/queues', async (req, res) => {
   try {
@@ -1164,19 +1199,33 @@ app.get('/api/workers', async (req, res) => {
     if (!r || !_redisUp) return res.json({ workers: [], telemetry: false });
     const ids = await r.zRangeByScore('np:wk:index', Date.now() - 90000, '+inf').catch(() => []); // heartbeat <90s
     const workers = [];
+    const hosts = {}; // agregação por FLEET_HOST (VM) → capacidade + métricas de host
+    const pj = (s) => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
     for (const id of ids) {
       const h = await r.hGetAll(`np:wk:${id}`).catch(() => ({}));
       if (!h.id) continue;
       const durs = (await r.lRange(`np:wk:${id}:dur`, 0, -1).catch(() => [])).map(Number).filter(Number.isFinite);
-      const pj = (s) => { try { return s ? JSON.parse(s) : null; } catch { return null; } };
-      workers.push({ id, role: h.role || '?', host: h.host || '', consumers: (h.consumers || '').split(',').filter(Boolean),
+      const logs3 = await r.lRange(`np:wk:${id}:log`, 0, 2).catch(() => []); // últimas 3 (mais recente à cabeça)
+      const conc = pj(h.conc);
+      const w = { id, role: h.role || '?', host: h.host || '', consumers: (h.consumers || '').split(',').filter(Boolean),
         started: +h.started || null, beat: +h.beat || null, cur: h.cur || null, curStarted: +h.cur_started || null,
         load: h.load != null && h.load !== 'null' ? +h.load : null, cores: +h.cores || null,
-        version: h.version || null, replicas: +h.replicas || null, conc: pj(h.conc), maxacks: pj(h.maxacks),
-        avgMs: durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null, ...(await workerCounts(r, id)) });
+        version: h.version || null, replicas: +h.replicas || null, conc, maxacks: pj(h.maxacks), logs3,
+        avgMs: durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null, ...(await workerCounts(r, id)) };
+      workers.push(w);
+      const hn = w.host;
+      if (hn) {
+        if (!hosts[hn]) hosts[hn] = { host: hn, slots: 0, workers: [], cores: null, load: null };
+        let s = 0; if (conc) for (const k in conc) s += (+conc[k] || 0);
+        hosts[hn].slots += s;
+        hosts[hn].workers.push(id);
+        if (w.cores) hosts[hn].cores = w.cores;
+        if (w.load != null) hosts[hn].load = w.load;
+      }
     }
+    await hostCapacity(r, hosts); // preenche cap1h/24h/30d + métricas por host
     workers.sort((a, b) => (b.beat || 0) - (a.beat || 0));
-    res.json({ workers, telemetry: true });
+    res.json({ workers, hosts, telemetry: true });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 app.get('/api/workers/:id', async (req, res) => {
@@ -1187,8 +1236,9 @@ app.get('/api/workers/:id', async (req, res) => {
     if (!h.id) return res.status(404).json({ error: 'worker não encontrado ou expirado' });
     const logs = await r.lRange(`np:wk:${req.params.id}:log`, 0, 120).catch(() => []);
     const durs = (await r.lRange(`np:wk:${req.params.id}:dur`, 0, -1).catch(() => [])).map(Number).filter(Number.isFinite);
+    let conc = null; try { conc = h.conc ? JSON.parse(h.conc) : null; } catch { /* */ }
     res.json({ id: h.id, role: h.role || '?', host: h.host || '', pid: h.pid || '', consumers: (h.consumers || '').split(',').filter(Boolean),
-      started: +h.started || null, beat: +h.beat || null, cur: h.cur || null, curStarted: +h.cur_started || null,
+      started: +h.started || null, beat: +h.beat || null, cur: h.cur || null, curStarted: +h.cur_started || null, conc,
       avgMs: durs.length ? Math.round(durs.reduce((a, b) => a + b, 0) / durs.length) : null, ...(await workerCounts(r, req.params.id)), logs });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
@@ -1893,6 +1943,31 @@ app.get('/api/fleet/pull/:host', (req, res) => {
   // Por defeito raw (text/plain) → os agentes comparam ficheiros com `cmp`, sem parser JSON.
   res.set('X-Env-Hash', hashEnv(env));
   res.type('text/plain').send(env);
+});
+// PUSH de telemetria de host (agente de pull, ~5 min): grava um snapshot no Redis (HASH, TTL 15min →
+// hosts silenciosos aparecem "sem dados" na página Servidores). Mesmo token que o pull do .env.
+// Só campos conhecidos (whitelist) e limitados em tamanho → não guardamos lixo arbitrário.
+const METRIC_FIELDS = ['cpu', 'load', 'cores', 'mem_used', 'mem_total', 'disk_used', 'disk_total',
+  'io_read', 'io_write', 'net_rx', 'net_tx', 'lat_directus', 'lat_pg', 'lat_minio', 'uptime', 'ts'];
+app.post('/api/fleet/metrics/:host', async (req, res) => {
+  const host = req.params.host;
+  if (!HOST_RE.test(host)) return res.status(400).json({ error: 'host inválido' });
+  if (FLEET_PULL_TOKEN) {
+    const tok = (req.get('authorization') || '').replace(/^Bearer\s+/i, '') || req.query.token || '';
+    if (tok !== FLEET_PULL_TOKEN) return res.status(401).json({ error: 'não autorizado' });
+  }
+  const body = req.body || {};
+  const h = {};
+  for (const k of METRIC_FIELDS) if (body[k] != null && body[k] !== '') h[k] = String(body[k]).slice(0, 32);
+  h.reported = String(Date.now()); // relógio do servidor → idade do snapshot sem depender do clock do host
+  try {
+    const r = await redisClient();
+    if (!r || !_redisUp) return res.status(503).json({ error: 'sem Redis' });
+    await r.del(`np:host:${host}:metrics`); // limpa campos obsoletos antes de re-escrever
+    await r.hSet(`np:host:${host}:metrics`, h);
+    await r.expire(`np:host:${host}:metrics`, 900); // 15 min
+  } catch (e) { return res.status(502).json({ error: e.message }); }
+  res.json({ ok: true, host, fields: Object.keys(h).length });
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

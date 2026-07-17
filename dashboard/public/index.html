@@ -41,6 +41,8 @@
   .np-shell.nav-collapsed .np-nav { flex-basis: var(--np-nav-w-collapsed); width: var(--np-nav-w-collapsed); padding-left: 8px; padding-right: 8px; }
   .np-shell.nav-collapsed .np-nav-row { justify-content: center; padding: 0; }
   .np-shell.nav-collapsed .np-nav-row span, .np-shell.nav-collapsed .np-nav-eyebrow { display: none; }
+  .np-shell.nav-collapsed .np-nav-head { display: none; }
+  .np-shell.nav-collapsed .np-nav-group.collapsed .np-nav-sub { display: block; }
   .np-iconbtn { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--np-radius); border: 1px solid var(--np-chrome-border); background: transparent; color: var(--np-chrome-text-2); cursor: pointer; position: relative; margin-right: 10px; }
   .np-iconbtn:hover { background: var(--np-chrome-2); color: var(--np-chrome-text); }
   .np-themebtn { width: auto; padding: 0 12px; gap: 6px; display: flex; align-items: center; font: inherit; font-size: 12px; font-weight: 600; }
@@ -50,11 +52,17 @@
   .np-shell { display: flex; align-items: flex-start; }
   .np-nav { position: sticky; top: var(--np-topbar-h); flex: 0 0 var(--np-nav-w); width: var(--np-nav-w); height: calc(100vh - var(--np-topbar-h)); background: var(--np-chrome); border-right: 1px solid var(--np-chrome-border); overflow-y: auto; padding: var(--np-s4) var(--np-s3); color: var(--np-chrome-text-2); }
   .np-nav-eyebrow { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--np-chrome-text-2); padding: 0 10px; margin: var(--np-s4) 0 var(--np-s2); }
-  .np-nav-row { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border-radius: var(--np-radius); font-size: 13px; font-weight: 500; color: var(--np-chrome-text-2); cursor: pointer; margin-bottom: 2px; }
+  .np-nav-row { display: flex; align-items: center; gap: 9px; height: 30px; padding: 0 10px; border-radius: var(--np-radius); font-size: 12.5px; font-weight: 500; color: var(--np-chrome-text-2); cursor: pointer; margin-bottom: 1px; }
   .np-nav-row:hover { background: var(--np-chrome-2); color: var(--np-chrome-text); }
   .np-nav-row.is-active { color: var(--np-chrome-text); background: var(--np-chrome-2); box-shadow: inset 3px 0 0 var(--np-brand); font-weight: 700; }
   .np-nav-row.is-active svg { color: var(--np-brand); }
   .np-nav-count { margin-left: auto; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--np-chrome-text-2); }
+  /* Submenus colapsáveis */
+  .np-nav-head { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; margin-top: 6px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--np-chrome-text-2); cursor: pointer; user-select: none; border-radius: var(--np-radius); }
+  .np-nav-head:hover { color: var(--np-chrome-text); background: var(--np-chrome-2); }
+  .np-nav-chev { margin-left: auto; display: inline-flex; opacity: .55; transition: transform .15s ease; }
+  .np-nav-group.collapsed .np-nav-chev { transform: rotate(-90deg); }
+  .np-nav-group.collapsed .np-nav-sub { display: none; }
   .np-nav-dot { width: 8px; height: 8px; border-radius: 999px; }
   .np-fresh { margin-top: var(--np-s4); background: rgba(255,255,255,0.04); border: 1px solid var(--np-chrome-border); border-radius: var(--np-radius); padding: 10px 12px; font-size: 11px; }
   .np-fresh .d { width: 7px; height: 7px; border-radius: 999px; background: var(--np-ok-mark); box-shadow: 0 0 0 3px rgba(34,197,94,0.18); display: inline-block; margin-right: 6px; }
@@ -162,7 +170,7 @@
   @media (max-width: 860px) {
     .np-nav { position: fixed; top: var(--np-topbar-h); left: 0; bottom: 0; height: auto; width: 264px; flex-basis: 264px; padding: 12px 10px; transform: translateX(-100%); transition: transform .25s var(--np-ease, ease); z-index: var(--np-z-drawer); box-shadow: var(--np-shadow-drawer); overflow-y: auto; }
     .np-shell.nav-mobile-open .np-nav { transform: translateX(0); }
-    .np-shell .np-nav-row { justify-content: flex-start !important; padding: 0 12px !important; height: 42px; }
+    .np-shell .np-nav-row { justify-content: flex-start !important; padding: 0 12px !important; height: 38px; }
     .np-shell .np-nav-row span, .np-shell .np-nav-eyebrow, .np-shell .np-nav-count { display: revert !important; }
     .np-navscrim { display: block; position: fixed; inset: var(--np-topbar-h) 0 0 0; background: var(--np-overlay, rgba(0,0,0,.45)); z-index: calc(var(--np-z-drawer) - 1); opacity: 0; pointer-events: none; transition: opacity .25s; }
     .np-shell.nav-mobile-open .np-navscrim { opacity: 1; pointer-events: auto; }
@@ -329,34 +337,36 @@ const DM = new Set(['CEO', 'CTO', 'CMO', 'CFO', 'COO', 'Founder']);
 
 // ---------- nav ----------
 let STATS = null;
+// Submenus do nav (ordem preservada). Cada item = [id, ícone, label, countKey?] (countKey lê t[key]).
+const NAV_GROUPS = [
+  ['Geral', [['overview', 'overview', 'Visão Geral'], ['outreach', 'send', 'Outreach'], ['config', 'sliders', 'Configuração']]],
+  ['Dataset', [['directory', 'directory', 'Negócios', 'sites'], ['isps', 'globe', 'ISPs'], ['triggers', 'activity', 'Gatilhos'], ['data-coverage', 'check', 'Cobertura Dados']]],
+  ['CRM', [['contacts', 'contacts', 'Contactos', 'contacts'], ['clients', 'briefcase', 'Clientes']]],
+  ['Prospecção', [['subscriptions', 'briefcase', 'Subscrições'], ['icps', 'contacts', 'ICPs'], ['segments', 'segments', 'Segmentos']]],
+  ['Canal Email', [['campaigns', 'send', 'Campanhas'], ['templates', 'mail', 'Templates']]],
+  ['Frota', [['servers', 'globe', 'Servidores'], ['vms', 'server', 'VMs'], ['workers', 'sparkles', 'Workers'], ['queues', 'activity', 'Filas'], ['coverage', 'check', 'Cobertura Jobs'], ['logs', 'clock', 'Logs']]],
+  ['AI', [['chat', 'sparkles', 'Chat'], ['agents', 'sparkles', 'Agentes']]],
+];
+const navCollapsedSet = () => { try { return new Set(JSON.parse(localStorage.getItem('np-nav-groups') || '[]')); } catch (e) { return new Set(); } };
+window.toggleNavGroup = (name) => {
+  const set = navCollapsedSet();
+  if (set.has(name)) set.delete(name); else set.add(name);
+  try { localStorage.setItem('np-nav-groups', JSON.stringify([...set])); } catch (e) {}
+  const el = document.querySelector(`.np-nav-group[data-group="${(window.CSS && CSS.escape) ? CSS.escape(name) : name}"]`);
+  if (el) el.classList.toggle('collapsed', set.has(name));
+};
 async function renderNav(active) {
   const t = STATS?.totals || {};
-  const item = (id, icon, label, count) => `<div class="np-nav-row ${active === id ? 'is-active' : ''}" onclick="location.hash='#/${id}'">${ic(icon, 17)}<span>${label}</span>${count != null ? `<span class="np-nav-count tnum">${fmt(count)}</span>` : ''}</div>`;
-  $('#nav').innerHTML = `
-    <div class="np-nav-eyebrow">Explorar</div>
-    ${item('overview', 'overview', 'Visão geral')}
-    ${item('directory', 'directory', 'Negócios', t.sites)}
-    ${item('contacts', 'contacts', 'Contactos', t.contacts)}
-    ${item('clients', 'briefcase', 'Clientes')}
-    <div class="np-nav-eyebrow">Sistema</div>
-    ${item('servers', 'globe', 'Servidores')}
-    ${item('vms', 'server', 'VMs')}
-    ${item('workers', 'sparkles', 'Workers')}
-    ${item('queues', 'activity', 'Filas')}
-    ${item('coverage', 'check', 'Cobertura jobs')}
-    ${item('data-coverage', 'check', 'Cobertura dados')}
-    ${item('logs', 'clock', 'Logs')}
-    ${item('agents', 'sparkles', 'Agentes IA')}
-      ${item('chat', 'sparkles', 'Chat IA')}
-    ${item('isps', 'globe', 'ISPs / alojamento')}
-    ${item('triggers', 'activity', 'Gatilhos')}
-    ${item('subscriptions', 'briefcase', 'Subscrições')}
-    ${item('icps', 'contacts', 'Públicos-alvo')}
-    ${item('templates', 'send', 'Templates email')}
-    ${item('campaigns', 'send', 'Campanhas')}
-      ${item('outreach', 'send', 'Outreach')}
-    ${item('segments', 'segments', 'Segmentos')}
-    ${item('config', 'sliders', 'Configuração')}`;
+  const collapsed = navCollapsedSet();
+  const item = (id, icon, label, count) => `<div class="np-nav-row ${active === id ? 'is-active' : ''}" onclick="location.hash='#/${id}'">${ic(icon, 16)}<span>${label}</span>${count != null ? `<span class="np-nav-count tnum">${fmt(count)}</span>` : ''}</div>`;
+  const group = ([name, items]) => {
+    const isCollapsed = collapsed.has(name) && !items.some((it) => it[0] === active); // grupo do item ativo fica sempre expandido
+    return `<div class="np-nav-group ${isCollapsed ? 'collapsed' : ''}" data-group="${name}">
+      <div class="np-nav-head" onclick="toggleNavGroup('${name}')"><span>${name}</span><span class="np-nav-chev">${ic('chevD', 13)}</span></div>
+      <div class="np-nav-sub">${items.map((it) => item(it[0], it[1], it[2], it[3] ? t[it[3]] : undefined)).join('')}</div>
+    </div>`;
+  };
+  $('#nav').innerHTML = NAV_GROUPS.map(group).join('');
 }
 
 // ========== SUBSCRIÇÕES (produtos Netmaster) ==========

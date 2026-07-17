@@ -62,6 +62,23 @@ services_json() {
   printf ']'
 }
 
+# Timers systemd (≈ crons) → pseudo-unidades (kind=timer). Estado + próxima execução + descrição.
+timers_json() {
+  command -v systemctl >/dev/null 2>&1 || { printf '[]'; return; }
+  local first=1 unit active desc nextus nexts k v
+  printf '['
+  while read -r unit; do
+    [ -z "$unit" ] && continue
+    active=""; desc=""; nextus=""
+    while IFS='=' read -r k v; do case "$k" in ActiveState) active=$v ;; Description) desc=$v ;; NextElapseUSecRealtime) nextus=$v ;; esac; done < <(systemctl show "$unit" -p ActiveState -p Description -p NextElapseUSecRealtime 2>/dev/null)
+    nexts=""; case "$nextus" in ''|*[!0-9]*) ;; *) nexts=$(date -d "@$((nextus / 1000000))" '+%d/%m %H:%M' 2>/dev/null) ;; esac
+    [ "$first" = 1 ] && first=0 || printf ','
+    printf '{"kind":"timer","id":"timer:%s","name":"%s","state":"%s","status":"%s","image":"%s","cpu":"","memb":"","logb64":""}' \
+      "$(esc_json "$unit")" "$(esc_json "${unit%.timer}")" "$(esc_json "$active")" "$(esc_json "${nexts:+próx. $nexts · }$desc")" "$(esc_json "$desc")"
+  done < <(systemctl list-units --type=timer --all --no-legend --plain 2>/dev/null | awk '{print $1}' | head -25)
+  printf ']'
+}
+
 # Junta dois arrays JSON "[...]" num só.
 merge_json_arrays() {
   local ai="${1#[}"; ai="${ai%]}"; local bi="${2#[}"; bi="${bi%]}"
@@ -86,19 +103,22 @@ collect_and_post() {
   local net_rx net_tx io_read io_write
   net_rx=$(awk "BEGIN{printf \"%.2f\", ($rx2-$rx1)/1048576}"); net_tx=$(awk "BEGIN{printf \"%.2f\", ($tx2-$tx1)/1048576}")
   io_read=$(awk "BEGIN{printf \"%.2f\", ($dr2-$dr1)*512/1048576}"); io_write=$(awk "BEGIN{printf \"%.2f\", ($dw2-$dw1)*512/1048576}")
-  local memt mema mem_total mem_used disk_total disk_used load cores uptime
+  local memt mema mem_total mem_used swapt swapf swap_total swap_used disk_total disk_used load cores uptime
   memt=$(awk '/^MemTotal:/{print $2}' /proc/meminfo); mema=$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)
   mem_total=$((memt / 1024)); mem_used=$(((memt - mema) / 1024))
+  swapt=$(awk '/^SwapTotal:/{print $2}' /proc/meminfo); swapf=$(awk '/^SwapFree:/{print $2}' /proc/meminfo)
+  swap_total=$(((swapt + 0) / 1024)); swap_used=$((((swapt + 0) - (swapf + 0)) / 1024))
   read -r disk_total disk_used < <(df -P -k / | awk 'NR==2{printf "%.0f %.0f", $2/1048576, $3/1048576}')
   load=$(awk '{print $1}' /proc/loadavg); cores=$(nproc 2>/dev/null || echo 0); uptime=$(awk '{printf "%d", $1}' /proc/uptime)
   local lat_directus lat_pg lat_minio units
   lat_directus=$(http_ms "${DIRECTUS_PING_URL:-}"); lat_minio=$(http_ms "${MINIO_HEALTH_URL:-}"); lat_pg=$(tcp_ms "${PG_HOST:-}" "${PG_PORT:-5432}")
   units=$(merge_json_arrays "$(containers_json)" "$(services_json)")
+  units=$(merge_json_arrays "$units" "$(timers_json)")
   # Hook opcional: se o reporter definir extra_units_json (ex.: Proxmox → LXC/VMs), junta-se aqui.
   if declare -F extra_units_json >/dev/null 2>&1; then units=$(merge_json_arrays "$units" "$(extra_units_json)"); fi
   local body
-  body=$(printf '{"cpu":%s,"load":%s,"cores":%s,"mem_used":%s,"mem_total":%s,"disk_used":%s,"disk_total":%s,"io_read":%s,"io_write":%s,"net_rx":%s,"net_tx":%s,"uptime":%s,"containers":%s%s%s%s}' \
-    "$cpu" "${load:-0}" "${cores:-0}" "$mem_used" "$mem_total" "$disk_used" "$disk_total" "$io_read" "$io_write" "$net_rx" "$net_tx" "$uptime" "$units" \
+  body=$(printf '{"cpu":%s,"load":%s,"cores":%s,"mem_used":%s,"mem_total":%s,"swap_used":%s,"swap_total":%s,"disk_used":%s,"disk_total":%s,"io_read":%s,"io_write":%s,"net_rx":%s,"net_tx":%s,"uptime":%s,"containers":%s%s%s%s}' \
+    "$cpu" "${load:-0}" "${cores:-0}" "$mem_used" "$mem_total" "${swap_used:-0}" "${swap_total:-0}" "$disk_used" "$disk_total" "$io_read" "$io_write" "$net_rx" "$net_tx" "$uptime" "$units" \
     "${lat_directus:+,\"lat_directus\":$lat_directus}" "${lat_pg:+,\"lat_pg\":$lat_pg}" "${lat_minio:+,\"lat_minio\":$lat_minio}")
   if [ "${METRICS_DRYRUN:-0}" = 1 ]; then printf '%s\n' "$body"; return 0; fi
   curl -fsS --max-time 20 -X POST ${FLEET_PULL_TOKEN:+-H "Authorization: Bearer $FLEET_PULL_TOKEN"} \

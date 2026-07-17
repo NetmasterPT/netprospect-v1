@@ -1454,7 +1454,7 @@ function b64utf8(b64) { try { const bin = atob(b64 || ''); const bytes = Uint8Ar
 // Unidade (container/serviço) está "a correr"? container: running/Up · serviço: active/running.
 const unitUp = (c) => /running|^active|healthy|online|^Up/i.test(c && c.state || '') || /running|healthy|online|^Up/i.test(c && c.status || '');
 const cpuSecFmt = (s) => { const n = +s; return n >= 3600 ? (n / 3600).toFixed(1) + ' h' : n >= 60 ? (n / 60).toFixed(0) + ' min' : n + ' s'; };
-const kindLabel = (k) => ({ service: 'serviço systemd', lxc: 'container LXC', vm: 'VM (Proxmox)', storage: 'storage (Proxmox)', zfs: 'pool ZFS', datastore: 'datastore (PBS)' }[k] || 'container Docker');
+const kindLabel = (k) => ({ service: 'serviço systemd', lxc: 'container LXC', vm: 'VM (Proxmox)', storage: 'storage (Proxmox)', zfs: 'pool ZFS', datastore: 'datastore (PBS)', timer: 'agendamento (timer/cron)' }[k] || 'container Docker');
 // Bloco de recursos de uma unidade. container(docker) → CPU%/RAM/rede/IO; serviço → RAM+CPU acumulado (cgroup);
 // lxc/vm → RAM + CPU% (pvesh).
 function containerStatsBlock(c) {
@@ -1486,10 +1486,10 @@ const containerMini = (c) => { if (!c) return ''; const cpu = c.cpu ? parseFloat
 const contForWorker = (hosts, w) => { const cs = ((hosts || {})[w.host] || {}).containers || []; return cs.find((c) => c.id && (c.id === w.id || w.id.startsWith(c.id) || c.id.startsWith(w.id))) || null; };
 // Botões das unidades (container/serviço/lxc/vm) de um host — nome + ponto de estado; não-container = tracejado.
 const containerChips = (host, cs) => (cs && cs.length)
-  ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = { lxc: 'LXC·', vm: 'VM·', storage: 'disco·', zfs: 'zfs·', datastore: 'ds·' }[c.kind] || ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}</button>`; }).join(' ')
+  ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = { lxc: 'LXC·', vm: 'VM·', storage: 'disco·', zfs: 'zfs·', datastore: 'ds·', timer: 'cron·' }[c.kind] || ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}</button>`; }).join(' ')
   : '<span class="muted" style="font-size:10px">sem unidades reportadas</span>';
 // Unidades AGRUPADAS por tipo (para os drawers): Docker / LXC / VMs / Serviços / Storage / ZFS / Datastores.
-const UNIT_ORDER = [['container', 'Containers Docker'], ['lxc', 'Containers LXC'], ['vm', 'VMs'], ['service', 'Serviços (OS)'], ['storage', 'Storage'], ['zfs', 'Pools ZFS'], ['datastore', 'Datastores']];
+const UNIT_ORDER = [['container', 'Containers Docker'], ['lxc', 'Containers LXC'], ['vm', 'VMs'], ['service', 'Serviços (OS)'], ['timer', 'Agendamentos (timers/cron)'], ['storage', 'Storage'], ['zfs', 'Pools ZFS'], ['datastore', 'Datastores']];
 function unitGroups(host, cs) {
   if (!cs || !cs.length) return '<span class="muted" style="font-size:10px">sem unidades reportadas</span>';
   const byKind = {}; for (const c of cs) { const k = c.kind || 'container'; (byKind[k] = byKind[k] || []).push(c); }
@@ -1561,7 +1561,12 @@ function hostMetricsBlock(H) {
   if (!m) return `<div class="muted" style="font-size:10px;margin-top:8px;border-top:1px dashed var(--np-border);padding-top:8px">sem telemetria de host — o agente de pull ainda não reportou (≤ ~5 min após deploy)</div>`;
   const num = (x) => (x == null || x === '' ? null : +x);
   const age = m.reported ? timeAgo(Math.floor(+m.reported / 1000)) : '—';
-  const bars = [usageBar('CPU', num(m.cpu), 100, '%'), usageBar('RAM', num(m.mem_used), num(m.mem_total), 'MB', (x) => fmt(x)), usageBar('Disco', num(m.disk_used), num(m.disk_total), 'GB', (x) => fmt(x))].join('');
+  const bars = [
+    usageBar('CPU', num(m.cpu), 100, '%'),
+    usageBar('RAM', num(m.mem_used), num(m.mem_total), 'MB', (x) => fmt(x)),
+    num(m.swap_total) > 0 ? usageBar('SWAP', num(m.swap_used), num(m.swap_total), 'MB', (x) => fmt(x)) : '',
+    usageBar('Disco /', num(m.disk_used), num(m.disk_total), 'GB', (x) => fmt(x)),
+  ].join('');
   const chips = [];
   if (num(m.net_rx) != null || num(m.net_tx) != null) chips.push(`<span class="np-chip" style="font-size:10px" title="rede ingress/egress">rede ↓${(num(m.net_rx) || 0).toFixed(1)} ↑${(num(m.net_tx) || 0).toFixed(1)} MB/s</span>`);
   if (num(m.io_read) != null || num(m.io_write) != null) chips.push(`<span class="np-chip" style="font-size:10px" title="disco I/O leitura/escrita">I/O r${(num(m.io_read) || 0).toFixed(1)} w${(num(m.io_write) || 0).toFixed(1)} MB/s</span>`);
@@ -1673,6 +1678,7 @@ window.openServer = async (dc) => {
     return `<div style="border:1px solid var(--np-border);border-radius:8px;padding:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><button class="np-btn np-btn--sm" onclick="openVm('${esc(v.host)}')">${esc(v.host)} ›</button><span class="tnum muted" style="font-size:11px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : '—'}${v.infra ? ' · infra' : ' · ' + fmt(v.done1h) + '/h'}</span></div>
       ${v.workers.length ? capBlock(v.cap) : ''}
+      ${hostMetricsBlock(v.cap)}
       <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${inner}</div>
     </div>`; };
   dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(dc)}</div><div class="muted" style="font-size:12px">${vms.length} VMs · ${workers} workers</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>

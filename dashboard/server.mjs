@@ -1973,7 +1973,7 @@ app.get('/api/fleet/pull/:host', (req, res) => {
 // PUSH de telemetria de host (agente de pull, ~5 min): grava um snapshot no Redis (HASH, TTL 15min →
 // hosts silenciosos aparecem "sem dados" na página Servidores). Mesmo token que o pull do .env.
 // Só campos conhecidos (whitelist) e limitados em tamanho → não guardamos lixo arbitrário.
-const METRIC_FIELDS = ['cpu', 'load', 'cores', 'mem_used', 'mem_total', 'disk_used', 'disk_total',
+const METRIC_FIELDS = ['cpu', 'load', 'cores', 'mem_used', 'mem_total', 'swap_used', 'swap_total', 'disk_used', 'disk_total',
   'io_read', 'io_write', 'net_rx', 'net_tx', 'lat_directus', 'lat_pg', 'lat_minio', 'uptime', 'ts'];
 app.post('/api/fleet/metrics/:host', async (req, res) => {
   const host = req.params.host;
@@ -2053,6 +2053,8 @@ app.get('/metrics', async (req, res) => {
     M('np_host_cpu_percent', 'CPU do host (%)', 'gauge');
     M('np_host_mem_used_bytes', 'RAM usada do host', 'gauge');
     M('np_host_mem_total_bytes', 'RAM total do host', 'gauge');
+    M('np_host_swap_used_bytes', 'SWAP usada do host', 'gauge');
+    M('np_host_swap_total_bytes', 'SWAP total do host', 'gauge');
     M('np_host_disk_used_bytes', 'Disco / usado', 'gauge');
     M('np_host_disk_total_bytes', 'Disco / total', 'gauge');
     M('np_host_load1', 'Load average 1m', 'gauge');
@@ -2074,6 +2076,8 @@ app.get('/metrics', async (req, res) => {
         g('np_host_cpu_percent', { host, dc }, m.cpu);
         if (m.mem_used) g('np_host_mem_used_bytes', { host, dc }, +m.mem_used * 1048576);
         if (m.mem_total) g('np_host_mem_total_bytes', { host, dc }, +m.mem_total * 1048576);
+        if (m.swap_used) g('np_host_swap_used_bytes', { host, dc }, +m.swap_used * 1048576);
+        if (m.swap_total) g('np_host_swap_total_bytes', { host, dc }, +m.swap_total * 1048576);
         if (m.disk_used) g('np_host_disk_used_bytes', { host, dc }, +m.disk_used * 1073741824);
         if (m.disk_total) g('np_host_disk_total_bytes', { host, dc }, +m.disk_total * 1073741824);
         g('np_host_load1', { host, dc }, m.load);

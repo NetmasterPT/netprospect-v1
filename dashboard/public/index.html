@@ -340,7 +340,7 @@ let STATS = null;
 // Submenus do nav (ordem preservada). Cada item = [id, ícone, label, countKey?] (countKey lê t[key]).
 const NAV_GROUPS = [
   ['Geral', [['overview', 'overview', 'Visão Geral'], ['outreach', 'send', 'Outreach'], ['config', 'sliders', 'Configuração']]],
-  ['Frota', [['servers', 'globe', 'Servidores'], ['vms', 'server', 'VMs'], ['workers', 'sparkles', 'Workers'], ['queues', 'activity', 'Filas'], ['coverage', 'check', 'Cobertura Jobs'], ['logs', 'clock', 'Logs']]],
+  ['Frota', [['servers', 'globe', 'Servidores'], ['vms', 'server', 'VMs'], ['workers', 'sparkles', 'Workers'], ['queues', 'activity', 'Filas'], ['autoscale', 'sparkles', 'Autoscaler'], ['coverage', 'check', 'Cobertura Jobs'], ['logs', 'clock', 'Logs']]],
   ['Dataset', [['directory', 'directory', 'Negócios', 'sites'], ['isps', 'globe', 'ISPs'], ['triggers', 'activity', 'Gatilhos'], ['data-coverage', 'check', 'Cobertura Dados']]],
   ['CRM', [['contacts', 'contacts', 'Contactos', 'contacts'], ['clients', 'briefcase', 'Clientes']]],
   ['Prospecção', [['subscriptions', 'briefcase', 'Subscrições'], ['icps', 'contacts', 'ICPs'], ['segments', 'segments', 'Segmentos']]],
@@ -2330,6 +2330,36 @@ async function viewConfig() {
 }
 
 // ---------- router ----------
+async function viewAutoscale() {
+  renderNav('autoscale');
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Frota</div><h1 class="np-h1">Autoscaler <span class="np-badge">recomendador</span></h1><div class="np-sub">Sugestões de capacidade por host para escoar os backlogs. <b>Fase 1: só recomenda</b> — aplicas manualmente no editor de <code>.env</code> (Servidores → ⚙). Distingue “preso no teto <code>maxAckPending</code>” (lever = subir o teto) de “teto com folga, poucos a puxar” (lever = add-role / conc).</div></div><button class="np-btn" onclick="viewAutoscale()">↻ Atualizar</button></div>`;
+  let d; try { d = await api('/api/autoscale'); } catch (e) { $('#view').innerHTML = head + errCard(e); return; }
+  if (!d.ok) { $('#view').innerHTML = head + `<div class="np-empty">${esc(d.error || 'sem dados')}</div>`; return; }
+  const bott = (d.bottlenecks || []).map((b) => `<tr>
+    <td><b>${esc(b.job)}</b></td><td class="np-sub">${esc(b.role || '?')}</td>
+    <td class="tnum">${fmt(b.pending)}</td>
+    <td class="tnum">${b.inflight}/${b.maxAck}${b.pegged ? ' <span style="color:#e5484d;font-weight:600">PRESO</span>' : ''}</td>
+    <td class="tnum">${b.drainPerH || '?'}/h</td>
+    <td class="tnum">${b.etaH != null ? b.etaH + 'h' : '—'}</td>
+    <td>${b.capped ? `<span class="np-badge" title="${esc(b.capReason)}">teto externo</span>` : ''}</td></tr>`).join('') || '<tr><td colspan="7" class="np-sub">sem backlogs acima de 200 pendentes</td></tr>';
+  const fleet = (d.fleetSuggestions || []).map((s) => `<div class="np-card" style="border-left:3px solid var(--np-brand);margin:6px 0"><b>${esc(s.job)}</b> — subir <code>maxAckPending ${s.from}→${s.to}</code><div class="np-sub" style="margin-top:4px">${esc(s.reason)}</div></div>`).join('') || '<div class="np-sub">nenhuma (nenhum job preso no teto com hosts a ter folga)</div>';
+  const hostCard = (h) => {
+    const sug = (h.suggestions || []).map((s) => s.type === 'add-role'
+      ? `<div style="margin:4px 0">➕ <code>WORKER_ROLES ${esc(s.action)}</code><div class="np-sub">${esc(s.reason)}</div></div>`
+      : `<div style="margin:4px 0">⬆️ <code>${esc(s.env)} ${s.from}→${s.to}</code><div class="np-sub">${esc(s.reason)}</div></div>`).join('') || '<div class="np-sub">sem sugestões</div>';
+    const bar = Math.min(100, h.busyPct), col = bar > 75 ? '#e5484d' : bar > 50 ? '#f5a623' : '#30a46c';
+    return `<div class="np-card"><div style="display:flex;justify-content:space-between;align-items:baseline"><b>${esc(h.host)}</b><span class="np-sub tnum">${h.cores} cores · ${h.busyPct}% · ${h.headroom} livres</span></div>
+      <div style="height:6px;background:rgba(128,128,128,0.2);border-radius:3px;margin:6px 0"><div style="height:6px;width:${bar}%;background:${col};border-radius:3px"></div></div>
+      <div class="np-sub">roles: ${h.roles.map((r) => `<code>${esc(r)}</code>`).join(' ') || '—'} · done1h ${fmt(h.done1h)}</div>
+      <div style="margin-top:8px">${sug}</div></div>`;
+  };
+  const capped = (d.capped || []).map((c) => `<code>${esc(c.job)}</code> — ${esc(c.reason)}`).join('<br>');
+  $('#view').innerHTML = head
+    + `<div class="np-card"><h3 style="margin:0 0 8px">Backlogs</h3><table class="np-table"><thead><tr><th>Job</th><th>Role</th><th>Pendentes</th><th>Em voo / teto</th><th>Dreno</th><th>ETA</th><th></th></tr></thead><tbody>${bott}</tbody></table></div>`
+    + `<div class="np-card" style="margin-top:12px"><h3 style="margin:0 0 8px">Sugestões fleet-wide (teto <code>maxAckPending</code>)</h3>${fleet}</div>`
+    + `<h3 style="margin:16px 0 8px">Por host — capacidade e sugestões</h3><div class="np-grid" style="grid-template-columns:repeat(auto-fill,minmax(340px,1fr))">${(d.hosts || []).map(hostCard).join('')}</div>`
+    + `<div class="np-card" style="margin-top:12px"><h3 style="margin:0 0 6px">Tetos externos (não escalam por concorrência)</h3><div class="np-sub">${capped}</div></div>`;
+}
 async function route() {
   closeDrawer();
   try { shellEl.classList.remove('nav-mobile-open'); } catch (e) {}
@@ -2353,6 +2383,7 @@ async function route() {
     else if (h === 'vms') await viewVms();
     else if (h === 'workers') await viewWorkers();
     else if (h === 'queues') await viewQueues();
+    else if (h === 'autoscale') await viewAutoscale();
     else if (h === 'coverage') await viewCoverage();
     else if (h === 'data-coverage') await viewDataCoverage();
     else if (h === 'report') await viewReport();

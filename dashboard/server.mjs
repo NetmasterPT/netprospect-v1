@@ -2068,6 +2068,95 @@ app.get('/metrics', async (req, res) => {
   res.send(out.join('\n') + '\n');
 });
 
+// --- Autoscaler (FASE 1: RECOMENDADOR read-only) — lê filas + hosts + .env e SUGERE ajustes de
+//     capacidade para escoar os backlogs, dentro de guarda-costas. NÃO aplica nada (revisão humana no
+//     editor de .env). Distingue "PRESO no teto maxAckPending" (lever = subir teto) de "teto com folga
+//     mas poucos a puxar" (lever = add-role / subir conc). Antes do catch-all. ---
+const AUTOSCALE_CAPPED = {
+  gmb: 'rate-limit do Google sobre 1 IP residencial — escala com +IPs, não com conc (ver GMB_MAX_ACK)',
+  verify: 'quota da API de verificação (~100/dia)',
+};
+const CONC_ENV = {
+  enrich: 'ENRICH_CONCURRENCY', contacts: 'CONTACTS_CONCURRENCY', fingerprint: 'FINGERPRINT_CONC',
+  score: 'SCORE_CONC', verify: 'VERIFY_CONCURRENCY', nuclei: 'NUCLEI_JOB_CONC', wpscan: 'WPSCAN_CONC',
+  industry: 'INDUSTRY_CONC', gmb: 'GMB_CONC', lighthouse_mobile: 'LIGHTHOUSE_CONC', lighthouse_desktop: 'LIGHTHOUSE_CONC',
+  ssl: 'DOMAIN_HEALTH_CONC', whois: 'DOMAIN_HEALTH_CONC', dnsprovider: 'DOMAIN_HEALTH_CONC',
+};
+function autoscaleRoleAssignable(role, host, env) {
+  if (role === 'residential') return /laptop/i.test(host);      // só há IP residencial na laptop
+  if (role === 'ai') return /^OLLAMA_URL=\S/m.test(env || '');    // ai precisa de Ollama
+  if (role === 'verify') return false;                            // quota — não escala por host
+  return true;                                                    // base/browser/security
+}
+function autoscaleRecommend({ consumers, workers, envByHost }) {
+  const roleByConsumer = {}; for (const c of consumers) roleByConsumer[c.name] = c.role;
+  const H = {};
+  for (const w of workers) {
+    const h = w.host || w.id;
+    (H[h] ||= { host: h, cores: 0, load: 0, roles: new Set(), done1h: 0, conc: {}, replicas: 0 });
+    H[h].cores = Math.max(H[h].cores, w.cores || 0);
+    H[h].load = Math.max(H[h].load, w.load || 0);
+    H[h].done1h += w.done1h || 0;
+    H[h].replicas = Math.max(H[h].replicas, w.replicas || 1);
+    (w.consumers || []).forEach((c) => { const r = roleByConsumer[c]; if (r && r !== '?') H[h].roles.add(r); });
+    if (w.conc) for (const k in w.conc) H[h].conc[k] = Math.max(H[h].conc[k] || 0, +w.conc[k] || 0);
+  }
+  for (const h in H) { H[h].busyPct = H[h].cores ? Math.min(100, Math.round(100 * H[h].load / H[h].cores)) : 0; H[h].headroom = Math.max(0, Math.round(H[h].cores - H[h].load)); }
+  const bottlenecks = consumers.filter((c) => (c.pending || 0) > 200).map((c) => {
+    const used = c.cap1h && typeof c.cap1h.used === 'number' ? c.cap1h.used : 0;
+    const drainPerH = used || (c.avgMs > 0 && c.slots > 0 ? Math.round(c.slots * 3600000 / c.avgMs) : 0);
+    const etaH = drainPerH > 0 ? +(c.pending / drainPerH).toFixed(1) : null;
+    const maxAck = c.maxAckPending || 0, inflight = c.ackPending || 0;
+    return { job: c.name, role: c.role, pending: c.pending, inflight, maxAck, pegged: maxAck > 0 && inflight >= Math.max(1, Math.floor(maxAck * 0.85)), avgMs: c.avgMs || null, slots: c.slots || 0, drainPerH, etaH, capped: !!AUTOSCALE_CAPPED[c.name], capReason: AUTOSCALE_CAPPED[c.name] || null };
+  }).sort((a, b) => ((b.etaH ?? 1e9) - (a.etaH ?? 1e9)));
+  const hostList = Object.values(H).sort((a, b) => a.host.localeCompare(b.host));
+  for (const h of hostList) h.suggestions = [];
+  const fleetSuggestions = [];
+  for (const b of bottlenecks) {
+    if (b.capped) continue;
+    const runners = hostList.filter((h) => h.cores > 0 && h.roles.has(b.role));
+    if (b.pegged) {
+      const headroomHosts = runners.filter((h) => h.busyPct < 70);
+      if (headroomHosts.length) {
+        fleetSuggestions.push({ type: 'raise-maxack', job: b.job, from: b.maxAck, to: b.maxAck * 2, reason: `${b.job}: PRESO no teto fleet-wide maxAckPending=${b.maxAck} (inflight ${b.inflight}); hosts '${b.role}' com folga (${headroomHosts.map((h) => h.host + ' ' + h.busyPct + '%').join(', ')}) → subir o teto${b.role === 'browser' ? ' (Chromium/CPU-pesado: gradual)' : ''}. Requer tornar maxAckPending override-ável (tipo GMB_MAX_ACK) ou editar jobs.js.` });
+      } else {
+        const idle = hostList.filter((h) => h.cores > 0 && !h.roles.has(b.role) && h.busyPct < 55 && autoscaleRoleAssignable(b.role, h.host, envByHost[h.host])).sort((a, b2) => b2.headroom - a.headroom)[0];
+        if (idle) idle.suggestions.push({ type: 'add-role', role: b.role, env: 'WORKER_ROLES', action: `+${b.role}`, reason: `${b.job}: backlog ${b.pending}; runners de '${b.role}' saturados → dar '${b.role}' a ${idle.host} (folga ${idle.busyPct}%)` });
+      }
+      continue;
+    }
+    const runnersBusy = runners.length > 0 && runners.every((h) => h.busyPct >= 75);
+    if (runners.length === 0 || runnersBusy) {
+      const idle = hostList.filter((h) => h.cores > 0 && !h.roles.has(b.role) && h.busyPct < 55 && autoscaleRoleAssignable(b.role, h.host, envByHost[h.host])).sort((a, b2) => b2.headroom - a.headroom)[0];
+      if (idle && !idle.suggestions.some((s) => s.type === 'add-role' && s.role === b.role))
+        idle.suggestions.push({ type: 'add-role', role: b.role, env: 'WORKER_ROLES', action: `+${b.role}`, reason: `${b.job}: backlog ${b.pending}${b.etaH ? ` (ETA ${b.etaH}h)` : ''}, teto com folga (inflight ${b.inflight}/${b.maxAck}); ${idle.host} livre (${idle.busyPct}%) pode puxar` });
+    }
+    const cenv = CONC_ENV[b.job];
+    if (cenv) for (const h of runners) if (h.busyPct < 65) {
+      const cur = h.conc[b.job] || 1, to = Math.max(cur + 1, Math.min(cur * 2, cur + h.headroom));
+      if (to > cur && !h.suggestions.some((s) => s.type === 'raise-conc' && s.env === cenv && s.job === b.job))
+        h.suggestions.push({ type: 'raise-conc', job: b.job, env: cenv, from: cur, to, reason: `${b.job}: backlog ${b.pending}, teto com folga; ${h.host} a ${h.busyPct}% → ${cenv} ${cur}→${to}` });
+    }
+  }
+  return { bottlenecks, fleetSuggestions, hosts: hostList.map((h) => ({ host: h.host, cores: h.cores, load: +h.load.toFixed(2), busyPct: h.busyPct, headroom: h.headroom, roles: [...h.roles].sort(), done1h: h.done1h, replicas: h.replicas, suggestions: h.suggestions })), capped: Object.entries(AUTOSCALE_CAPPED).map(([job, reason]) => ({ job, reason })) };
+}
+app.get('/api/autoscale', async (req, res) => {
+  try {
+    const data = await cached('np:autoscale:v1', async () => {
+      const b = `http://127.0.0.1:${PORT}`;
+      const [q, w] = await Promise.all([
+        fetch(`${b}/api/queues`).then((r) => r.json()).catch(() => ({ consumers: [] })),
+        fetch(`${b}/api/workers`).then((r) => r.json()).catch(() => ({ workers: [] })),
+      ]);
+      let names = [];
+      try { names = fs.readdirSync(FLEET_ENV_DIR).filter((f) => f.endsWith('.env')).map((f) => f.replace(/\.env$/, '')); } catch { /* */ }
+      const envByHost = {}; for (const h of names) envByHost[h] = readFleetEnv(h);
+      return { ok: true, ...autoscaleRecommend({ consumers: q.consumers || [], workers: w.workers || [], envByHost }), ts: Date.now() };
+    }, 60);
+    res.json(data);
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => { ensureFleetDir(); console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`); });

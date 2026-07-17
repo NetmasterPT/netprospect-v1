@@ -341,6 +341,20 @@ let STATS = null;
 const NAV_GROUPS = [
   ['Geral', [['overview', 'overview', 'Visão Geral'], ['outreach', 'send', 'Outreach'], ['config', 'sliders', 'Configuração']]],
   ['Frota', [['servers', 'globe', 'Servidores'], ['vms', 'server', 'VMs'], ['workers', 'sparkles', 'Workers'], ['queues', 'activity', 'Filas'], ['autoscale', 'sparkles', 'Autoscaler'], ['coverage', 'check', 'Cobertura Jobs'], ['logs', 'clock', 'Logs']]],
+  ['Observabilidade', [
+    ['ext-am', 'activity', 'AlertManager', null, 'http://100.96.102.84:9093'],
+    ['ext-prom', 'activity', 'Prometheus', null, 'http://100.125.24.44:9090'],
+    ['ext-graf', 'sparkles', 'Grafana', null, 'http://100.68.203.121:3000'],
+    ['ext-otel', 'activity', 'OpenTelemetry', null, 'http://100.114.17.74:16686'],
+    ['ext-uk', 'check', 'UptimeKuma', null, 'http://100.76.94.112:3001'],
+    ['ext-ntfy', 'send', 'Ntfy', null, 'http://100.118.244.35'],
+    ['ext-ph', 'activity', 'PostHog', null, 'https://eu.posthog.com'],
+  ]],
+  ['Data', [
+    ['ext-directus', 'server', 'Directus', null, 'http://100.114.17.74:8056'],
+    ['ext-minio', 'server', 'MinIO', null, 'http://100.124.43.117:9001'],
+    ['ext-adminer', 'directory', 'Adminer', null, 'http://100.114.17.74:8080'],
+  ]],
   ['Dataset', [['directory', 'directory', 'Negócios', 'sites'], ['isps', 'globe', 'ISPs'], ['triggers', 'activity', 'Gatilhos'], ['data-coverage', 'check', 'Cobertura Dados']]],
   ['CRM', [['contacts', 'contacts', 'Contactos', 'contacts'], ['clients', 'briefcase', 'Clientes']]],
   ['Prospecção', [['subscriptions', 'briefcase', 'Subscrições'], ['icps', 'contacts', 'ICPs'], ['segments', 'segments', 'Segmentos']]],
@@ -358,12 +372,14 @@ window.toggleNavGroup = (name) => {
 async function renderNav(active) {
   const t = STATS?.totals || {};
   const collapsed = navCollapsedSet();
-  const item = (id, icon, label, count) => `<div class="np-nav-row ${active === id ? 'is-active' : ''}" onclick="location.hash='#/${id}'">${ic(icon, 16)}<span>${label}</span>${count != null ? `<span class="np-nav-count tnum">${fmt(count)}</span>` : ''}</div>`;
+  const item = (id, icon, label, count, url) => url
+    ? `<a class="np-nav-row" href="${url}" target="_blank" rel="noopener" style="text-decoration:none;color:inherit">${ic(icon, 16)}<span>${label}</span><span class="np-nav-count" style="opacity:.45;font-size:11px">↗</span></a>`
+    : `<div class="np-nav-row ${active === id ? 'is-active' : ''}" onclick="location.hash='#/${id}'">${ic(icon, 16)}<span>${label}</span>${count != null ? `<span class="np-nav-count tnum">${fmt(count)}</span>` : ''}</div>`;
   const group = ([name, items]) => {
     const isCollapsed = collapsed.has(name) && !items.some((it) => it[0] === active); // grupo do item ativo fica sempre expandido
     return `<div class="np-nav-group ${isCollapsed ? 'collapsed' : ''}" data-group="${name}">
       <div class="np-nav-head" onclick="toggleNavGroup('${name}')"><span>${name}</span><span class="np-nav-chev">${ic('chevD', 13)}</span></div>
-      <div class="np-nav-sub">${items.map((it) => item(it[0], it[1], it[2], it[3] ? t[it[3]] : undefined)).join('')}</div>
+      <div class="np-nav-sub">${items.map((it) => item(it[0], it[1], it[2], it[3] ? t[it[3]] : undefined, it[4])).join('')}</div>
     </div>`;
   };
   $('#nav').innerHTML = NAV_GROUPS.map(group).join('');
@@ -1472,6 +1488,17 @@ const contForWorker = (hosts, w) => { const cs = ((hosts || {})[w.host] || {}).c
 const containerChips = (host, cs) => (cs && cs.length)
   ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = { lxc: 'LXC·', vm: 'VM·', storage: 'disco·', zfs: 'zfs·', datastore: 'ds·' }[c.kind] || ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}</button>`; }).join(' ')
   : '<span class="muted" style="font-size:10px">sem unidades reportadas</span>';
+// Unidades AGRUPADAS por tipo (para os drawers): Docker / LXC / VMs / Serviços / Storage / ZFS / Datastores.
+const UNIT_ORDER = [['container', 'Containers Docker'], ['lxc', 'Containers LXC'], ['vm', 'VMs'], ['service', 'Serviços (OS)'], ['storage', 'Storage'], ['zfs', 'Pools ZFS'], ['datastore', 'Datastores']];
+function unitGroups(host, cs) {
+  if (!cs || !cs.length) return '<span class="muted" style="font-size:10px">sem unidades reportadas</span>';
+  const byKind = {}; for (const c of cs) { const k = c.kind || 'container'; (byKind[k] = byKind[k] || []).push(c); }
+  const sec = (k, label) => `<div style="margin-top:8px"><div class="muted" style="font-size:9px;text-transform:uppercase;letter-spacing:.04em">${label} (${byKind[k].length})</div><div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px">${containerChips(host, byKind[k])}</div></div>`;
+  const parts = [];
+  for (const [k, label] of UNIT_ORDER) { if (byKind[k]) { parts.push(sec(k, label)); delete byKind[k]; } }
+  for (const k in byKind) parts.push(sec(k, k)); // kinds desconhecidos
+  return parts.join('');
+}
 // Drawer de um container (mostra-o "como um worker": host, imagem, estado, uptime, portas).
 window.openContainer = async (host, name) => {
   const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
@@ -1608,7 +1635,7 @@ window.openVm = async (host) => {
   const v = allVms(d).find((x) => x.host === host);
   if (!v) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">VM ${esc(host)} sem dados a reportar.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
   const cs = (v.cap && v.cap.containers) || [];
-  const contSec = `<div class="np-sec-t">Containers / serviços (${cs.length})</div><div style="display:flex;flex-wrap:wrap;gap:4px">${containerChips(v.host, cs)}</div>`;
+  const contSec = `<div class="np-sec-t">Unidades (${cs.length})</div>${unitGroups(v.host, cs)}`;
   let wkCfg = '';
   if (v.workers.length) {
     const jobs = Object.keys(v.conc || {}).sort();
@@ -1642,7 +1669,7 @@ window.openServer = async (dc) => {
   const cap = { cap1h: sumCaps(withWk, 'cap1h'), cap24h: sumCaps(withWk, 'cap24h'), cap30d: sumCaps(withWk, 'cap30d') };
   const vmRow = (v) => { const inner = v.workers.length
       ? v.workers.map((w) => `<button class="np-btn np-btn--sm" style="font-size:9px;padding:1px 6px" onclick="openWorker('${esc(w.id)}')" title="${esc(w.role)}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('')
-      : containerChips(v.host, v.cap && v.cap.containers);
+      : unitGroups(v.host, v.cap && v.cap.containers);
     return `<div style="border:1px solid var(--np-border);border-radius:8px;padding:8px">
       <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><button class="np-btn np-btn--sm" onclick="openVm('${esc(v.host)}')">${esc(v.host)} ›</button><span class="tnum muted" style="font-size:11px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : '—'}${v.infra ? ' · infra' : ' · ' + fmt(v.done1h) + '/h'}</span></div>
       ${v.workers.length ? capBlock(v.cap) : ''}
@@ -1835,7 +1862,7 @@ async function viewWorkers() {
   const infraHosts = Object.keys(d.hosts || {}).filter((h) => d.hosts[h].infra && (d.hosts[h].containers || []).length).sort()
     .map((h) => ({ host: h, dc: DC_OF(h), containers: d.hosts[h].containers }));
   const sig = ws.map((w) => w.id).join(',') + '|inf:' + infraHosts.map((x) => x.host).join(',');
-  const infraSection = () => infraHosts.map((x) => `<div style="margin-bottom:10px"><div class="muted" style="font-size:11px;margin-bottom:4px"><b>${esc(x.host)}</b> · ${esc(x.dc)} · ${x.containers.length} containers</div><div style="display:flex;flex-wrap:wrap;gap:4px">${containerChips(x.host, x.containers)}</div></div>`).join('');
+  const infraSection = () => infraHosts.map((x) => `<div style="margin-bottom:10px"><div class="muted" style="font-size:11px;margin-bottom:4px"><b>${esc(x.host)}</b> · ${esc(x.dc)} · ${x.containers.length} unidades</div>${unitGroups(x.host, x.containers)}</div>`).join('');
   const curInner = (w) => w.cur ? `<div style="font-size:12.5px"><span class="np-dot" style="background:var(--np-ok-mark);display:inline-block;margin-right:6px"></span><b>${esc(w.cur)}</b> <span class="muted">(${w.curStarted ? durMs(Date.now() - w.curStarted) : ''})</span></div>` : `<div class="muted" style="font-size:12.5px">idle</div>`;
   const statsInner = (w) => `<div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(w.done24h)}</div><div class="muted" style="font-size:10px">feitas 24h · ${fmt(w.done1h)}/h</div></div><div><div class="tnum" style="font-size:16px;font-weight:800;color:${w.fail24h ? 'var(--np-warn)' : ''}">${fmt(w.fail24h)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div><div><div class="tnum" style="font-size:16px;font-weight:800">${durMs(w.avgMs)}</div><div class="muted" style="font-size:10px">dur. média</div></div>`;
   const logsInner = (logs) => (logs && logs.length) ? logs.map(esc).join('\n') : '<span class="muted">(sem logs recentes)</span>';

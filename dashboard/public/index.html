@@ -1438,15 +1438,18 @@ function b64utf8(b64) { try { const bin = atob(b64 || ''); const bytes = Uint8Ar
 // Unidade (container/serviço) está "a correr"? container: running/Up · serviço: active/running.
 const unitUp = (c) => /running|^active|healthy|^Up/i.test(c && c.state || '') || /running|healthy|^Up/i.test(c && c.status || '');
 const cpuSecFmt = (s) => { const n = +s; return n >= 3600 ? (n / 3600).toFixed(1) + ' h' : n >= 60 ? (n / 60).toFixed(0) + ' min' : n + ' s'; };
-// Bloco de recursos de uma unidade. container → docker stats (CPU%/RAM/rede/IO); serviço → cgroup (RAM + CPU acumulado).
+const kindLabel = (k) => k === 'service' ? 'serviço systemd' : k === 'lxc' ? 'container LXC' : k === 'vm' ? 'VM (Proxmox)' : 'container Docker';
+// Bloco de recursos de uma unidade. container(docker) → CPU%/RAM/rede/IO; serviço → RAM+CPU acumulado (cgroup);
+// lxc/vm → RAM + CPU% (pvesh).
 function containerStatsBlock(c) {
   if (!c) return '';
-  if (c.kind === 'service') {
+  if (c.kind && c.kind !== 'container') {
     const mb = c.memb ? +c.memb : null; const bars = [];
     if (mb) bars.push(`<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;font-size:10px"><span class="muted">RAM</span><span class="tnum">${fmtBytes(mb)}</span></div></div>`);
-    const chips = [];
-    if (c.cpuSec) chips.push(`<span class="np-chip" style="font-size:10px" title="tempo de CPU acumulado (cgroup)">CPU ${cpuSecFmt(c.cpuSec)} total</span>`);
-    return bars.join('') + (chips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${chips.join('')}</div>` : '<span class="muted" style="font-size:10px">sem contabilidade de recursos (cgroup)</span>');
+    const chips = []; const cpuPct = c.cpu ? parseFloat(c.cpu) : null;
+    if (cpuPct != null && !isNaN(cpuPct)) chips.push(`<span class="np-chip" style="font-size:10px" title="CPU instantâneo (pvesh)">CPU ${esc(c.cpu)}</span>`);
+    else if (c.cpuSec) chips.push(`<span class="np-chip" style="font-size:10px" title="tempo de CPU acumulado (cgroup)">CPU ${cpuSecFmt(c.cpuSec)} total</span>`);
+    return bars.join('') + (chips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${chips.join('')}</div>` : (mb ? '' : '<span class="muted" style="font-size:10px">sem contabilidade de recursos</span>'));
   }
   const cpu = c.cpu ? parseFloat(c.cpu) : null;
   const [mu, ml] = pairOf(c.mem), [rx, tx] = pairOf(c.net), [br, bw] = pairOf(c.blk);
@@ -1464,10 +1467,10 @@ const containerLogsBlock = (c) => { const t = b64utf8(c && c.logb64).trim(); ret
 const containerMini = (c) => { if (!c) return ''; const cpu = c.cpu ? parseFloat(c.cpu) : null; const [mu, ml] = pairOf(c.mem); const chips = []; if (cpu != null && !isNaN(cpu)) chips.push(`CPU ${cpu.toFixed(1)}%`); if (mu != null) chips.push(`RAM ${fmtBytes(mu)}${ml ? ' / ' + fmtBytes(ml) : ''}`); return chips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">${chips.map((t) => `<span class="np-chip" style="font-size:10px" title="recursos do container (docker stats)">${t}</span>`).join('')}</div>` : ''; };
 // Encontra o container de um worker (id do worker = id do container) nos hosts reportados.
 const contForWorker = (hosts, w) => { const cs = ((hosts || {})[w.host] || {}).containers || []; return cs.find((c) => c.id && (c.id === w.id || w.id.startsWith(c.id) || c.id.startsWith(w.id))) || null; };
-// Botões das unidades (container/serviço) de um host — nome + ponto de estado; serviço tem contorno tracejado.
+// Botões das unidades (container/serviço/lxc/vm) de um host — nome + ponto de estado; não-container = tracejado.
 const containerChips = (host, cs) => (cs && cs.length)
-  ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const svc = c.kind === 'service'; return `<button class="np-btn np-btn--sm" style="font-size:9px${svc ? ';border-style:dashed' : ''}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${svc ? 'serviço systemd' : 'container docker'} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${esc(c.name)}</button>`; }).join(' ')
-  : '<span class="muted" style="font-size:10px">sem containers/serviços reportados</span>';
+  ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = c.kind === 'lxc' ? 'LXC·' : c.kind === 'vm' ? 'VM·' : ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}</button>`; }).join(' ')
+  : '<span class="muted" style="font-size:10px">sem unidades reportadas</span>';
 // Drawer de um container (mostra-o "como um worker": host, imagem, estado, uptime, portas).
 window.openContainer = async (host, name) => {
   const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
@@ -1476,17 +1479,19 @@ window.openContainer = async (host, name) => {
   const H = (d.hosts || {})[host] || {};
   const c = (H.containers || []).find((x) => x.name === name);
   if (!c) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">${esc(name)} já não está a correr em ${esc(host)}.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
-  const up = unitUp(c); const svc = c.kind === 'service';
+  const up = unitUp(c); const dk = !c.kind || c.kind === 'container'; const hasLogs = (c.logb64 || '').length > 0;
   const kv = (k, v) => `<div class="k">${k}</div><div class="v">${v}</div>`;
   const ports = (c.ports || '').split(',').map((p) => p.trim()).filter(Boolean);
   const stats = containerStatsBlock(c);
-  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(c.name)}</div><div class="muted" style="font-size:12px">${svc ? 'serviço systemd' : 'container docker'} em <a href="#" onclick="openVm('${esc(host)}');return false" style="color:var(--np-brand-ink,#2563eb)">${esc(host)}</a></div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+  const imgLabel = c.kind === 'service' ? 'Descrição' : (c.kind === 'lxc' || c.kind === 'vm') ? 'Origem' : 'Imagem';
+  const src = dk ? 'docker ps/stats/logs' : c.kind === 'service' ? 'systemctl / journalctl' : 'pvesh (Proxmox)';
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(c.name)}</div><div class="muted" style="font-size:12px">${esc(kindLabel(c.kind))} em <a href="#" onclick="openVm('${esc(host)}');return false" style="color:var(--np-brand-ink,#2563eb)">${esc(host)}</a></div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
     <div style="padding:16px 18px">
-      <div class="np-kv">${kv('Tipo', svc ? 'serviço systemd' : 'container Docker')}${kv('Estado', `<span class="np-badge ${up ? 'ok' : 'warn'}" style="height:18px">${esc(c.state || '?')}${c.status && svc ? ' · ' + esc(c.status) : ''}</span>`)}${!svc ? kv('Status', esc(c.status || '—')) : ''}${kv(svc ? 'Descrição' : 'Imagem', `<span class="np-mono" style="font-size:11px">${esc(c.image || '—')}</span>`)}${kv('Host', esc(host))}</div>
+      <div class="np-kv">${kv('Tipo', esc(kindLabel(c.kind)))}${kv('Estado', `<span class="np-badge ${up ? 'ok' : 'warn'}" style="height:18px">${esc(c.status || c.state || '?')}</span>`)}${kv(imgLabel, `<span class="np-mono" style="font-size:11px">${esc(c.image || '—')}</span>`)}${kv('Host', esc(host))}</div>
       ${stats ? `<div class="np-sec-t">Recursos</div>${stats}` : ''}
       ${ports.length ? `<div class="np-sec-t">Portas</div><div style="display:flex;flex-wrap:wrap;gap:4px">${ports.map((p) => `<span class="np-chip" style="font-size:10px">${esc(p)}</span>`).join('')}</div>` : ''}
-      <div class="np-sec-t">Logs (tail)</div>${containerLogsBlock(c)}
-      <div class="muted" style="font-size:11px;margin-top:12px">Snapshot (<code>${svc ? 'systemctl / journalctl' : 'docker ps/stats/logs'}</code>) reportado pelo agente (~5 min).${svc ? ' CPU = tempo acumulado (cgroup).' : ' Rede/IO acumulados desde o arranque.'}</div>
+      ${dk || hasLogs ? `<div class="np-sec-t">Logs (tail)</div>${containerLogsBlock(c)}` : ''}
+      <div class="muted" style="font-size:11px;margin-top:12px">Snapshot (<code>${src}</code>) reportado pelo agente (~5 min).${dk ? ' Rede/IO acumulados desde o arranque.' : c.kind === 'service' ? ' CPU = tempo acumulado (cgroup).' : ''}</div>
     </div>`;
 };
 // Soma capacidades (usado/total/livre) de uma janela por um conjunto de VMs (aditivo).

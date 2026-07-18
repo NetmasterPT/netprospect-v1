@@ -53,15 +53,24 @@ if ($changed) {
 
 # 4) OBSERVABILITY self-heal — o windows_exporter (:9182) e o Alloy correm FORA do Docker (serviços
 #    Windows), por isso um reboot/queda deixa-os parados e o Prometheus perde o target sem que o
-#    recreate acima os toque. Idempotente, corre SEMPRE: garante Running + StartupType=Automatic e a
-#    regra de firewall da 9182. (Instalar de raiz = install-windows-observability.ps1.)
+#    recreate acima os toque. Idempotente, corre SEMPRE: INSTALA se faltarem (a Task corre elevada,
+#    -RunLevel Highest → pode instalar o MSI), garante Running + StartupType=Automatic e a regra de
+#    firewall da 9182. Sem isto, um laptop novo (ou sem o exporter) fica sem target no Prometheus.
+$obsInstaller = "$REPO\deploy\observability\install-windows-observability.ps1"
+$needInstall = @("windows_exporter", "Alloy") | Where-Object { -not (Get-Service $_ -ErrorAction SilentlyContinue) }
+if ($needInstall -and (Test-Path $obsInstaller)) {
+  try {
+    Log "observability: a instalar ($($needInstall -join ',')) via install-windows-observability.ps1"
+    & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $obsInstaller *>> $Log
+  } catch { Log "AVISO instalador observability: $_" }
+}
 foreach ($svc in @("windows_exporter", "Alloy")) {
   try {
     $s = Get-Service $svc -ErrorAction SilentlyContinue
     if ($s) {
       if ($s.StartType -ne "Automatic") { Set-Service $svc -StartupType Automatic }
       if ($s.Status -ne "Running") { Start-Service $svc; Log "$svc arrancado (estava $($s.Status))" }
-    } elseif ($svc -eq "windows_exporter") { Log "AVISO $svc nao instalado -- corre install-windows-observability.ps1" }
+    } else { Log "AVISO $svc continua em falta apos tentativa de instalacao" }
   } catch { Log "AVISO self-heal ${svc}: $_" }
 }
 try {

@@ -188,3 +188,30 @@ services:
       - '${LAN_IP}:8080:8080'
       - '${TAILNET_IP}:8080:8080'
       - '127.0.0.1:8080:8080'
+
+  # Cron do enqueue diário do verify — alimenta jobs.verify pelos MELHORES leads (lead_score desc). A quota
+  # real é imposta pela frota (contador+lock por-chave no Redis, lib/verify-providers.js); isto só enche a
+  # fila e re-enfileira os pendentes do dia anterior. Loop busybox (o np-server não tem cron/crontab): verifica
+  # de 10/10min e dispara 1× às 06:00 UTC (após o reset diário da quota free à meia-noite UTC). $$=escape do compose.
+  verify-enqueue-cron:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      - dashboard
+    command:
+      - sh
+      - -c
+      - |
+        apk add --no-cache curl >/dev/null 2>&1
+        echo "verify-enqueue-cron iniciado ($$(date -u))"
+        LAST=""
+        while true; do
+          H=$$(date -u +%H); D=$$(date -u +%Y-%m-%d)
+          if [ "$$H" = "06" ] && [ "$$D" != "$$LAST" ]; then
+            LAST=$$D
+            echo "$$(date -u) -> enqueue verify (maxEmails=100)"
+            curl -fsS -X POST "http://dashboard:3000/api/verify/enqueue?maxEmails=100" || echo "curl falhou"
+            echo
+          fi
+          sleep 600
+        done

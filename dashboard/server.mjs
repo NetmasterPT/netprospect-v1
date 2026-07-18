@@ -2364,6 +2364,27 @@ app.get('/api/moloni/documents/:id/pdf', async (req, res) => {
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 
+// ── Moloni — escrita (B): criar cliente/produto/documento (todos os tipos). ──
+const importMoloniWrite = async () => { try { return await import('./lib/moloni-write.js'); } catch { return import('../lib/moloni-write.js'); } };
+app.post('/api/moloni/customers', async (req, res) => {
+  try { const m = await importMoloniWrite(); res.json({ ok: true, result: await m.createCustomer(req.body || {}) }); }
+  catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
+app.post('/api/moloni/products', async (req, res) => {
+  try { const m = await importMoloniWrite(); res.json({ ok: true, result: await m.createProduct(req.body || {}) }); }
+  catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
+app.post('/api/moloni/documents', async (req, res) => {
+  try { const m = await importMoloniWrite(); const type = req.query.type || (req.body && req.body.type);
+    res.json({ ok: true, result: await m.createDocument(type, req.body || {}) }); }
+  catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
+app.post('/api/moloni/documents/:id/finalize', async (req, res) => {
+  try { const m = await importMoloniWrite(); const type = req.query.type || (req.body && req.body.type);
+    res.json({ ok: true, result: await m.finalizeDocument(type, parseInt(req.params.id, 10)) }); }
+  catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => { ensureFleetDir(); console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`); });

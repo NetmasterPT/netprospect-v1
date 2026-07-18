@@ -1824,7 +1824,7 @@ function covSum(cov, thresh) {
   const keys = COV_BUCKETS[thresh] || COV_BUCKETS.all;
   const rows = (cov.buckets || []).filter((b) => keys.includes(b.bucket));
   const sum = (f) => rows.reduce((a, b) => a + (+b[f] || 0), 0);
-  const out = { total: sum('total'), wp_total: sum('wp_total'), contacts_total: sum('contacts_total') };
+  const out = { total: sum('total'), wp_total: sum('wp_total') };
   for (const [k] of COV_JOBS) out[k] = sum(k);
   return out;
 }
@@ -1864,9 +1864,15 @@ async function viewCoverage() {
   if (!cov.ok) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Indisponível:</b> ${esc(cov.error || '—')} <span class="muted">(a página Cobertura precisa do PG_HOST/creds no dashboard).</span></div></div>`; return; }
   const seg = COV_THS.map(([k, l]) => `<button class="np-btn np-btn--sm ${COV_THRESH === k ? 'np-btn--primary' : ''}" onclick="window.covSet('${k}')">${l}</button>`).join(' ');
   const s = covSum(cov, COV_THRESH); const total = s.total || 1;
-  // wpscan → denominador wp_total (só WP); verify → contacts_total (só sites COM emails podem ser verificados,
-  // senão os sites sem contactos contavam trivialmente como "verificados" e inflavam a métrica).
-  const rows = COV_JOBS.map(([k, label, kind]) => { const tot = k === 'wpscan' ? (s.wp_total || 1) : k === 'verify' ? (s.contacts_total || 1) : total; const lbl = k === 'wpscan' ? label + ' (só WP)' : k === 'verify' ? label + ' (só c/ contactos)' : label; return { label: lbl, cat: kind, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 }; });
+  // wpscan → denominador wp_total (só WP). verify → nível-CONTACTO: contactos CLASSIFICADOS (verify correu) /
+  // contactos COM email — reconcilia com a Cobertura de Dados (que mostra os VÁLIDOS desses mesmos contactos;
+  // classificados ⊇ válidos+catch-all). Os outros jobs são nível-site.
+  const vb = verifySum(cov, COV_THRESH);
+  const rows = COV_JOBS.map(([k, label, kind]) => {
+    if (k === 'verify') { const t = vb.withemail || 1; return { label: 'Verify de email (contactos)', cat: kind, n: vb.classified, total: t, pct: Math.round(1000 * vb.classified / t) / 10 }; }
+    const tot = k === 'wpscan' ? (s.wp_total || 1) : total;
+    return { label: k === 'wpscan' ? label + ' (só WP)' : label, cat: kind, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 };
+  });
   const sorted = covSortRows(rows, 'jobs');
   const v = cov.verify || {};
   $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">
@@ -1902,12 +1908,13 @@ function dcovSum(cov, thresh) {
   for (const [k] of DCOV_FIELDS) out[k] = sum(k);
   return out;
 }
-// Verify contact-level agregado ao filtro de score: válidos + catch-all (prováveis) + total com email.
-function dcovVerifySum(cov, thresh) {
+// Verify contact-level agregado ao filtro de score (partilhado pelas 2 páginas de cobertura):
+// classified (verify correu, p/ a página Jobs) ⊇ valid+catchall (p/ a página Dados); denom = com email.
+function verifySum(cov, thresh) {
   const keys = COV_BUCKETS[thresh] || COV_BUCKETS.all;
   const rows = (cov.verifyBuckets || []).filter((b) => keys.includes(b.bucket));
   const sum = (f) => rows.reduce((a, b) => a + (+b[f] || 0), 0);
-  return { valid: sum('v_valid'), catchall: sum('v_catchall'), withemail: sum('v_withemail') };
+  return { classified: sum('v_classified'), valid: sum('v_valid'), catchall: sum('v_catchall'), withemail: sum('v_withemail') };
 }
 window.dcovSet = (t) => { DCOV_THRESH = t; viewDataCoverage(); };
 async function viewDataCoverage() {
@@ -1922,7 +1929,7 @@ async function viewDataCoverage() {
   const sorted = covSortRows(rows, 'data');
   const v = cov.verify || {};
   // Verify contact-level (filtrado pelo score): válidos (verde) + catch-all/prováveis (roxo) / contactos com email.
-  const vb = dcovVerifySum(cov, DCOV_THRESH);
+  const vb = verifySum(cov, DCOV_THRESH);
   const vpct = vb.withemail ? Math.round(1000 * vb.valid / vb.withemail) / 10 : 0;
   const verifySection = `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">Contactos (verificação de email)</td></tr>
     <tr><td style="padding:8px 10px"><b>Emails válidos</b> <span class="muted" style="font-size:10.5px">verde=válidos · roxo=prováveis (catch-all)</span></td>

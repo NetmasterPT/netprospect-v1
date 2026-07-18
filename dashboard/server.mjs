@@ -1675,10 +1675,9 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 // --- Cobertura de jobs por bucket de lead_score (np-db direto; cache 30min) ---
 // TEM de ficar ANTES do catch-all `app.get('*')`, senão a SPA engole /api/coverage.
 const COVERAGE_SQL = `
--- cby = por site: nº de contactos AINDA por classificar (email_status NULL). Um site em cby tem >=1
--- contacto. nunv=0 → todos os contactos do site já têm status (verify terminou). Inclui os deixados a
--- meio quando a quota do verify esgotou (esses ficam status=NULL → nunv>0 → não contam como verificados).
-WITH cby AS (SELECT site, count(*) FILTER (WHERE email_status IS NULL) AS nunv FROM contacts GROUP BY site)
+-- NB: o verify NÃO é medido aqui. Ao nível-site enganava (sites sem emails contavam trivialmente como
+-- verificados, ex. 1805). É medido ao nível-CONTACTO em CONTACT_VERIFY_SQL (partilhado c/ a Cobertura de
+-- Dados) → campo verifyBuckets; a página Jobs mostra os contactos CLASSIFICADOS / contactos com email.
 SELECT
   CASE WHEN lead_score>75 THEN 'b75' WHEN lead_score>70 THEN 'b70' WHEN lead_score>65 THEN 'b65'
        WHEN lead_score>60 THEN 'b60' WHEN lead_score>55 THEN 'b55' WHEN lead_score>50 THEN 'b50'
@@ -1710,13 +1709,6 @@ SELECT
   count(*) FILTER (WHERE s.whois_checked_at IS NOT NULL)::int AS dnsprovider,
   count(*) FILTER (WHERE s.whois_checked_at IS NOT NULL)::int AS whois,
   count(*) FILTER (WHERE s.contacts_checked_at IS NOT NULL)::int AS contacts,
-  -- contacts_total = sites COM ≥1 contacto (email) → denominador do verify (à la wp_total p/ wpscan): só
-  -- estes PODEM ser verificados. Sites sem emails não têm nada a verificar → fora do numerador E do denom.
-  count(*) FILTER (WHERE s.id IN (SELECT site FROM cby))::int AS contacts_total,
-  -- verify = sites COM contactos e TODOS classificados (nunv=0). ANTES contava também os sites SEM contactos
-  -- (não estavam na CTE de não-verificados) → inflava a métrica em massa (ex.: 1805 vs só ~220 contactos
-  -- processados). A quota ~100/dia só limita as sondas PAGAS (valid/catch_all); invalid/role/no_mx são grátis.
-  count(*) FILTER (WHERE s.contacts_checked_at IS NOT NULL AND s.id IN (SELECT site FROM cby WHERE nunv = 0))::int AS verify,
   count(*) FILTER (WHERE s.lead_score_at IS NOT NULL)::int AS score,
   count(*) FILTER (WHERE s.audit_checked_at IS NOT NULL)::int AS audit,
   count(*) FILTER (WHERE s.checked_at IS NOT NULL)::int AS industry,
@@ -1734,11 +1726,12 @@ app.get('/api/coverage', async (req, res) => {
     const data = await cached('np:coverage:v1', async () => {
       const p = await pgPool();
       if (!p) return { ok: false, error: 'PG desligado (falta PG_HOST/creds)' };
-      const [sites, ver] = await Promise.all([
+      const [sites, ver, vb] = await Promise.all([
         p.query(COVERAGE_SQL),
         p.query("SELECT count(*) FILTER (WHERE email_status IS NOT NULL)::int verified, count(*) FILTER (WHERE email_verified)::int accepted, count(*) FILTER (WHERE email IS NOT NULL)::int with_email FROM contacts"),
+        p.query(CONTACT_VERIFY_SQL),
       ]);
-      return { ok: true, buckets: sites.rows, verify: ver.rows[0], ts: Date.now() };
+      return { ok: true, buckets: sites.rows, verify: ver.rows[0], verifyBuckets: vb.rows, ts: Date.now() };
     }, 120);
     res.json(data);
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
@@ -1781,15 +1774,18 @@ SELECT
   count(*) FILTER (WHERE domain_expiry IS NOT NULL)::int AS whois
 -- Mesmo denominador da cobertura de jobs: só leads qualificados e vivos (ver COVERAGE_SQL).
 FROM sites WHERE qualified AND is_live GROUP BY bucket`;
-// Verify ao NÍVEL DO CONTACTO por bucket de score (p/ a Cobertura de Dados): emails válidos (verde) +
-// catch_all "prováveis válidos" (roxo), sobre o total de contactos COM email. Junta contacts→sites p/ o bucket.
-const DCOV_VERIFY_SQL = `
+// Verify ao NÍVEL DO CONTACTO por bucket de score, PARTILHADO pelas 2 páginas de cobertura → reconciliam:
+// Jobs usa v_classified ("verify correu" = email_status não-NULL); Dados usa v_valid (verde) + v_catchall
+// (roxo, prováveis). Denominador comum = v_withemail (contactos COM email). v_classified ⊇ v_valid+v_catchall
+// (o resto são inválido/role/sem-MX — classificações grátis, fora da quota ~100/dia das sondas pagas).
+const CONTACT_VERIFY_SQL = `
 SELECT
   CASE WHEN s.lead_score>75 THEN 'b75' WHEN s.lead_score>70 THEN 'b70' WHEN s.lead_score>65 THEN 'b65'
        WHEN s.lead_score>60 THEN 'b60' WHEN s.lead_score>55 THEN 'b55' WHEN s.lead_score>50 THEN 'b50'
        WHEN s.lead_score>45 THEN 'b45' WHEN s.lead_score>40 THEN 'b40' WHEN s.lead_score>35 THEN 'b35'
        WHEN s.lead_score>30 THEN 'b30' WHEN s.lead_score>25 THEN 'b25' WHEN s.lead_score>20 THEN 'b20'
        ELSE 'lt20' END AS bucket,
+  count(*) FILTER (WHERE c.email_status IS NOT NULL)::int AS v_classified,
   count(*) FILTER (WHERE c.email_status='valid')::int AS v_valid,
   count(*) FILTER (WHERE c.email_status='catch_all')::int AS v_catchall,
   count(*) FILTER (WHERE c.email IS NOT NULL)::int AS v_withemail
@@ -1803,7 +1799,7 @@ app.get('/api/data-coverage', async (req, res) => {
       const [sites, ver, vb] = await Promise.all([
         p.query(DATA_COVERAGE_SQL),
         p.query("SELECT count(*) FILTER (WHERE email_status IS NOT NULL)::int verified, count(*) FILTER (WHERE email_verified)::int accepted, count(*) FILTER (WHERE email IS NOT NULL)::int with_email FROM contacts"),
-        p.query(DCOV_VERIFY_SQL),
+        p.query(CONTACT_VERIFY_SQL),
       ]);
       return { ok: true, buckets: sites.rows, verify: ver.rows[0], verifyBuckets: vb.rows, ts: Date.now() };
     }, 120);

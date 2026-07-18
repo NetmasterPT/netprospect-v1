@@ -366,6 +366,17 @@ const NAV_GROUPS = [
   ]],
   ['Dataset', [['directory', 'directory', 'Negócios', 'sites'], ['isps', 'globe', 'ISPs'], ['triggers', 'activity', 'Gatilhos'], ['data-coverage', 'check', 'Cobertura Dados']]],
   ['CRM', [['contacts', 'contacts', 'Contactos', 'contacts'], ['clients', 'briefcase', 'Clientes']]],
+  ['Contabilidade', [
+    ['moloni-faturas', 'briefcase', 'Faturas'],
+    ['moloni-fr', 'briefcase', 'Faturas-Recibo'],
+    ['moloni-recibos', 'briefcase', 'Recibos'],
+    ['moloni-nc', 'briefcase', 'Notas de Crédito'],
+    ['moloni-nd', 'briefcase', 'Notas de Débito'],
+    ['moloni-ff', 'briefcase', 'Fat. Fornecedores'],
+    ['moloni-frf', 'briefcase', 'FR Fornecedores'],
+    ['moloni-avencas', 'clock', 'Avenças'],
+    ['moloni-produtos', 'directory', 'Produtos'],
+  ]],
   ['Prospecção', [['subscriptions', 'briefcase', 'Subscrições'], ['icps', 'contacts', 'ICPs'], ['segments', 'segments', 'Segmentos']]],
   ['Canal Email', [['campaigns', 'send', 'Campanhas'], ['templates', 'mail', 'Templates']]],
   ['AI', [['chat', 'sparkles', 'Chat'], ['agents', 'sparkles', 'Agentes']]],
@@ -1204,6 +1215,83 @@ window.conChipX = (k) => {
   else CState[k] = '';
   CState.page = 1; paintContacts();
 };
+
+// ========== CONTABILIDADE (Moloni) ==========
+const MOLONI_SYNC_HINT = 'Ativa as permissões no app Moloni e corre o sync para popular.';
+const MState = { page: 1, q: '' };
+async function viewMoloniDocs(navId, type, label) {
+  const qp = parseHashQuery();
+  MState.q = qp.q || ''; MState.page = +qp.page || 1; MState.type = type; MState.label = label; MState.navId = navId;
+  if (!STATS) STATS = await api('/api/stats'); renderNav(navId);
+  await paintMoloniDocs();
+}
+async function paintMoloniDocs() {
+  const p = new URLSearchParams({ type: MState.type, page: MState.page, limit: 25, ...(MState.q ? { q: MState.q } : {}) });
+  if (!REFRESHING || !$('#mbody')) $('#view').innerHTML = `
+    <div class="np-head"><div><div class="np-eyebrow">Contabilidade · Moloni</div><h1 class="np-h1">${esc(MState.label)}</h1><div class="np-sub">Documentos sincronizados do Moloni</div></div></div>
+    <section class="np-card"><div class="np-filterbar"><input class="np-input" id="mq" style="min-width:220px" placeholder="Procurar nº ou cliente…" value="${esc(MState.q)}"/></div></section>
+    <section class="np-card" style="margin-top:14px"><div class="np-tablewrap"><table class="np-table" style="min-width:840px"><thead><tr>
+      <th>Nº</th><th>Cliente</th><th>Data</th><th style="text-align:right">Líquido</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="mbody"><tr><td colspan="8"><div class="np-empty">A carregar…</div></td></tr></tbody></table></div><div class="np-pager" id="mpager"></div></section>`;
+  const mq = $('#mq'); if (mq) { let t; mq.oninput = () => { clearTimeout(t); t = setTimeout(() => { MState.q = mq.value.trim(); MState.page = 1; paintMoloniDocs(); }, 400); }; }
+  const r = await api('/api/moloni/documents?' + p);
+  $('#mbody').innerHTML = r.rows.map((d) => `<tr>
+    <td><b>${esc(d.number || '—')}</b></td>
+    <td>${esc(d.customer_name || d.company?.name || '—')}</td>
+    <td class="muted">${esc((d.date || '').slice(0, 10) || '—')}</td>
+    <td style="text-align:right" class="tnum">${eur(d.net)}</td>
+    <td style="text-align:right" class="tnum">${eur(d.vat)}</td>
+    <td style="text-align:right" class="tnum"><b>${eur(d.total)}</b></td>
+    <td>${d.status === 1 ? '<span class="np-badge ok" style="height:20px">Fechado</span>' : '<span class="np-badge warn" style="height:20px">Rascunho</span>'}</td>
+    <td>${d.status === 1 && d.moloni_id ? `<a class="np-btn np-btn--sm" href="/api/moloni/documents/${encodeURIComponent(d.moloni_id)}/pdf" target="_blank" rel="noopener">${ic('download', 13)}PDF</a>` : ''}</td></tr>`).join('') || `<tr><td colspan="8"><div class="np-empty">Sem documentos. ${MOLONI_SYNC_HINT}</div></td></tr>`;
+  const pages = Math.max(1, Math.ceil(r.total / r.limit));
+  $('#mpager').innerHTML = molPager(r, pages, 'molPage');
+}
+window.molPage = (n) => { MState.page = n; paintMoloniDocs(); };
+
+async function viewMoloniProducts() {
+  const qp = parseHashQuery(); MState.q = qp.q || ''; MState.page = +qp.page || 1;
+  if (!STATS) STATS = await api('/api/stats'); renderNav('moloni-produtos');
+  await paintMoloniProducts();
+}
+async function paintMoloniProducts() {
+  const p = new URLSearchParams({ page: MState.page, limit: 25, ...(MState.q ? { q: MState.q } : {}) });
+  if (!REFRESHING || !$('#mbody')) $('#view').innerHTML = `
+    <div class="np-head"><div><div class="np-eyebrow">Contabilidade · Moloni</div><h1 class="np-h1">Produtos</h1><div class="np-sub">Produtos e serviços do Moloni</div></div></div>
+    <section class="np-card"><div class="np-filterbar"><input class="np-input" id="mq" style="min-width:220px" placeholder="Procurar nome ou ref…" value="${esc(MState.q)}"/></div></section>
+    <section class="np-card" style="margin-top:14px"><div class="np-tablewrap"><table class="np-table" style="min-width:620px"><thead><tr>
+      <th>Nome</th><th>Ref.</th><th>Tipo</th><th style="text-align:right">Preço</th></tr></thead>
+      <tbody id="mbody"><tr><td colspan="4"><div class="np-empty">A carregar…</div></td></tr></tbody></table></div><div class="np-pager" id="mpager"></div></section>`;
+  const mq = $('#mq'); if (mq) { let t; mq.oninput = () => { clearTimeout(t); t = setTimeout(() => { MState.q = mq.value.trim(); MState.page = 1; paintMoloniProducts(); }, 400); }; }
+  const r = await api('/api/moloni/products?' + p);
+  $('#mbody').innerHTML = r.rows.map((x) => `<tr><td><b>${esc(x.name || '—')}</b></td><td class="muted">${esc(x.reference || '—')}</td><td>${x.kind === 'servico' ? '<span class="np-badge info" style="height:20px">Serviço</span>' : '<span class="np-badge neutral" style="height:20px">Produto</span>'}</td><td style="text-align:right" class="tnum">${eur(x.price)}</td></tr>`).join('') || `<tr><td colspan="4"><div class="np-empty">Sem produtos. ${MOLONI_SYNC_HINT}</div></td></tr>`;
+  const pages = Math.max(1, Math.ceil(r.total / r.limit));
+  $('#mpager').innerHTML = molPager(r, pages, 'molProdPage');
+}
+window.molProdPage = (n) => { MState.page = n; paintMoloniProducts(); };
+
+async function viewMoloniAvencas() {
+  const qp = parseHashQuery(); MState.page = +qp.page || 1;
+  if (!STATS) STATS = await api('/api/stats'); renderNav('moloni-avencas');
+  await paintMoloniAvencas();
+}
+async function paintMoloniAvencas() {
+  const p = new URLSearchParams({ page: MState.page, limit: 25 });
+  if (!REFRESHING || !$('#mbody')) $('#view').innerHTML = `
+    <div class="np-head"><div><div class="np-eyebrow">Contabilidade · Moloni</div><h1 class="np-h1">Avenças</h1><div class="np-sub">Serviços recorrentes / avenças</div></div></div>
+    <section class="np-card"><div class="np-tablewrap"><table class="np-table" style="min-width:620px"><thead><tr>
+      <th>Nome</th><th>Cliente</th><th style="text-align:right">Valor</th><th>Periodicidade</th><th>Próxima</th><th>Ativa</th></tr></thead>
+      <tbody id="mbody"><tr><td colspan="6"><div class="np-empty">A carregar…</div></td></tr></tbody></table></div><div class="np-pager" id="mpager"></div></section>`;
+  const r = await api('/api/moloni/avencas?' + p);
+  $('#mbody').innerHTML = r.rows.map((a) => `<tr><td><b>${esc(a.name || '—')}</b></td><td class="muted">${esc(a.company?.name || a.customer_moloni_id || '—')}</td><td style="text-align:right" class="tnum">${eur(a.amount)}</td><td class="muted">${esc(a.period || '—')}</td><td class="muted">${esc((a.next_date || '').slice(0, 10) || '—')}</td><td>${a.active ? ic('check', 14) : SP14}</td></tr>`).join('') || `<tr><td colspan="6"><div class="np-empty">Sem avenças. ${MOLONI_SYNC_HINT} <span class="muted">(fonte por definir)</span></div></td></tr>`;
+  const pages = Math.max(1, Math.ceil(r.total / r.limit));
+  $('#mpager').innerHTML = molPager(r, pages, 'molAvPage');
+}
+window.molAvPage = (n) => { MState.page = n; paintMoloniAvencas(); };
+
+function molPager(r, pages, fn) {
+  return `<span>A mostrar <b>${fmt(r.total ? (r.page - 1) * r.limit + 1 : 0)}–${fmt(Math.min(r.page * r.limit, r.total))}</b> de <b>${fmt(r.total)}</b></span><span style="flex:1"></span><button ${r.page <= 1 ? 'disabled' : ''} onclick="${fn}(${r.page - 1})">‹</button><span class="tnum">Página ${r.page} / ${fmt(pages)}</span><button ${r.page >= pages ? 'disabled' : ''} onclick="${fn}(${r.page + 1})">›</button>`;
+}
 
 // ========== SEGMENTS / SETTINGS (lightweight) ==========
 function segFilterChips(f) {
@@ -2644,6 +2732,15 @@ async function route() {
     else if (h === 'logs') await viewLogs();
     else if (h === 'config') await viewConfig();
     else if (h === 'settings') await viewSettings();
+    else if (h === 'moloni-faturas') await viewMoloniDocs('moloni-faturas', 'fatura', 'Faturas');
+    else if (h === 'moloni-fr') await viewMoloniDocs('moloni-fr', 'fatura_recibo', 'Faturas-Recibo');
+    else if (h === 'moloni-recibos') await viewMoloniDocs('moloni-recibos', 'recibo', 'Recibos');
+    else if (h === 'moloni-nc') await viewMoloniDocs('moloni-nc', 'nota_credito', 'Notas de Crédito');
+    else if (h === 'moloni-nd') await viewMoloniDocs('moloni-nd', 'nota_debito', 'Notas de Débito');
+    else if (h === 'moloni-ff') await viewMoloniDocs('moloni-ff', 'fatura_fornecedor', 'Faturas de Fornecedores');
+    else if (h === 'moloni-frf') await viewMoloniDocs('moloni-frf', 'fatura_recibo_fornecedor', 'FR de Fornecedores');
+    else if (h === 'moloni-avencas') await viewMoloniAvencas();
+    else if (h === 'moloni-produtos') await viewMoloniProducts();
     else await viewOverview();
   } catch (e) { $('#view').innerHTML = `<div class="np-empty">Erro a carregar: ${esc(e.message)}</div>`; }
   if (parseHashQuery().notif) openNotifications(); // deep-link p/ notificações

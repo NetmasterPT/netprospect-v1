@@ -2308,6 +2308,62 @@ app.post('/api/moloni/sync', async (req, res) => {
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
 
+// ── Moloni — leitura (A4): as páginas Contabilidade lêem o Directus sincronizado. ──
+app.get('/api/moloni/documents', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 25);
+    const offset = (page - 1) * limit;
+    const parts = [];
+    if (req.query.type) parts.push(`filter[document_type][_eq]=${encodeURIComponent(req.query.type)}`);
+    const q = (req.query.q || '').trim();
+    if (q) { const s = encodeURIComponent(q); parts.push(`filter[_or][0][number][_icontains]=${s}`); parts.push(`filter[_or][1][customer_name][_icontains]=${s}`); }
+    const filter = parts.length ? '&' + parts.join('&') : '';
+    const fields = 'fields=id,moloni_id,document_type,number,customer_name,date,net,vat,total,status,pdf_cached,company.name';
+    const url = `/items/moloni_documents?${fields}${filter}&sort[]=-date&limit=${limit}&offset=${offset}&meta=filter_count`;
+    const r = await fetch(`${DIRECTUS_URL}${url}`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    const json = await r.json();
+    res.json({ rows: json.data || [], total: json.meta?.filter_count ?? (json.data || []).length, page, limit });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+app.get('/api/moloni/products', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 25);
+    const offset = (page - 1) * limit;
+    const q = (req.query.q || '').trim();
+    let filter = '';
+    if (q) { const s = encodeURIComponent(q); filter = `&filter[_or][0][name][_icontains]=${s}&filter[_or][1][reference][_icontains]=${s}`; }
+    const url = `/items/products?fields=id,moloni_id,name,reference,kind,price,tax_id${filter}&sort[]=name&limit=${limit}&offset=${offset}&meta=filter_count`;
+    const r = await fetch(`${DIRECTUS_URL}${url}`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    const json = await r.json();
+    res.json({ rows: json.data || [], total: json.meta?.filter_count ?? (json.data || []).length, page, limit });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+app.get('/api/moloni/avencas', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 25);
+    const offset = (page - 1) * limit;
+    const url = `/items/moloni_avencas?fields=id,moloni_id,name,customer_moloni_id,amount,period,next_date,active,company.name&sort[]=name&limit=${limit}&offset=${offset}&meta=filter_count`;
+    const r = await fetch(`${DIRECTUS_URL}${url}`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    const json = await r.json();
+    res.json({ rows: json.data || [], total: json.meta?.filter_count ?? (json.data || []).length, page, limit });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+// PDF de um documento fechado (status=1) — via Moloni (getPDFLink → landing → bytes).
+app.get('/api/moloni/documents/:id/pdf', async (req, res) => {
+  try {
+    const docId = parseInt(req.params.id, 10);
+    if (!docId) return res.status(400).json({ error: 'id inválido' });
+    let mod; try { mod = await import('./lib/moloni.js'); } catch { mod = await import('../lib/moloni.js'); }
+    const buf = await mod.fetchPdfBuffer(docId);
+    res.set('Content-Type', 'application/pdf');
+    res.set('Content-Disposition', `inline; filename="moloni-${docId}.pdf"`);
+    res.send(buf);
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => { ensureFleetDir(); console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`); });

@@ -167,8 +167,17 @@ services:
     restart: unless-stopped
     environment:
       COLLECTOR_OTLP_ENABLED: 'true'
-      # Limita o store em memória (all-in-one) — os workers geram muitos traces mesmo com amostragem.
-      MEMORY_MAX_TRACES: '50000'
+      # Persistência em disco (Badger embutido no all-in-one) — os traces sobrevivem a restart do
+      # container (antes era store em memória, MEMORY_MAX_TRACES=50000, perdido a cada recreate).
+      # BADGER_SPAN_STORE_TTL expira os traces ao fim de 72h → limita o crescimento do disco (os
+      # workers geram muitos spans mesmo com amostragem). O volume é ./.data/jaeger (uid 10001).
+      SPAN_STORAGE_TYPE: badger
+      BADGER_EPHEMERAL: 'false'
+      BADGER_DIRECTORY_VALUE: /badger/data
+      BADGER_DIRECTORY_KEY: /badger/key
+      BADGER_SPAN_STORE_TTL: 72h
+    volumes:
+      - ./.data/jaeger:/badger
     ports:
       - '${LAN_IP}:16686:16686'       # UI
       - '${TAILNET_IP}:16686:16686'

@@ -1,0 +1,43 @@
+groups:
+  - name: proxmox
+    interval: 30s
+    rules:
+      # Proxmox node down
+      - alert: ProxmoxNodeDown
+        expr: up{job="proxmox"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Proxmox node is down"
+          description: "Proxmox exporter {{ $labels.instance }} has been down for more than 1 minute."
+
+      # High CPU usage
+      - alert: ProxmoxHighCPU
+        expr: 100 - (avg by(instance) (irate(pve_node_cpu_usage_ratio[5m])) * 100) < 20
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage on Proxmox node"
+          description: "CPU usage is above 80% on {{ $labels.instance }}"
+
+      # High memory usage
+      - alert: ProxmoxHighMemory
+        expr: (pve_node_memory_used_bytes / pve_node_memory_total_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage on Proxmox node"
+          description: "Memory usage is above 90% on {{ $labels.instance }}"
+
+      # Disk space low
+      - alert: ProxmoxLowDiskSpace
+        expr: (pve_node_disk_used_bytes / pve_node_disk_total_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low disk space on Proxmox node"
+          description: "Disk usage is above 85% on {{ $labels.instance }}"

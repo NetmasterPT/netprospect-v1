@@ -1,0 +1,26 @@
+groups:
+  - name: netprospect-queues
+    rules:
+      # Fila com backlog e NINGUÉM a puxar (0 in-flight) = provavelmente sem worker para o role.
+      # `for: 20m` absorve blips (reboot do np-server). As filas saudáveis têm sempre ack_pending>0.
+      - alert: NetProspectQueueStuck
+        expr: np_queue_pending > 100 and np_queue_ack_pending == 0
+        for: 20m
+        labels: { severity: warning, service: netprospect }
+        annotations:
+          summary: "Fila {{ $labels.consumer }} presa: {{ $value | printf \"%.0f\" }} pendentes e 0 em voo"
+      # Fila TERMINADA (pending==0) com órfãos = candidata a requeue pelo monitor (fetch fica de fora —
+      # os órfãos do fetch são sites mortos que expiram por MaxAge). Threshold >5 evita ruído de cauda.
+      - alert: NetProspectQueueOrphans
+        expr: np_queue_orphans{consumer!~"fetch|gmb|lighthouse.*|nuclei|wpscan|whois|subdomains|industry"} > 5 and np_queue_pending == 0
+        for: 15m
+        labels: { severity: warning, service: netprospect }
+        annotations:
+          summary: "Fila {{ $labels.consumer }} terminada com {{ $value | printf \"%.0f\" }} órfãos (requeue?)"
+      # SWAP alto = RAM sob pressão (o gap que causou o incidente do de1). Só hosts COM swap emitem a série.
+      - alert: NetProspectHostSwap
+        expr: np_host_swap_total_bytes > 0 and 100 * np_host_swap_used_bytes / np_host_swap_total_bytes > 50
+        for: 10m
+        labels: { severity: warning, service: netprospect }
+        annotations:
+          summary: "SWAP alto em {{ $labels.host }} ({{ $value | printf \"%.0f\" }}%) — RAM sob pressão"

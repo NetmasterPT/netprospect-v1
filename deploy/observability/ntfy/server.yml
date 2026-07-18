@@ -1,0 +1,30 @@
+# ntfy server config (hel1-ntfy, CT205) — receptor de notificações da frota NetProspect.
+# Fonte-de-verdade versionada; deploy via deploy/observability/push-configs.sh → /etc/ntfy/server.yml.
+# Fluxo de alertas: Prometheus → Alertmanager (CT203, webhook) → dashboard np-server
+#   (/api/alertmanager-webhook) → ntfy topic `netprospect-alerts`. O Uptime-Kuma (CT301) publica
+#   direto neste ntfy (notificação `ntfy-netprospect-alerts`). Só acessível na tailnet.
+#
+# Defaults do ntfy que NÃO mexemos ficam comentados no template original; aqui só o que é nosso.
+
+# URL base pública (na tailnet) — usada nos links/anexos e no rodapé das mensagens.
+base-url: "http://100.118.244.35"
+
+# HTTP na :80 (a notificação do Uptime-Kuma e o publish do dashboard usam http://100.118.244.35 sem porta).
+listen-http: ":80"
+
+# Persistência das mensagens em SQLite → sobrevivem a restart do serviço (suporta since=/poll=1).
+cache-file: "/var/cache/ntfy/cache.db"
+cache-duration: "12h"
+
+# Anexos (pequenos) em disco.
+attachment-cache-dir: "/var/cache/ntfy/attachments"
+attachment-total-size-limit: "1G"
+attachment-file-size-limit: "15M"
+attachment-expiry-duration: "6h"
+
+# Estamos atrás do Tailscale, não de um proxy L7 — o IP remoto é o real.
+behind-proxy: false
+
+# Logging.
+log-level: info
+log-format: text

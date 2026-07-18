@@ -37,7 +37,7 @@ groups:
         labels: { severity: warning, service: netprospect }
         annotations: { summary: "Latência ao Directus alta em {{ $labels.host }} ({{ $value | printf \"%.0f\" }}ms)" }
       - alert: NetProspectHostOverloaded
-        expr: np_host_load1 / np_host_cores > 4
+        expr: np_host_load1 / np_host_cores > 4 and np_host_cores >= 4
         for: 10m
         labels: { severity: warning, service: netprospect }
         annotations: { summary: "Load/core alto em {{ $labels.host }} ({{ $value | printf \"%.1f\" }}×)" }

@@ -1755,7 +1755,7 @@ async function viewServers() {
     <div id="sv_${k}_body">${serverBody(dc, list, k)}</div>
     <div onclick="openServer('${esc(dc)}')" style="cursor:pointer;text-align:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--np-border);font-size:11px;color:var(--np-brand-ink,#2563eb)">ver servidor ›</div>
   </div></section>`; };
-  preserveOpen($('#fleet-servers'), () => { $('#view').innerHTML = head + `<div id="fleet-servers" class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr))">${dcNames.map(card).join('')}</div>`; });
+  preserveOpen($('#fleet-servers'), () => { $('#view').innerHTML = head + `<div id="fleet-servers" class="np-grid np-grid--2">${dcNames.map(card).join('')}</div>`; });
 }
 // Drawer de uma VM (host): load + capacidade 1h/24h/30d + telemetria de host + workers (botões) + config/.env.
 window.openVm = async (host) => {

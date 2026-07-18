@@ -28,8 +28,46 @@ LimitNOFILE=65536
 [Install]
 WantedBy=multi-user.target
 EOF
+
+# --- healthcheck contra "empty ring" pós-reboot ---------------------------------------------------
+# O Loki single-binary pode ficar preso em "empty ring" a seguir a um reboot: o ingester não se
+# regista no ring a tempo → /ready dá 503 e os pushes falham com 500, MAS o processo NÃO crasha, por
+# isso o Restart=on-failure não apanha. Este timer reinicia o Loki se o /ready falhar 3 checks
+# seguidos (~3 min), com contador em /run p/ não entrar em loop de restart. (Aconteceu no reboot do
+# hel1 a 2026-07-18 e exigiu restart manual.)
+cat > /usr/local/bin/loki-healthcheck.sh <<'HC'
+#!/usr/bin/env bash
+set -uo pipefail
+STATE=/run/loki-healthcheck.fails
+code=$(curl -s -o /dev/null -m 5 -w '%{http_code}' http://127.0.0.1:3100/ready 2>/dev/null || echo 000)
+if [ "$code" = "200" ]; then rm -f "$STATE"; exit 0; fi
+n=$(( $(cat "$STATE" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$STATE"
+if [ "$n" -ge 3 ]; then
+  logger -t loki-healthcheck "Loki /ready=$code há ${n} checks → restart"
+  systemctl restart loki; rm -f "$STATE"
+fi
+HC
+chmod +x /usr/local/bin/loki-healthcheck.sh
+cat > /etc/systemd/system/loki-healthcheck.service <<EOF
+[Unit]
+Description=NetProspect Loki healthcheck (self-heal do empty-ring)
+After=loki.service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/loki-healthcheck.sh
+EOF
+cat > /etc/systemd/system/loki-healthcheck.timer <<EOF
+[Unit]
+Description=Loki healthcheck a cada 60s (arranca 90s após boot)
+[Timer]
+OnBootSec=90s
+OnUnitActiveSec=60s
+[Install]
+WantedBy=timers.target
+EOF
+
 systemctl daemon-reload
-systemctl enable --now loki >/dev/null 2>&1
+systemctl enable --now loki loki-healthcheck.timer >/dev/null 2>&1
 sleep 5
-echo "loki: $(systemctl is-active loki)"
+echo "loki: $(systemctl is-active loki) | healthcheck-timer: $(systemctl is-active loki-healthcheck.timer)"
 curl -fsS --max-time 5 http://127.0.0.1:3100/ready 2>&1 | head -1 || true

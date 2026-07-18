@@ -50,3 +50,23 @@ if ($changed) {
   try { docker compose -p $COMPOSE_PROJECT -f "$REPO\$COMPOSE_FILE" up -d --force-recreate 2>&1 | Out-Null; Log "recreate OK ($COMPOSE_PROJECT)" }
   catch { Log "ERRO recreate: $_" }
 } else { Log "sem alteracoes" }
+
+# 4) OBSERVABILITY self-heal — o windows_exporter (:9182) e o Alloy correm FORA do Docker (serviços
+#    Windows), por isso um reboot/queda deixa-os parados e o Prometheus perde o target sem que o
+#    recreate acima os toque. Idempotente, corre SEMPRE: garante Running + StartupType=Automatic e a
+#    regra de firewall da 9182. (Instalar de raiz = install-windows-observability.ps1.)
+foreach ($svc in @("windows_exporter", "Alloy")) {
+  try {
+    $s = Get-Service $svc -ErrorAction SilentlyContinue
+    if ($s) {
+      if ($s.StartType -ne "Automatic") { Set-Service $svc -StartupType Automatic }
+      if ($s.Status -ne "Running") { Start-Service $svc; Log "$svc arrancado (estava $($s.Status))" }
+    } elseif ($svc -eq "windows_exporter") { Log "AVISO $svc nao instalado -- corre install-windows-observability.ps1" }
+  } catch { Log "AVISO self-heal ${svc}: $_" }
+}
+try {
+  if (-not (Get-NetFirewallRule -DisplayName "windows_exporter 9182" -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -DisplayName "windows_exporter 9182" -Direction Inbound -Protocol TCP -LocalPort 9182 -Action Allow -Profile Any | Out-Null
+    Log "firewall 9182 criada"
+  }
+} catch { Log "AVISO firewall 9182: $_" }

@@ -71,7 +71,9 @@ EOF
 cat > /etc/systemd/system/node_exporter.service <<EOF
 [Unit]
 Description=Prometheus Node Exporter
-After=network-online.target
+# --web.listen-address liga o IP da TAILNET → tem de arrancar DEPOIS do tailscaled (senão o bind
+# falha no boot e o serviço morre). RestartSec dá folga p/ o IP subir enquanto o systemd tenta.
+After=network-online.target tailscaled.service
 Wants=network-online.target
 [Service]
 User=node_exporter
@@ -82,6 +84,7 @@ ExecStart=/usr/local/bin/node_exporter \\
   --collector.zfs \\
   --collector.textfile.directory=/var/lib/node_exporter/textfile
 Restart=on-failure
+RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF

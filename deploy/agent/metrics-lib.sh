@@ -157,6 +157,8 @@ collect_and_post() {
     "$cpu" "${load:-0}" "${cores:-0}" "$mem_used" "$mem_total" "${swap_used:-0}" "${swap_total:-0}" "$disk_used" "$disk_total" "$io_read" "$io_write" "$net_rx" "$net_tx" "$uptime" "${addr:-}" "$latmatrix" "$units" \
     "${lat_directus:+,\"lat_directus\":$lat_directus}" "${lat_pg:+,\"lat_pg\":$lat_pg}" "${lat_minio:+,\"lat_minio\":$lat_minio}")
   if [ "${METRICS_DRYRUN:-0}" = 1 ]; then printf '%s\n' "$body"; return 0; fi
-  curl -fsS --max-time 20 -X POST ${FLEET_PULL_TOKEN:+-H "Authorization: Bearer $FLEET_PULL_TOKEN"} \
-    -H "Content-Type: application/json" -d "$body" "$SERVER_URL/api/fleet/metrics/$FLEET_HOST" -o /dev/null
+  # Body por STDIN (--data-binary @-), NÃO como argumento: com os nós PVE a trazerem centenas de unidades +
+  # logs, o body passa dos 128 KB (MAX_ARG_STRLEN do Linux) e `-d "$body"` dá "Argument list too long".
+  printf '%s' "$body" | curl -fsS --max-time 25 -X POST ${FLEET_PULL_TOKEN:+-H "Authorization: Bearer $FLEET_PULL_TOKEN"} \
+    -H "Content-Type: application/json" --data-binary @- "$SERVER_URL/api/fleet/metrics/$FLEET_HOST" -o /dev/null
 }

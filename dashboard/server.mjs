@@ -1675,10 +1675,10 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 // --- Cobertura de jobs por bucket de lead_score (np-db direto; cache 30min) ---
 // TEM de ficar ANTES do catch-all `app.get('*')`, senão a SPA engole /api/coverage.
 const COVERAGE_SQL = `
--- unv = sites com contactos AINDA por processar (email_status NULL). Inclui os deixados a meio
--- quando a quota do verify esgotou (esses ficam email=NULL,status=NULL — antes escapavam à métrica
--- porque exigia email IS NOT NULL → o site contava como "verificado" sem o job ter terminado).
-WITH unv AS (SELECT DISTINCT site FROM contacts WHERE email_status IS NULL)
+-- cby = por site: nº de contactos AINDA por classificar (email_status NULL). Um site em cby tem >=1
+-- contacto. nunv=0 → todos os contactos do site já têm status (verify terminou). Inclui os deixados a
+-- meio quando a quota do verify esgotou (esses ficam status=NULL → nunv>0 → não contam como verificados).
+WITH cby AS (SELECT site, count(*) FILTER (WHERE email_status IS NULL) AS nunv FROM contacts GROUP BY site)
 SELECT
   CASE WHEN lead_score>75 THEN 'b75' WHEN lead_score>70 THEN 'b70' WHEN lead_score>65 THEN 'b65'
        WHEN lead_score>60 THEN 'b60' WHEN lead_score>55 THEN 'b55' WHEN lead_score>50 THEN 'b50'
@@ -1710,7 +1710,13 @@ SELECT
   count(*) FILTER (WHERE s.whois_checked_at IS NOT NULL)::int AS dnsprovider,
   count(*) FILTER (WHERE s.whois_checked_at IS NOT NULL)::int AS whois,
   count(*) FILTER (WHERE s.contacts_checked_at IS NOT NULL)::int AS contacts,
-  count(*) FILTER (WHERE s.contacts_checked_at IS NOT NULL AND s.id NOT IN (SELECT site FROM unv))::int AS verify,
+  -- contacts_total = sites COM ≥1 contacto (email) → denominador do verify (à la wp_total p/ wpscan): só
+  -- estes PODEM ser verificados. Sites sem emails não têm nada a verificar → fora do numerador E do denom.
+  count(*) FILTER (WHERE s.id IN (SELECT site FROM cby))::int AS contacts_total,
+  -- verify = sites COM contactos e TODOS classificados (nunv=0). ANTES contava também os sites SEM contactos
+  -- (não estavam na CTE de não-verificados) → inflava a métrica em massa (ex.: 1805 vs só ~220 contactos
+  -- processados). A quota ~100/dia só limita as sondas PAGAS (valid/catch_all); invalid/role/no_mx são grátis.
+  count(*) FILTER (WHERE s.contacts_checked_at IS NOT NULL AND s.id IN (SELECT site FROM cby WHERE nunv = 0))::int AS verify,
   count(*) FILTER (WHERE s.lead_score_at IS NOT NULL)::int AS score,
   count(*) FILTER (WHERE s.audit_checked_at IS NOT NULL)::int AS audit,
   count(*) FILTER (WHERE s.checked_at IS NOT NULL)::int AS industry,
@@ -1730,7 +1736,7 @@ app.get('/api/coverage', async (req, res) => {
       if (!p) return { ok: false, error: 'PG desligado (falta PG_HOST/creds)' };
       const [sites, ver] = await Promise.all([
         p.query(COVERAGE_SQL),
-        p.query("SELECT count(*) FILTER (WHERE email_status IS NOT NULL)::int verified, count(*) FILTER (WHERE email IS NOT NULL)::int with_email FROM contacts"),
+        p.query("SELECT count(*) FILTER (WHERE email_status IS NOT NULL)::int verified, count(*) FILTER (WHERE email_verified)::int accepted, count(*) FILTER (WHERE email IS NOT NULL)::int with_email FROM contacts"),
       ]);
       return { ok: true, buckets: sites.rows, verify: ver.rows[0], ts: Date.now() };
     }, 120);
@@ -1782,7 +1788,7 @@ app.get('/api/data-coverage', async (req, res) => {
       if (!p) return { ok: false, error: 'PG desligado (falta PG_HOST/creds)' };
       const [sites, ver] = await Promise.all([
         p.query(DATA_COVERAGE_SQL),
-        p.query("SELECT count(*) FILTER (WHERE email_status IS NOT NULL)::int verified, count(*) FILTER (WHERE email IS NOT NULL)::int with_email FROM contacts"),
+        p.query("SELECT count(*) FILTER (WHERE email_status IS NOT NULL)::int verified, count(*) FILTER (WHERE email_verified)::int accepted, count(*) FILTER (WHERE email IS NOT NULL)::int with_email FROM contacts"),
       ]);
       return { ok: true, buckets: sites.rows, verify: ver.rows[0], ts: Date.now() };
     }, 120);

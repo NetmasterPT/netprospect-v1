@@ -1824,7 +1824,7 @@ function covSum(cov, thresh) {
   const keys = COV_BUCKETS[thresh] || COV_BUCKETS.all;
   const rows = (cov.buckets || []).filter((b) => keys.includes(b.bucket));
   const sum = (f) => rows.reduce((a, b) => a + (+b[f] || 0), 0);
-  const out = { total: sum('total'), wp_total: sum('wp_total') };
+  const out = { total: sum('total'), wp_total: sum('wp_total'), contacts_total: sum('contacts_total') };
   for (const [k] of COV_JOBS) out[k] = sum(k);
   return out;
 }
@@ -1862,8 +1862,9 @@ async function viewCoverage() {
   if (!cov.ok) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Indisponível:</b> ${esc(cov.error || '—')} <span class="muted">(a página Cobertura precisa do PG_HOST/creds no dashboard).</span></div></div>`; return; }
   const seg = COV_THS.map(([k, l]) => `<button class="np-btn np-btn--sm ${COV_THRESH === k ? 'np-btn--primary' : ''}" onclick="window.covSet('${k}')">${l}</button>`).join(' ');
   const s = covSum(cov, COV_THRESH); const total = s.total || 1;
-  // wpscan só se aplica a sites WordPress → denominador = wp_total (não-WP não pode ter wpscan).
-  const rows = COV_JOBS.map(([k, label, kind]) => { const tot = k === 'wpscan' ? (s.wp_total || 1) : total; return { label: k === 'wpscan' ? label + ' (só WP)' : label, cat: kind, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 }; });
+  // wpscan → denominador wp_total (só WP); verify → contacts_total (só sites COM emails podem ser verificados,
+  // senão os sites sem contactos contavam trivialmente como "verificados" e inflavam a métrica).
+  const rows = COV_JOBS.map(([k, label, kind]) => { const tot = k === 'wpscan' ? (s.wp_total || 1) : k === 'verify' ? (s.contacts_total || 1) : total; const lbl = k === 'wpscan' ? label + ' (só WP)' : k === 'verify' ? label + ' (só c/ contactos)' : label; return { label: lbl, cat: kind, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 }; });
   const sorted = covSortRows(rows, 'jobs');
   const v = cov.verify || {};
   $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">
@@ -1872,7 +1873,7 @@ async function viewCoverage() {
     <div class="np-tablewrap"><table style="min-width:520px;width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="color:var(--np-text-2);font-size:11px">${covTh('jobs', 'label', 'Job')}${covTh('jobs', 'coberto', 'Coberto', 'right')}${covTh('jobs', 'total', 'Total', 'right')}<th style="padding:6px 10px">Progresso</th>${covTh('jobs', 'pct', '%', 'right')}</tr></thead>
       <tbody>${sorted.grouped ? (() => { let g = null; return sorted.rows.map((r) => { const hdr = r.cat !== g ? (g = r.cat, `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${r.cat === 'audit' ? 'Auditoria' : 'Pipeline base'}</td></tr>`) : ''; return hdr + covRowHtml(r, true); }).join(''); })() : sorted.rows.map((r) => covRowHtml(r, true)).join('')}</tbody></table></div>
-    <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email): ${fmt(v.verified || 0)} verificados de ${fmt(v.with_email || 0)} com email — nível-contacto, não filtrado por score · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
+    <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email · nível-contacto, não filtrado por score): <b>${fmt(v.accepted || 0)}</b> aceites (válido/catch-all — sondas PAGAS, quota ~100/dia) · ${fmt(v.verified || 0)} classificados no total, de ${fmt(v.with_email || 0)} com email — os restantes classificados são grátis (inválido/role/sem-MX, fora da quota) · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
     <br>Filas sem métrica de cobertura (dispatchers/internas, não medem dados por site): <code>discover</code> (cria sites), <code>audit_ondemand/qualified/rest</code> (despacham as finas → contam em "Auditoria coarse"), <code>result_site</code> (writer PG), <code>campaign_generate/send</code> (tabela de campanhas).</div>
   </div></div>`;
 }
@@ -1917,7 +1918,7 @@ async function viewDataCoverage() {
     <div class="np-tablewrap"><table style="min-width:520px;width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="color:var(--np-text-2);font-size:11px">${covTh('data', 'label', 'Dado')}${covTh('data', 'coberto', 'Com dados', 'right')}${covTh('data', 'total', 'Total', 'right')}<th style="padding:6px 10px">Progresso</th>${covTh('data', 'pct', '%', 'right')}</tr></thead>
       <tbody>${sorted.grouped ? (() => { let g = null; return sorted.rows.map((r) => { const hdr = r.cat !== g ? (g = r.cat, `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${esc(r.cat)}</td></tr>`) : ''; return hdr + covRowHtml(r, false); }).join(''); })() : sorted.rows.map((r) => covRowHtml(r, false)).join('')}</tbody></table></div>
-    <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email): ${fmt(v.verified || 0)} verificados de ${fmt(v.with_email || 0)} com email · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
+    <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email): <b>${fmt(v.accepted || 0)}</b> aceites (válido/catch-all, sondas pagas ~100/dia) · ${fmt(v.verified || 0)} classificados de ${fmt(v.with_email || 0)} com email · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
     <br>Compara com a <a href="#/coverage" style="color:var(--np-brand)">Cobertura de jobs</a>: se o job correu a ~100% mas o dado está baixo, é porque esse dado <b>não existe</b> para a maioria (não é trabalho em falta). <b>security</b>/<b>social</b> contam só quando há resultado real (não vazio).</div>
   </div></div>`;
 }

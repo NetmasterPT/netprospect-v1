@@ -1310,6 +1310,20 @@ app.get('/api/config', async (req, res) => {
         proxyCount: Array.isArray(proxies) ? proxies.length : 0, proxyFileExists: !!proxies,
         angles: angles?.angles ? Object.keys(angles.angles) : [], sender_org: angles?.sender_org || null,
         sending, mailer: process.env.SMTP_HOST ? 'smtp' : 'dry-run',
+        // Estado das integrações (Fase F) — só flags de env, NUNCA os valores secretos.
+        integrations: (() => { const has = (k) => !!process.env[k]; const mp = (process.env.MOLONI_MODE || '').toLowerCase() === 'live' ? 'MOLONI_' : 'SANDBOX_MOLONI_'; return {
+          moloni: { enabled: has(mp + 'CLIENT_ID') && has(mp + 'COMPANY_ID'), mode: process.env.MOLONI_MODE || 'sandbox' },
+          openprovider: { enabled: has('OPENPROVIDER_USERNAME') && (has('OPENPROVIDER_PASSWORD') || has('OPENPROVIDER_PASSWORD_HASH')) },
+          documenso: { enabled: has('DOCUMENSO_API_BASE') && has('DOCUMENSO_API_TOKEN') && has('DOCUMENSO_WEBHOOK_SECRET') },
+          notion: { enabled: has('NOTION_ACCESS_TOKEN') && has('NOTION_DATABASE_ID') },
+          google: { enabled: has('GOOGLE_SA_CLIENT_EMAIL') && has('GOOGLE_SA_PRIVATE_KEY') },
+          stripe: { enabled: has('STRIPE_TEST_SECRET_KEY') || has('STRIPE_LIVE_SECRET_KEY') },
+          paypal: { enabled: has('PAYPAL_SANDBOX_CLIENT_ID') || has('PAYPAL_LIVE_CLIENT_ID') },
+          eupago: { enabled: has('EUPAGO_API_KEY') },
+          coingate: { enabled: has('COINGATE_SANDBOX_API_TOKEN') || has('COINGATE_LIVE_API_TOKEN') },
+          wise: { enabled: has('WISE_SANDBOX_API_TOKEN') || has('WISE_LIVE_API_TOKEN') },
+          bank_transfer: { enabled: has('BANK_TRANSFER_IBAN') },
+        }; })(),
       },
     });
   } catch (e) { res.status(502).json({ error: e.message }); }

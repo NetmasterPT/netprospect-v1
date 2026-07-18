@@ -1558,6 +1558,17 @@ function zfsTopoBlock(c) {
   });
   return `<div class="np-sec-t">Topologia (mirrors / vdevs)</div><div style="display:flex;flex-direction:column;gap:2px">${rows.join('')}</div>`;
 }
+// Deep-link para o HISTÓRICO de logs no Grafana/Loki (dashboard `netprospect-logs`). Complementa o
+// tail (logb64, ~5 min) com a série completa pesquisável. lxc/vm são hosts próprios no Loki
+// (label host=<nome>); container/service vivem sob o host que os reporta (host + nome no filtro).
+function lokiLink(host, c) {
+  const noLogs = ['zfs', 'storage', 'datastore', 'backup', 'snapshot', 'template', 'vmdisk', 'iso', 'cttemplate'];
+  if (noLogs.includes(c.kind)) return '';
+  const lhost = (c.kind === 'lxc' || c.kind === 'vm') ? c.name : host;
+  const search = (c.kind === 'lxc' || c.kind === 'vm') ? '' : (c.name || '');
+  const u = `http://100.68.203.121:3000/d/netprospect-logs/netprospect-logs?orgId=1&var-host=${encodeURIComponent(lhost)}&var-search=${encodeURIComponent(search)}&from=now-6h&to=now`;
+  return ` <a href="${u}" target="_blank" rel="noopener" class="np-chip" style="font-size:10px;text-decoration:none;vertical-align:middle" title="Abrir o histórico completo no Grafana/Loki">Loki ↗</a>`;
+}
 // Drawer de um container (mostra-o "como um worker": host, imagem, estado, uptime, portas).
 window.openContainer = async (host, name) => {
   const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
@@ -1579,7 +1590,7 @@ window.openContainer = async (host, name) => {
       ${c.kind === 'zfs' ? zfsTopoBlock(c) : ''}
       ${(c.kind === 'storage' || c.kind === 'datastore') ? storeContentBlock(host, H.containers, c.name) : ''}
       ${ports.length ? `<div class="np-sec-t">Portas</div><div style="display:flex;flex-wrap:wrap;gap:4px">${ports.map((p) => `<span class="np-chip" style="font-size:10px">${esc(p)}</span>`).join('')}</div>` : ''}
-      ${dk || hasLogs ? `<div class="np-sec-t">Logs (tail)</div>${containerLogsBlock(c)}` : c.kind === 'vm' ? `<div class="np-sec-t">Logs</div><div class="muted" style="font-size:11px">Os logs de uma VM vivem dentro do guest (não acessíveis do host). Abre o host que a VM reporta:</div><div style="margin-top:6px"><button class="np-btn np-btn--sm" onclick="openVm('${esc(c.name)}')">abrir ${esc(c.name)} ›</button></div>` : ''}
+      ${dk || hasLogs ? `<div class="np-sec-t">Logs (tail)${lokiLink(host, c)}</div>${containerLogsBlock(c)}` : c.kind === 'vm' ? `<div class="np-sec-t">Logs${lokiLink(host, c)}</div><div class="muted" style="font-size:11px">O tail dos logs vive dentro do guest, mas o histórico completo está no Loki (a VM embarca via Alloy). Abre o Loki acima, ou o host que a VM reporta:</div><div style="margin-top:6px"><button class="np-btn np-btn--sm" onclick="openVm('${esc(c.name)}')">abrir ${esc(c.name)} ›</button></div>` : ''}
       <div class="muted" style="font-size:11px;margin-top:12px">Snapshot (<code>${src}</code>) reportado pelo agente (~5 min).${dk ? ' Rede/IO acumulados desde o arranque.' : c.kind === 'service' ? ' CPU = tempo acumulado (cgroup).' : (c.kind === 'lxc' || c.kind === 'vm') ? ' RAM/disco/rede/uptime via pvesh; logs LXC via pct exec journalctl.' : ''}</div>
     </div>`;
 };

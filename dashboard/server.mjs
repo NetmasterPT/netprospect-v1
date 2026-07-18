@@ -972,6 +972,32 @@ app.post('/api/audit/segment', async (req, res) => {
   }
 });
 
+// --- Verify: enqueue diário (chamado por cron no np-server) -------------------
+// Enfileira jobs.verify (1 por domínio) pelos MELHORES leads primeiro (lead_score desc), até percorrer
+// ~maxEmails contactos por-verificar. Re-enfileira automaticamente os PENDENTES do dia anterior (são os
+// contactos que continuam email_status NULL; idempotente por msgId=verify:<dom>). A quota REAL é imposta
+// pela frota (contador+lock por-chave no Redis, lib/verify-providers.js) — isto só ALIMENTA a fila.
+app.post('/api/verify/enqueue', async (req, res) => {
+  if (FLEET_PULL_TOKEN) {
+    const tok = (req.get('authorization') || '').replace(/^Bearer\s+/i, '') || req.query.token || '';
+    if (tok !== FLEET_PULL_TOKEN) return res.status(401).json({ error: 'não autorizado' });
+  }
+  const maxEmails = Math.max(1, Math.min(5000, parseInt(req.query.maxEmails ?? req.body?.maxEmails, 10) || 100));
+  try {
+    const p = await pgPool();
+    if (!p) return res.status(503).json({ ok: false, error: 'PG desligado (falta PG_HOST/creds)' });
+    const rows = (await p.query(
+      `SELECT co.org_domain AS domain
+         FROM contacts ct JOIN companies co ON co.id = ct.company JOIN sites s ON s.id = ct.site
+        WHERE ct.email_status IS NULL AND co.org_domain IS NOT NULL AND s.qualified AND s.is_live
+        ORDER BY s.lead_score DESC NULLS LAST
+        LIMIT $1`, [maxEmails])).rows;
+    const seen = new Set(); let jobs = 0;
+    for (const r of rows) { const dom = r.domain; if (!dom || seen.has(dom)) continue; seen.add(dom); await natsPublish('jobs.verify', { domain: dom }, `verify:${dom}`); jobs++; }
+    res.json({ ok: true, scanned: rows.length, domains: jobs, maxEmails });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
 // --- Workers / fila (observabilidade NATS JetStream) — B2 --------------------
 // Espelho compacto de lib/jobs.js CONSUMERS (durable -> role); o dashboard não
 // importa lib/. Manter em sincronia se se acrescentarem consumers.

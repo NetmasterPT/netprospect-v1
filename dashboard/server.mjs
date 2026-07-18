@@ -1781,16 +1781,31 @@ SELECT
   count(*) FILTER (WHERE domain_expiry IS NOT NULL)::int AS whois
 -- Mesmo denominador da cobertura de jobs: só leads qualificados e vivos (ver COVERAGE_SQL).
 FROM sites WHERE qualified AND is_live GROUP BY bucket`;
+// Verify ao NÍVEL DO CONTACTO por bucket de score (p/ a Cobertura de Dados): emails válidos (verde) +
+// catch_all "prováveis válidos" (roxo), sobre o total de contactos COM email. Junta contacts→sites p/ o bucket.
+const DCOV_VERIFY_SQL = `
+SELECT
+  CASE WHEN s.lead_score>75 THEN 'b75' WHEN s.lead_score>70 THEN 'b70' WHEN s.lead_score>65 THEN 'b65'
+       WHEN s.lead_score>60 THEN 'b60' WHEN s.lead_score>55 THEN 'b55' WHEN s.lead_score>50 THEN 'b50'
+       WHEN s.lead_score>45 THEN 'b45' WHEN s.lead_score>40 THEN 'b40' WHEN s.lead_score>35 THEN 'b35'
+       WHEN s.lead_score>30 THEN 'b30' WHEN s.lead_score>25 THEN 'b25' WHEN s.lead_score>20 THEN 'b20'
+       ELSE 'lt20' END AS bucket,
+  count(*) FILTER (WHERE c.email_status='valid')::int AS v_valid,
+  count(*) FILTER (WHERE c.email_status='catch_all')::int AS v_catchall,
+  count(*) FILTER (WHERE c.email IS NOT NULL)::int AS v_withemail
+FROM contacts c JOIN sites s ON s.id = c.site
+WHERE s.qualified AND s.is_live GROUP BY bucket`;
 app.get('/api/data-coverage', async (req, res) => {
   try {
     const data = await cached('np:datacoverage:v1', async () => {
       const p = await pgPool();
       if (!p) return { ok: false, error: 'PG desligado (falta PG_HOST/creds)' };
-      const [sites, ver] = await Promise.all([
+      const [sites, ver, vb] = await Promise.all([
         p.query(DATA_COVERAGE_SQL),
         p.query("SELECT count(*) FILTER (WHERE email_status IS NOT NULL)::int verified, count(*) FILTER (WHERE email_verified)::int accepted, count(*) FILTER (WHERE email IS NOT NULL)::int with_email FROM contacts"),
+        p.query(DCOV_VERIFY_SQL),
       ]);
-      return { ok: true, buckets: sites.rows, verify: ver.rows[0], ts: Date.now() };
+      return { ok: true, buckets: sites.rows, verify: ver.rows[0], verifyBuckets: vb.rows, ts: Date.now() };
     }, 120);
     res.json(data);
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }

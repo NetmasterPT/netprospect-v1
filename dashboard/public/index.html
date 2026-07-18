@@ -1848,6 +1848,8 @@ function covTh(page, col, label, align) {
   return `<th style="padding:6px 10px;cursor:pointer;user-select:none;white-space:nowrap;text-align:${align || 'left'}" onclick="window.covSortBy('${page}','${col}')">${label}${ar}</th>`;
 }
 function covBar(pct) { const col = pct >= 90 ? 'var(--np-ok-mark,#16a34a)' : pct >= 40 ? 'var(--np-warn,#d97706)' : 'var(--np-brand,#e11d48)'; return `<div style="height:8px;background:var(--np-border,#e5e7eb);border-radius:4px;overflow:hidden"><div style="height:100%;width:${Math.min(100, pct)}%;background:${col}"></div></div>`; }
+// Barra a DUAS cores: válidos (verde) + prováveis/catch-all (roxo), empilhados sobre o total. Verify da Cobertura de Dados.
+function covBar2(validN, catchallN, tot) { const t = tot || 1; const vp = Math.min(100, 100 * validN / t); const cp = Math.min(Math.max(0, 100 - vp), 100 * catchallN / t); return `<div style="height:8px;background:var(--np-border,#e5e7eb);border-radius:4px;overflow:hidden;display:flex"><div style="height:100%;width:${vp}%;background:var(--np-ok-mark,#16a34a)" title="válidos (confirmados)"></div><div style="height:100%;width:${cp}%;background:#8b5cf6" title="catch-all (provavelmente válidos)"></div></div>`; }
 function covRowHtml(r, badge) {
   return `<tr><td style="padding:8px 10px"><b>${esc(r.label)}</b>${badge ? ` <span class="np-badge ${r.cat === 'audit' ? 'info' : ''}" style="height:16px;font-size:9px">${r.cat}</span>` : ''}</td>
     <td class="tnum" style="text-align:right;padding:8px 10px">${fmt(r.n)}</td>
@@ -1900,6 +1902,13 @@ function dcovSum(cov, thresh) {
   for (const [k] of DCOV_FIELDS) out[k] = sum(k);
   return out;
 }
+// Verify contact-level agregado ao filtro de score: válidos + catch-all (prováveis) + total com email.
+function dcovVerifySum(cov, thresh) {
+  const keys = COV_BUCKETS[thresh] || COV_BUCKETS.all;
+  const rows = (cov.verifyBuckets || []).filter((b) => keys.includes(b.bucket));
+  const sum = (f) => rows.reduce((a, b) => a + (+b[f] || 0), 0);
+  return { valid: sum('v_valid'), catchall: sum('v_catchall'), withemail: sum('v_withemail') };
+}
 window.dcovSet = (t) => { DCOV_THRESH = t; viewDataCoverage(); };
 async function viewDataCoverage() {
   renderNav('data-coverage');
@@ -1912,13 +1921,22 @@ async function viewDataCoverage() {
   const rows = DCOV_FIELDS.map(([k, label, cat]) => { const tot = k === 'wpscan' ? (s.wp_total || 1) : total; return { label: k === 'wpscan' ? label + ' (só WP)' : label, cat, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 }; });
   const sorted = covSortRows(rows, 'data');
   const v = cov.verify || {};
+  // Verify contact-level (filtrado pelo score): válidos (verde) + catch-all/prováveis (roxo) / contactos com email.
+  const vb = dcovVerifySum(cov, DCOV_THRESH);
+  const vpct = vb.withemail ? Math.round(1000 * vb.valid / vb.withemail) / 10 : 0;
+  const verifySection = `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">Contactos (verificação de email)</td></tr>
+    <tr><td style="padding:8px 10px"><b>Emails válidos</b> <span class="muted" style="font-size:10.5px">verde=válidos · roxo=prováveis (catch-all)</span></td>
+      <td class="tnum" style="text-align:right;padding:8px 10px"><b style="color:var(--np-ok-mark,#16a34a)">${fmt(vb.valid)}</b>${vb.catchall ? ` <span style="color:#8b5cf6" title="catch-all — provavelmente válidos">(+${fmt(vb.catchall)})</span>` : ''}</td>
+      <td class="tnum" style="text-align:right;padding:8px 10px;color:var(--np-text-2)">${fmt(vb.withemail)}</td>
+      <td style="padding:8px 10px;min-width:160px">${covBar2(vb.valid, vb.catchall, vb.withemail || 1)}</td>
+      <td class="tnum" style="text-align:right;padding:8px 10px;font-weight:800">${vpct}%</td></tr>`;
   $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b">
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center"><span class="muted" style="font-size:12px">Lead score:</span> ${seg}
       <span class="muted" style="margin-left:auto;font-size:11.5px">${fmt(s.total)} sites neste filtro</span></div>
     <div class="np-tablewrap"><table style="min-width:520px;width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="color:var(--np-text-2);font-size:11px">${covTh('data', 'label', 'Dado')}${covTh('data', 'coberto', 'Com dados', 'right')}${covTh('data', 'total', 'Total', 'right')}<th style="padding:6px 10px">Progresso</th>${covTh('data', 'pct', '%', 'right')}</tr></thead>
-      <tbody>${sorted.grouped ? (() => { let g = null; return sorted.rows.map((r) => { const hdr = r.cat !== g ? (g = r.cat, `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${esc(r.cat)}</td></tr>`) : ''; return hdr + covRowHtml(r, false); }).join(''); })() : sorted.rows.map((r) => covRowHtml(r, false)).join('')}</tbody></table></div>
-    <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email): <b>${fmt(v.accepted || 0)}</b> aceites (válido/catch-all, sondas pagas ~100/dia) · ${fmt(v.verified || 0)} classificados de ${fmt(v.with_email || 0)} com email · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
+      <tbody>${verifySection}${sorted.grouped ? (() => { let g = null; return sorted.rows.map((r) => { const hdr = r.cat !== g ? (g = r.cat, `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${esc(r.cat)}</td></tr>`) : ''; return hdr + covRowHtml(r, false); }).join(''); })() : sorted.rows.map((r) => covRowHtml(r, false)).join('')}</tbody></table></div>
+    <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> — a linha acima é o filtro de score selecionado. Fleet-wide (todos os scores): <b>${fmt(v.accepted || 0)}</b> aceites (válido/catch-all, sondas pagas ~100/dia) · ${fmt(v.verified || 0)} classificados de ${fmt(v.with_email || 0)} com email · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
     <br>Compara com a <a href="#/coverage" style="color:var(--np-brand)">Cobertura de jobs</a>: se o job correu a ~100% mas o dado está baixo, é porque esse dado <b>não existe</b> para a maioria (não é trabalho em falta). <b>security</b>/<b>social</b> contam só quando há resultado real (não vazio).</div>
   </div></div>`;
 }

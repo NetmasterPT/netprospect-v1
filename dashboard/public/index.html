@@ -198,6 +198,15 @@
   @media (max-width: 380px) {
     .np-kpis { grid-template-columns: 1fr !important; }
   }
+  /* Secções expansíveis (VMs/CTs/Docker/serviços/crons) nos cards e drawers de Servidor */
+  .np-details { margin-top: 8px; border-top: 1px dashed var(--np-border); padding-top: 6px; }
+  .np-details > summary { cursor: pointer; font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: var(--np-text-2, #6b7280); list-style: none; user-select: none; display: flex; align-items: center; }
+  .np-details > summary::-webkit-details-marker { display: none; }
+  .np-details > summary::before { content: '▸'; display: inline-block; margin-right: 5px; transition: transform .15s ease; }
+  .np-details[open] > summary::before { transform: rotate(90deg); }
+  /* Grelha de Servidores: 2 cartões por linha em desktop (mais largos, menos altos); 1 em mobile. */
+  .np-grid.np-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  @media (max-width: 880px) { .np-grid.np-grid--2 { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
@@ -1484,10 +1493,13 @@ const containerLogsBlock = (c) => { const t = b64utf8(c && c.logb64).trim(); ret
 const containerMini = (c) => { if (!c) return ''; const cpu = c.cpu ? parseFloat(c.cpu) : null; const [mu, ml] = pairOf(c.mem); const chips = []; if (cpu != null && !isNaN(cpu)) chips.push(`CPU ${cpu.toFixed(1)}%`); if (mu != null) chips.push(`RAM ${fmtBytes(mu)}${ml ? ' / ' + fmtBytes(ml) : ''}`); return chips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px">${chips.map((t) => `<span class="np-chip" style="font-size:10px" title="recursos do container (docker stats)">${t}</span>`).join('')}</div>` : ''; };
 // Encontra o container de um worker (id do worker = id do container) nos hosts reportados.
 const contForWorker = (hosts, w) => { const cs = ((hosts || {})[w.host] || {}).containers || []; return cs.find((c) => c.id && (c.id === w.id || w.id.startsWith(c.id) || c.id.startsWith(w.id))) || null; };
-// Botões das unidades (container/serviço/lxc/vm) de um host — nome + ponto de estado; não-container = tracejado.
-const containerChips = (host, cs) => (cs && cs.length)
-  ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = { lxc: 'LXC·', vm: 'VM·', storage: 'disco·', zfs: 'zfs·', datastore: 'ds·', timer: 'cron·', snapshot: 'snap·' }[c.kind] || ''; const tfaaMk = TFAA_GUESTS.includes(c.name) ? ' <span style="color:#7c3aed;font-weight:800" title="na tailnet Tailscale do cliente TFAA (tail9be421.ts.net)">·TFAA</span>' : ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}${TFAA_GUESTS.includes(c.name) ? ';border-color:#c4b5fd' : ''}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}${tfaaMk}</button>`; }).join(' ')
-  : '<span class="muted" style="font-size:10px">sem unidades reportadas</span>';
+// Botão de UMA unidade (container/serviço/lxc/vm/zfs/…): nome + ponto de estado; não-container = tracejado.
+const unitBtn = (host, c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = { lxc: 'LXC·', vm: 'VM·', storage: 'disco·', zfs: 'zfs·', datastore: 'ds·', timer: 'cron·', snapshot: 'snap·' }[c.kind] || ''; const tfaaMk = TFAA_GUESTS.includes(c.name) ? ' <span style="color:#7c3aed;font-weight:800" title="na tailnet Tailscale do cliente TFAA (tail9be421.ts.net)">·TFAA</span>' : ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}${TFAA_GUESTS.includes(c.name) ? ';border-color:#c4b5fd' : ''}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}${tfaaMk}</button>`; };
+// Botões das unidades de um host (nome + ponto de estado; não-container = tracejado).
+const containerChips = (host, cs) => (cs && cs.length) ? cs.map((c) => unitBtn(host, c)).join(' ') : '<span class="muted" style="font-size:10px">sem unidades reportadas</span>';
+// Unidades de TODOS os hosts de um DC (server), com o host de origem taggeado (_host) → cards/drawers de Servidor.
+function dcUnits(list) { const out = []; for (const v of (list || [])) { const cs = (v.cap && v.cap.containers) || []; for (const c of cs) out.push(Object.assign({ _host: v.host }, c)); } return out; }
+const unitChipsMulti = (units) => (units && units.length) ? units.map((c) => unitBtn(c._host, c)).join(' ') : '<span class="muted" style="font-size:10px">—</span>';
 // Unidades AGRUPADAS por tipo (para os drawers): Docker / LXC / VMs / Serviços / Storage / ZFS / Datastores.
 const UNIT_ORDER = [['container', 'Containers Docker'], ['lxc', 'Containers LXC'], ['vm', 'VMs'], ['service', 'Serviços (OS)'], ['timer', 'Agendamentos (timers/cron)'], ['storage', 'Storage'], ['zfs', 'Pools ZFS'], ['datastore', 'Datastores'], ['snapshot', 'Snapshots']];
 function unitGroups(host, cs) {
@@ -1556,9 +1568,10 @@ function usageBar(label, used, total, unit, fmtv) {
 }
 const latChip = (label, ms) => { if (ms == null || ms === '') return ''; const v = +ms; const col = v < 50 ? 'var(--np-ok-mark,#16a34a)' : v < 200 ? 'var(--np-warn,#d97706)' : 'var(--np-bad,#dc2626)'; return `<span class="np-chip" style="font-size:10px" title="latência para ${label}">${label} <b style="color:${col}">${Math.round(v)}ms</b></span>`; };
 // Bloco de telemetria de host (reportada pelo agente de pull ~5 min): RAM/disco/CPU + rede/IO + latências.
-function hostMetricsBlock(H) {
+function hostMetricsBlock(H, opts) {
+  opts = opts || {};
   const m = H && H.metrics;
-  if (!m) return `<div class="muted" style="font-size:10px;margin-top:8px;border-top:1px dashed var(--np-border);padding-top:8px">sem telemetria de host — o agente de pull ainda não reportou (≤ ~5 min após deploy)</div>`;
+  if (!m) return opts.bare ? '<span class="muted" style="font-size:10px">sem telemetria de host — o agente ainda não reportou</span>' : `<div class="muted" style="font-size:10px;margin-top:8px;border-top:1px dashed var(--np-border);padding-top:8px">sem telemetria de host — o agente de pull ainda não reportou (≤ ~5 min após deploy)</div>`;
   const num = (x) => (x == null || x === '' ? null : +x);
   const age = m.reported ? timeAgo(Math.floor(+m.reported / 1000)) : '—';
   const bars = [
@@ -1570,8 +1583,11 @@ function hostMetricsBlock(H) {
   const chips = [];
   if (num(m.net_rx) != null || num(m.net_tx) != null) chips.push(`<span class="np-chip" style="font-size:10px" title="rede ingress/egress">rede ↓${(num(m.net_rx) || 0).toFixed(1)} ↑${(num(m.net_tx) || 0).toFixed(1)} MB/s</span>`);
   if (num(m.io_read) != null || num(m.io_write) != null) chips.push(`<span class="np-chip" style="font-size:10px" title="disco I/O leitura/escrita">I/O r${(num(m.io_read) || 0).toFixed(1)} w${(num(m.io_write) || 0).toFixed(1)} MB/s</span>`);
-  const lats = [latChip('Directus', m.lat_directus), latChip('PG', m.lat_pg), latChip('NAS', m.lat_minio)].join('');
-  return `<div style="margin-top:8px;border-top:1px dashed var(--np-border);padding-top:8px"><div class="muted" style="font-size:9px;text-transform:uppercase;letter-spacing:.04em">Telemetria de host · ${age}</div>${bars}<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${chips.join('')}${lats}</div></div>`;
+  // Latências de serviço (Directus/PG/NAS): omitidas quando há uma secção de latência dedicada (opts.noLat).
+  const lats = opts.noLat ? '' : [latChip('Directus', m.lat_directus), latChip('PG', m.lat_pg), latChip('NAS', m.lat_minio)].join('');
+  const chipRow = (chips.length || lats) ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${chips.join('')}${lats}</div>` : '';
+  if (opts.bare) return `<div class="muted" style="font-size:9px;margin-bottom:3px">atualizado ${age}</div>${bars}${chipRow}`;
+  return `<div style="margin-top:8px;border-top:1px dashed var(--np-border);padding-top:8px"><div class="muted" style="font-size:9px;text-transform:uppercase;letter-spacing:.04em">Telemetria de host · ${age}</div>${bars}${chipRow}</div>`;
 }
 // Resumo de storage do nó Proxmox (pools ZFS + nº de storages + total de snapshots) — chips para o
 // card/drawer do Servidor. Fonte: as unidades kind=zfs/storage + a contagem de snapshots no status.
@@ -1593,7 +1609,7 @@ function latMatrixBlock(H) {
   return `<div class="np-sec-t">Latência para outros nós (${entries.length})</div><div style="display:flex;gap:4px;flex-wrap:wrap;max-height:220px;overflow:auto">${chips}</div>`;
 }
 // Barras de uso/capacidade por cada storage/pool ZFS/datastore (para os drawers). Parseia used/total/% do status.
-function pveStorageBars(H) {
+function pveStorageBars(H, opts) {
   const cs = (H && H.containers) || [];
   const st = cs.filter((c) => c.kind === 'storage' || c.kind === 'zfs' || c.kind === 'datastore');
   if (!st.length) return '';
@@ -1605,7 +1621,7 @@ function pveStorageBars(H) {
     const health = /online/i.test(s.state || '') ? '' : ` <b style="color:var(--np-bad,#dc2626)">${esc(s.state)}</b>`;
     return `<div style="margin-top:5px"><div style="display:flex;justify-content:space-between;font-size:10px;gap:8px"><span class="muted" style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(tag)} · ${esc(s.name)}${health}</span><span class="tnum" style="color:${col};white-space:nowrap">${used}${total ? ' / ' + total : ''}${pct != null ? ' · ' + pct + '%' : ''}</span></div>${pct != null ? `<div style="height:5px;background:var(--np-border);border-radius:3px;overflow:hidden;margin-top:2px"><div style="height:100%;width:${pct}%;background:${col}"></div></div>` : ''}</div>`;
   });
-  return `<div class="np-sec-t">Armazenamento (${st.length})</div>${rows.join('')}`;
+  return (opts && opts.noHeader) ? rows.join('') : `<div class="np-sec-t">Armazenamento (${st.length})</div>${rows.join('')}`;
 }
 const vmBusy = (v) => v.workers.some((w) => w.cur);
 const vmBtnInner = (v) => `${esc(v.host)}${vmBusy(v) ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''} <span class="muted tnum" style="font-size:10px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : ''}</span>`;
@@ -1659,41 +1675,87 @@ async function viewVms() {
   </div></section>`; };
   $('#view').innerHTML = head + `<div id="fleet-vms" class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">${vms.map(card).join('')}</div>`;
 }
+// --- Servidores: helpers PARTILHADOS pelo card E pelo drawer (nível-DC/servidor) ---
+// Host físico do DC = o nó Proxmox (nome termina em -pve). As suas métricas de SO SÃO as do servidor.
+const pveOf = (list) => (list || []).find((v) => /-pve$/.test(v.host || ''));
+// Load do DC: se houver nó -pve, o seu loadavg já agrega todos os guests → usa-o. Senão soma (Oracle/Laptop).
+const dynLoad = (list) => { const pve = pveOf(list); return (pve && pve.load != null && pve.cores) ? loadBar(pve.load, pve.cores) : loadBar(+list.reduce((a, v) => a + (v.load || 0), 0).toFixed(2), list.reduce((a, v) => a + (v.cores || 0), 0)); };
+const dynStats = (list) => { const d1 = list.reduce((a, v) => a + v.done1h, 0), f = list.reduce((a, v) => a + v.fail24h, 0); return `<div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(d1)}/h</div><div class="muted" style="font-size:10px">throughput</div></div><div><div class="tnum" style="font-size:16px;font-weight:800;color:${f ? 'var(--np-warn)' : ''}">${fmt(f)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div>`; };
+const dynCap = (list) => capBlock({ cap1h: sumCaps(list, 'cap1h'), cap24h: sumCaps(list, 'cap24h'), cap30d: sumCaps(list, 'cap30d') });
+// Preserva o estado aberto dos <details> ao RE-RENDERIZAR (full render only). No patch de 10s NÃO se re-renderiza:
+// só se atualizam os valores-folha dentro de cada secção → os <details> persistem e o estado aberto mantém-se nativo.
+function preserveOpen(root, fn) { const open = new Set([...(root ? root.querySelectorAll('details[open]') : [])].map((d) => d.id).filter(Boolean)); fn(); for (const id of open) { const el = document.getElementById(id); if (el) el.open = true; } }
+const workerChips = (workers) => workers.map((w) => `<button class="np-btn np-btn--sm" style="font-size:9px" onclick="event.stopPropagation();openWorker('${esc(w.id)}')" title="${esc(w.role || '')}${w.cur ? ' · ' + esc(w.cur) : ''}">${esc((w.id || '').slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join(' ');
+// Chips da matriz de latência (só o conteúdo, sem wrapper) — para patch sem recriar o <details>.
+function latMatrixInner(H) { const lm = H && H.latmatrix; if (!lm) return ''; return Object.entries(lm).sort((a, b) => a[1] - b[1]).map(([host, ms]) => { const col = ms < 20 ? 'var(--np-ok-mark)' : ms < 80 ? 'var(--np-warn,#d97706)' : 'var(--np-bad,#dc2626)'; return `<span class="np-chip" style="font-size:10px" title="latência (ping) para ${esc(host)}">${esc(host)} <b style="color:${col}">${ms}ms</b></span>`; }).join(''); }
+// Latência COLAPSÁVEL (fechada por defeito), com inner id estável p/ patch.
+function latMatrixDetails(pfx, H) { const lm = H && H.latmatrix; if (!lm || !Object.keys(lm).length) return ''; const n = Object.keys(lm).length; return `<details class="np-details" id="svd_${pfx}_lat"><summary>Latência para outros nós <span class="muted">(${n})</span></summary><div id="sv_${pfx}_latinner" style="margin-top:6px;display:flex;gap:4px;flex-wrap:wrap;max-height:220px;overflow:auto">${latMatrixInner(H)}</div></details>`; }
+// Bloco do nó físico Proxmox (métricas + volumes ZFS/storage + latência colapsável) com inner ids p/ patch.
+function physBlock(pfx, pve) {
+  const cs = (pve.cap && pve.cap.containers) || [];
+  const nst = cs.filter((c) => c.kind === 'storage' || c.kind === 'zfs' || c.kind === 'datastore').length;
+  const stor = nst ? `<details class="np-details" id="svd_${pfx}_st" open><summary>Armazenamento <span class="muted">(${nst})</span></summary><div id="sv_${pfx}_zfs">${pveStorageBars(pve.cap, { noHeader: true })}</div></details>` : '';
+  return `<div class="muted" style="font-size:9px;margin-top:12px;text-transform:uppercase;letter-spacing:.04em">Servidor físico (Proxmox) · ${esc(pve.host)}</div>
+    <details class="np-details" id="svd_${pfx}_tel" open><summary>Telemetria de host</summary><div id="sv_${pfx}_metrics">${hostMetricsBlock(pve.cap, { bare: true, noLat: true })}</div></details>
+    ${stor}
+    ${latMatrixDetails(pfx, pve.cap)}`;
+}
+// Secção <details> com ids estáveis (o <details> e o inner div persistem → estado aberto mantido no patch).
+const srvDetails = (pfx, kind, label, count, inner, open) => `<details class="np-details" id="svd_${pfx}_${kind}"${open ? ' open' : ''}><summary><span id="svs_${pfx}_${kind}">${label} <span class="muted">(${count})</span></span></summary><div id="svu_${pfx}_${kind}" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${inner}</div></details>`;
+const SRV_UNIT_ORDER = [['vm', 'VMs'], ['lxc', 'CTs (LXC)'], ['container', 'Containers Docker'], ['service', 'Serviços'], ['timer', 'Crons / timers'], ['zfs', 'Pools ZFS'], ['storage', 'Storage'], ['datastore', 'Datastores'], ['snapshot', 'Snapshots']];
+// Secções expansíveis (TODAS fechadas por defeito exceto Workers), agregadas de todos os hosts do servidor.
+function srvUnitSections(pfx, list) {
+  const units = dcUnits(list);
+  const workers = (list || []).flatMap((v) => v.workers || []);
+  const byKind = {}; for (const c of units) { const k = c.kind || 'container'; (byKind[k] = byKind[k] || []).push(c); }
+  const parts = [];
+  if (workers.length) parts.push(srvDetails(pfx, 'wk', 'Workers', workers.length, workerChips(workers), false));
+  for (const [kind, label] of SRV_UNIT_ORDER) { if (!byKind[kind]) continue; parts.push(srvDetails(pfx, kind, label, byKind[kind].length, unitChipsMulti(byKind[kind]), false)); delete byKind[kind]; }
+  for (const kind in byKind) parts.push(srvDetails(pfx, kind, kind, byKind[kind].length, unitChipsMulti(byKind[kind]), false));
+  return parts.join('');
+}
+// Corpo PARTILHADO do Servidor (card E drawer) — cada parte dinâmica com id estável para patch GRANULAR.
+function serverBody(dc, list, pfx) {
+  const pve = pveOf(list); const hasPve = pve && pve.cap;
+  return `<div id="sv_${pfx}_load">${dynLoad(list)}</div>
+    <div id="sv_${pfx}_stats" style="display:flex;gap:16px;margin-top:10px">${dynStats(list)}</div>
+    <div id="sv_${pfx}_cap">${dynCap(list)}</div>
+    <div id="sv_${pfx}_phys">${hasPve ? physBlock(pfx, pve) : ''}</div>
+    <div id="sv_${pfx}_units">${srvUnitSections(pfx, list)}</div>`;
+}
+// Patch GRANULAR do card (10s): atualiza SÓ os valores-folha; NÃO recria os <details> → não quebra a navegação.
+function patchServer(pfx, list) {
+  const pve = pveOf(list); const hasPve = pve && pve.cap;
+  setHTML('sv_' + pfx + '_load', dynLoad(list));
+  setHTML('sv_' + pfx + '_stats', dynStats(list));
+  setHTML('sv_' + pfx + '_cap', dynCap(list));
+  if (hasPve) { setHTML('sv_' + pfx + '_metrics', hostMetricsBlock(pve.cap, { bare: true, noLat: true })); setHTML('sv_' + pfx + '_zfs', pveStorageBars(pve.cap, { noHeader: true })); setHTML('sv_' + pfx + '_latinner', latMatrixInner(pve.cap)); }
+  const byKind = {}; for (const c of dcUnits(list)) { const k = c.kind || 'container'; (byKind[k] = byKind[k] || []).push(c); }
+  const workers = (list || []).flatMap((v) => v.workers || []);
+  if (workers.length) setHTML('svu_' + pfx + '_wk', workerChips(workers));
+  for (const kind in byKind) setHTML('svu_' + pfx + '_' + kind, unitChipsMulti(byKind[kind]));
+}
 async function viewServers() {
   renderNav('servers');
-  const head = `<div class="np-head"><div><div class="np-eyebrow">Frota</div><h1 class="np-h1">Servidores</h1><div class="np-sub">Datacenters → VMs → workers · capacidade 1h/24h/30d · click → drawer · atualiza 10 s</div></div></div>`;
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Frota</div><h1 class="np-h1">Servidores</h1><div class="np-sub">Datacenters → nós → VMs/CTs/containers · ZFS · latência · capacidade · click → drawer · atualiza 10 s</div></div></div>`;
   let d; try { d = await api('/api/workers'); } catch (e) { if (!REFRESHING) $('#view').innerHTML = head + errCard(e); return; }
   const vms = allVms(d);
   const dcs = {};
   for (const v of vms) (dcs[v.dc] = dcs[v.dc] || []).push(v);
   const dcNames = Object.keys(dcs).sort(); // ordenação estável por nome do DC
   for (const dc of dcNames) dcs[dc].sort((a, b) => a.host.localeCompare(b.host));
-  const sig = dcNames.map((dc) => dc + ':' + dcs[dc].map((v) => v.host + '#' + v.workers.length + (v.infra ? 'i' : '')).join(',')).join('|');
-  // Load do DC: se houver nó físico Proxmox (-pve), o seu loadavg JÁ agrega todos os guests LXC/VM —
-  // usa-o diretamente. Somar os guests estava a contar a mesma carga física ~Nx (LXC lê o /proc/loadavg
-  // do host → HEL1 dava 190%). DCs sem nó -pve (Oracle/Laptop = workers cloud independentes) → soma.
-  const dynLoad = (list) => { const pve = list.find((v) => /-pve$/.test(v.host || '')); return (pve && pve.load != null && pve.cores) ? loadBar(pve.load, pve.cores) : loadBar(+list.reduce((a, v) => a + (v.load || 0), 0).toFixed(2), list.reduce((a, v) => a + (v.cores || 0), 0)); };
-  const dynStats = (list) => { const d1 = list.reduce((a, v) => a + v.done1h, 0), f = list.reduce((a, v) => a + v.fail24h, 0); return `<div><div class="tnum" style="font-size:16px;font-weight:800">${fmt(d1)}/h</div><div class="muted" style="font-size:10px">throughput</div></div><div><div class="tnum" style="font-size:16px;font-weight:800;color:${f ? 'var(--np-warn)' : ''}">${fmt(f)}</div><div class="muted" style="font-size:10px">falhas 24h</div></div>`; };
-  const dynCap = (list) => capBlock({ cap1h: sumCaps(list, 'cap1h'), cap24h: sumCaps(list, 'cap24h'), cap30d: sumCaps(list, 'cap30d') });
-  const vmBtns = (list) => list.map((v) => `<button class="np-btn np-btn--sm" onclick="event.stopPropagation();openVm('${esc(v.host)}')" title="${v.infra ? 'infra · ' + ((v.cap && v.cap.containers) ? v.cap.containers.length : 0) + ' containers' : esc(v.roles.join('/')) + ' · ' + v.workers.length + ' workers'}">${vmBtnInner(v)}</button>`).join('');
-  // Host físico do DC = o nó Proxmox (nome termina em -pve). As suas métricas de SO SÃO as do servidor.
-  const pveOf = (list) => list.find((v) => /-pve$/.test(v.host || ''));
-  const pveMetrics = (list) => { const p = pveOf(list); return (p && p.cap) ? `<div class="muted" style="font-size:9px;margin-top:12px;text-transform:uppercase;letter-spacing:.04em">Servidor físico (Proxmox) · ${esc(p.host)}</div>${hostMetricsBlock(p.cap)}${pveStorageChips(p.cap)}` : ''; };
+  // sig inclui a contagem de unidades por host → uma mudança estrutural (container add/remove) força re-render.
+  const sig = dcNames.map((dc) => dc + ':' + dcs[dc].map((v) => v.host + '#' + v.workers.length + (v.infra ? 'i' : '') + '#' + ((v.cap && v.cap.containers) ? v.cap.containers.length : 0)).join(',')).join('|');
   if (fleetPatchable('servers', sig)) {
-    for (const dc of dcNames) { const k = idsafe(dc); setHTML('sv_' + k + '_load', dynLoad(dcs[dc])); setHTML('sv_' + k + '_stats', dynStats(dcs[dc])); setHTML('sv_' + k + '_cap', dynCap(dcs[dc])); setHTML('sv_' + k + '_pve', pveMetrics(dcs[dc])); setHTML('sv_' + k + '_vms', vmBtns(dcs[dc])); }
+    for (const dc of dcNames) patchServer(idsafe(dc), dcs[dc]);
     return;
   }
   const card = (dc) => { const list = dcs[dc]; const k = idsafe(dc); const workers = list.reduce((a, v) => a + v.workers.length, 0); return `<section class="np-card"><div class="np-card-b">
-    <div style="cursor:pointer" onclick="openServer('${esc(dc)}')"><div style="font-weight:800;font-size:15px">${esc(dc)} <span style="font-size:11px;color:var(--np-brand-ink,#2563eb)">ver ›</span></div><div class="muted" style="font-size:11px">${list.length} VMs · ${workers} workers</div>${tnRow(dcTnBadges(list))}</div>
-    <div id="sv_${k}_load" style="margin-top:10px">${dynLoad(list)}</div>
-    <div id="sv_${k}_stats" style="display:flex;gap:16px;margin-top:10px">${dynStats(list)}</div>
-    <div id="sv_${k}_cap">${dynCap(list)}</div>
-    <div id="sv_${k}_pve">${pveMetrics(list)}</div>
-    <div class="muted" style="font-size:9px;margin-top:12px;text-transform:uppercase;letter-spacing:.04em">VMs</div>
-    <div id="sv_${k}_vms" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${vmBtns(list)}</div>
+    <div style="cursor:pointer" onclick="openServer('${esc(dc)}')"><div style="font-weight:800;font-size:15px">${esc(dc)} <span style="font-size:11px;color:var(--np-brand-ink,#2563eb)">ver ›</span></div><div class="muted" style="font-size:11px">${list.length} hosts · ${workers} workers</div>${tnRow(dcTnBadges(list))}</div>
+    <div id="sv_${k}_body">${serverBody(dc, list, k)}</div>
     <div onclick="openServer('${esc(dc)}')" style="cursor:pointer;text-align:center;margin-top:12px;padding-top:8px;border-top:1px solid var(--np-border);font-size:11px;color:var(--np-brand-ink,#2563eb)">ver servidor ›</div>
   </div></section>`; };
-  $('#view').innerHTML = head + `<div id="fleet-servers" class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">${dcNames.map(card).join('')}</div>`;
+  preserveOpen($('#fleet-servers'), () => { $('#view').innerHTML = head + `<div id="fleet-servers" class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(340px,1fr))">${dcNames.map(card).join('')}</div>`; });
 }
 // Drawer de uma VM (host): load + capacidade 1h/24h/30d + telemetria de host + workers (botões) + config/.env.
 window.openVm = async (host) => {
@@ -1732,11 +1794,9 @@ window.openServer = async (dc) => {
   dw.innerHTML = `<div class="np-empty">A carregar…</div>`;
   let d; try { d = await api('/api/workers'); } catch (e) { dw.innerHTML = `<div class="np-empty">Erro: ${esc(e.message)}</div>`; return; }
   const vms = allVms(d).filter((v) => v.dc === dc).sort((a, b) => a.host.localeCompare(b.host));
-  if (!vms.length) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">${esc(dc)} sem VMs a reportar.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
+  if (!vms.length) { dw.innerHTML = `<div style="padding:18px"><div class="np-badge warn" style="height:auto;padding:8px">${esc(dc)} sem hosts a reportar.</div><div style="margin-top:10px"><button class="np-btn np-btn--sm" onclick="closeDrawer()">Fechar</button></div></div>`; return; }
   const workers = vms.reduce((a, v) => a + v.workers.length, 0);
-  const totLoad = +vms.reduce((a, v) => a + (v.load || 0), 0).toFixed(2), totCores = vms.reduce((a, v) => a + (v.cores || 0), 0);
-  const withWk = vms.filter((v) => v.workers.length);
-  const cap = { cap1h: sumCaps(withWk, 'cap1h'), cap24h: sumCaps(withWk, 'cap24h'), cap30d: sumCaps(withWk, 'cap30d') };
+  // Detalhe por-host (o drawer tem espaço): cada host com a sua capacidade + telemetria + unidades agrupadas + link.
   const vmRow = (v) => { const inner = v.workers.length
       ? v.workers.map((w) => `<button class="np-btn np-btn--sm" style="font-size:9px;padding:1px 6px" onclick="openWorker('${esc(w.id)}')" title="${esc(w.role)}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('')
       : unitGroups(v.host, v.cap && v.cap.containers);
@@ -1746,13 +1806,11 @@ window.openServer = async (dc) => {
       ${hostMetricsBlock(v.cap)}
       <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${inner}</div>
     </div>`; };
-  const pve = vms.find((v) => /-pve$/.test(v.host || ''));
-  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(dc)}</div><div class="muted" style="font-size:12px">${vms.length} VMs · ${workers} workers</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+  const pfx = idsafe(dc) + 'd';
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(dc)}</div><div class="muted" style="font-size:12px">${vms.length} hosts · ${workers} workers</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
     <div style="padding:16px 18px">
-      ${(pve && pve.load != null && pve.cores) ? loadBar(pve.load, pve.cores) : loadBar(totLoad, totCores)}
-      ${pve && pve.cap ? `<div class="np-sec-t">Servidor físico (Proxmox) · <a href="#" onclick="openVm('${esc(pve.host)}');return false" style="color:var(--np-brand-ink,#2563eb)">${esc(pve.host)}</a></div>${hostMetricsBlock(pve.cap)}${pveStorageBars(pve.cap)}${latMatrixBlock(pve.cap)}` : ''}
-      <div class="np-sec-t">Capacidade agregada (usado / total · livre)</div>${capBlock(cap)}
-      <div class="np-sec-t">VMs (${vms.length})</div>
+      ${serverBody(dc, vms, pfx)}
+      <div class="np-sec-t">Detalhe por host (${vms.length})</div>
       <div style="display:flex;flex-direction:column;gap:8px">${vms.map(vmRow).join('')}</div>
     </div>`;
 };
@@ -1851,7 +1909,11 @@ function covBar(pct) { const col = pct >= 90 ? 'var(--np-ok-mark,#16a34a)' : pct
 // Barra a DUAS cores: válidos (verde) + prováveis/catch-all (roxo), empilhados sobre o total. Verify da Cobertura de Dados.
 function covBar2(validN, catchallN, tot) { const t = tot || 1; const vp = Math.min(100, 100 * validN / t); const cp = Math.min(Math.max(0, 100 - vp), 100 * catchallN / t); return `<div style="height:8px;background:var(--np-border,#e5e7eb);border-radius:4px;overflow:hidden;display:flex"><div style="height:100%;width:${vp}%;background:var(--np-ok-mark,#16a34a)" title="válidos (confirmados)"></div><div style="height:100%;width:${cp}%;background:#8b5cf6" title="catch-all (provavelmente válidos)"></div></div>`; }
 function covRowHtml(r, badge) {
-  return `<tr><td style="padding:8px 10px"><b>${esc(r.label)}</b>${badge ? ` <span class="np-badge ${r.cat === 'audit' ? 'info' : ''}" style="height:16px;font-size:9px">${r.cat}</span>` : ''}</td>
+  // Nota de "mostrar ambos": r.elig = {n,total,pct} = quão SELETIVO é o job (elegíveis / total do filtro),
+  // mostrada quando o universo elegível < total (ex.: WPScan só-WP). r.note = texto livre (ex.: verify).
+  const sub = r.elig ? `<div class="muted" style="font-size:10px;margin-top:2px" title="quantos do filtro são elegíveis para este job">${fmt(r.elig.n)}/${fmt(r.elig.total)} elegíveis · ${r.elig.pct}% do filtro</div>`
+    : (r.note ? `<div class="muted" style="font-size:10px;margin-top:2px">${esc(r.note)}</div>` : '');
+  return `<tr><td style="padding:8px 10px"><b>${esc(r.label)}</b>${badge ? ` <span class="np-badge ${r.cat === 'audit' ? 'info' : ''}" style="height:16px;font-size:9px">${r.cat}</span>` : ''}${sub}</td>
     <td class="tnum" style="text-align:right;padding:8px 10px">${fmt(r.n)}</td>
     <td class="tnum" style="text-align:right;padding:8px 10px;color:var(--np-text-2)">${fmt(r.total)}</td>
     <td style="padding:8px 10px;min-width:160px">${covBar(r.pct)}</td>
@@ -1869,9 +1931,14 @@ async function viewCoverage() {
   // classificados ⊇ válidos+catch-all). Os outros jobs são nível-site.
   const vb = verifySum(cov, COV_THRESH);
   const rows = COV_JOBS.map(([k, label, kind]) => {
-    if (k === 'verify') { const t = vb.withemail || 1; return { label: 'Verify de email (contactos)', cat: kind, n: vb.classified, total: t, pct: Math.round(1000 * vb.classified / t) / 10 }; }
-    const tot = k === 'wpscan' ? (s.wp_total || 1) : total;
-    return { label: k === 'wpscan' ? label + ' (só WP)' : label, cat: kind, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 };
+    // "Total" por linha = universo ELEGÍVEL do job (o que há para fazer). r.elig (feito/elegível já é a
+    // barra; elegível/total = selectividade) só se mostra quando o elegível < total do filtro.
+    if (k === 'verify') { const t = vb.withemail || 1; return { label: 'Verify de email (contactos)', cat: kind, n: vb.classified, total: t, pct: Math.round(1000 * vb.classified / t) / 10, note: 'nível-contacto: classificados / contactos com email' }; }
+    const elig = k === 'wpscan' ? (s.wp_total || 0) : total; // wpscan só se aplica a WordPress/WooCommerce
+    const tot = elig || 1;
+    const r = { label: k === 'wpscan' ? label + ' (só WP)' : label, cat: kind, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 };
+    if (elig < total) r.elig = { n: elig, total, pct: Math.round(1000 * elig / total) / 10 };
+    return r;
   });
   const sorted = covSortRows(rows, 'jobs');
   const v = cov.verify || {};
@@ -1882,6 +1949,7 @@ async function viewCoverage() {
       <thead><tr style="color:var(--np-text-2);font-size:11px">${covTh('jobs', 'label', 'Job')}${covTh('jobs', 'coberto', 'Coberto', 'right')}${covTh('jobs', 'total', 'Total', 'right')}<th style="padding:6px 10px">Progresso</th>${covTh('jobs', 'pct', '%', 'right')}</tr></thead>
       <tbody>${sorted.grouped ? (() => { let g = null; return sorted.rows.map((r) => { const hdr = r.cat !== g ? (g = r.cat, `<tr><td colspan="5" style="padding:10px 10px 4px;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--np-text-2)">${r.cat === 'audit' ? 'Auditoria' : 'Pipeline base'}</td></tr>`) : ''; return hdr + covRowHtml(r, true); }).join(''); })() : sorted.rows.map((r) => covRowHtml(r, true)).join('')}</tbody></table></div>
     <div class="muted" style="font-size:11.5px;margin-top:12px"><b>verify</b> (email · nível-contacto, não filtrado por score): <b>${fmt(v.accepted || 0)}</b> aceites (válido/catch-all — sondas PAGAS, quota ~100/dia) · ${fmt(v.verified || 0)} classificados no total, de ${fmt(v.with_email || 0)} com email — os restantes classificados são grátis (inválido/role/sem-MX, fora da quota) · dados de ${cov.ts ? timeAgo(Math.floor(cov.ts / 1000)) : '—'}
+    <br><b>Total</b> = universo <b>elegível</b> de cada job (o que há para fazer): <b>WPScan</b> = só WordPress/WooCommerce; <b>Verify</b> = contactos com email; os restantes = todos os leads do filtro. Quando o elegível &lt; total do filtro, a linha mostra também a <b>selectividade</b> (elegíveis / total).
     <br>Filas sem métrica de cobertura (dispatchers/internas, não medem dados por site): <code>discover</code> (cria sites), <code>audit_ondemand/qualified/rest</code> (despacham as finas → contam em "Auditoria coarse"), <code>result_site</code> (writer PG), <code>campaign_generate/send</code> (tabela de campanhas).</div>
   </div></div>`;
 }

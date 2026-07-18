@@ -43,6 +43,7 @@ import { egressDispatcher } from '../lib/egress.js';
 import { makeProviderPool } from '../lib/verify-providers.js';
 import { makeReacherPool } from '../lib/reacher.js';
 import { verifyDomain } from '../lib/verify-core.js';
+import { redisClient } from '../lib/worker-telemetry.js';
 
 const UA = 'netprospect-enrich/1.0 (+https://netmaster.pt; prospecao B2B)';
 const TIMEOUT_MS = 12000;
@@ -56,12 +57,18 @@ const SKIP_DH_SCORE = /^(1|true|yes)$/i.test(process.env.DOMAIN_HEALTH_SKIP_SCOR
 const GMB_ENABLED = /^(1|true|yes)$/i.test(process.env.GMB_ENABLED || '');
 const VERIFY_MAX_CAND = Math.max(1, parseInt(process.env.VERIFY_MAX_CANDIDATES || '4', 10));
 
-// Pool de verificação partilhado por worker (estado de quota diária persiste entre
-// jobs). Lazy: só constrói quando o 1.º job `verify` chega. As chaves free vêm de
-// config/verify-providers.json (montado na imagem/VM) → quota LOCAL a este IP.
+// Pool de verificação partilhado por worker. Lazy: só constrói quando o 1.º job `verify` chega. As chaves
+// free vêm de config/verify-providers.json. A QUOTA DIÁRIA é contabilizada + lockada no REDIS (partilhada por
+// todos os workers e entre restarts; reset diário automático) — ver makeProviderPool. Fail-soft se Redis em baixo.
 let _vpool = null;
-function verifyPool() {
-  if (!_vpool) _vpool = { providers: makeProviderPool(), reacher: makeReacherPool(), mxCache: new Map() };
+async function verifyPool() {
+  if (!_vpool) {
+    const redis = await redisClient().catch(() => null);
+    const providers = makeProviderPool(undefined, { redis });
+    _vpool = { providers, reacher: makeReacherPool(), mxCache: new Map() };
+  }
+  // Reconcilia a quota com o Redis a cada job (locks de outros workers + viragem do dia, sem depender de restart).
+  await _vpool.providers.loadState();
   return _vpool;
 }
 
@@ -474,7 +481,7 @@ export function makeFineHandlers(ctx, js) {
   async function handleVerify(job) {
     const domain = job?.domain;
     if (!domain) return 'term';
-    const { providers, reacher, mxCache } = verifyPool();
+    const { providers, reacher, mxCache } = await verifyPool();
     if (!providers.count && !reacher.enabled()) return 'ack'; // sem verificador configurado → no-op
     const contacts = await client.request(readItems('contacts', {
       filter: { email_status: { _null: true }, company: { org_domain: { _eq: domain } } },

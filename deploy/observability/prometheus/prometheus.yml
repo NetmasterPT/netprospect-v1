@@ -132,3 +132,28 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: '100.105.222.100:9115'          # de1-blackbox
+
+  # --- node-exporter dos CTs — P3 (métricas OS por-CT). hel1 via vmbr1, de1 via tailscale ---
+  - job_name: 'node-ct'
+    static_configs:
+      - {targets: ['10.10.10.2:9100'], labels: {host: 'pbs'}}
+      - {targets: ['10.10.10.3:9100'], labels: {host: 'pdm'}}
+      - {targets: ['10.10.10.4:9100'], labels: {host: 'pmg'}}
+      - {targets: ['10.10.10.10:9100'], labels: {host: 'prometheus'}}
+      - {targets: ['10.10.10.11:9100'], labels: {host: 'grafana'}}
+      - {targets: ['10.10.10.13:9100'], labels: {host: 'pve-exporter'}}
+      - {targets: ['10.10.10.12:9100'], labels: {host: 'alertmanager'}}
+      - {targets: ['10.10.10.14:9100'], labels: {host: 'blackbox'}}
+      - {targets: ['10.10.10.15:9100'], labels: {host: 'ntfy'}}
+      - {targets: ['10.10.10.16:9100'], labels: {host: 'hel1-loki'}}
+      - {targets: ['10.10.10.20:9100'], labels: {host: 'wazuh'}}
+      - {targets: ['10.10.10.21:9100'], labels: {host: 'uptimekuma'}}
+      - {targets: ['10.10.10.51:9100'], labels: {host: 'jenkins'}}
+      - {targets: ['10.10.10.52:9100'], labels: {host: 'sonarqube'}}
+      - {targets: ['10.10.10.53:9100'], labels: {host: 'ollama'}}
+      - {targets: ['10.10.10.54:9100'], labels: {host: 'openwebui'}}
+      - {targets: ['10.10.10.56:9100'], labels: {host: 'n8n'}}
+      - {targets: ['10.10.10.80:9100'], labels: {host: 'np-db'}}
+      - {targets: ['100.65.117.95:9100'], labels: {host: 'de1-pbs'}}
+      - {targets: ['100.116.29.90:9100'], labels: {host: 'de1-pve-exporter'}}
+      - {targets: ['100.105.222.100:9100'], labels: {host: 'de1-blackbox'}}

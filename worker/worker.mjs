@@ -607,4 +607,14 @@ async function main() {
   process.exit(1);
 }
 
+// RAIZ do restart-loop exit-0 dos workers browser (incidente 20260716): quando o Chrome falha a meio
+// da auditoria, o Lighthouse rejeita o await PRINCIPAL (apanhado → 'retry') MAS uma promise de CDP em
+// segundo plano rejeita SEPARADAMENTE, sem handler (`Protocol error (Page.navigate): Target closed`,
+// lighthouse/core/gather/session.js) → unhandledRejection derrubava o processo em SILÊNCIO (exit-0, sem
+// crash/OOM). Este handler apanha-a: LOG + SOBREVIVE (o worker deixa de morrer a cada falha de Chrome).
+// uncaughtException → LOG + exit 1 (loud, backstop); exit → LOG do code (um exit espontâneo é anómalo).
+process.on('unhandledRejection', (reason) => { console.error('⚠ unhandledRejection (apanhado, worker sobrevive):', reason?.stack || reason?.message || String(reason)); });
+process.on('uncaughtException', (err) => { console.error('⚠ uncaughtException:', err?.stack || err?.message || String(err)); process.exit(1); });
+process.on('exit', (code) => { console.error(`⚠ worker a SAIR com code=${code}`); });
+
 main().catch((err) => { console.error('Erro fatal no worker:', err); process.exit(1); });

@@ -1,0 +1,64 @@
+# Regras de alerta para as fontes de infra novas (P8): postgres/redis/clickhouse/minio/node/zfs.
+# Deploy: /etc/prometheus/rules/netprospect-infra.yml no CT200 (via push-configs.sh). → Alertmanager → ntfy.
+groups:
+  - name: netprospect-infra
+    rules:
+      # --- Postgres (np-db) — fecha o watchlist ECONNREFUSED/ETIMEDOUT do subdomains ---
+      - alert: NetProspectPostgresDown
+        expr: pg_up == 0
+        for: 2m
+        labels: { severity: critical, service: postgres }
+        annotations: { summary: "Postgres (np-db) down — postgres-exporter reporta pg_up=0" }
+      - alert: NetProspectPostgresConnectionsHigh
+        expr: sum(pg_stat_database_numbackends) / max(pg_settings_max_connections) > 0.85
+        for: 5m
+        labels: { severity: warning, service: postgres }
+        annotations: { summary: "Postgres backends >85% do max_connections (PgBouncer a recusar → ECONNREFUSED)" }
+
+      # --- Redis (np-server) ---
+      - alert: NetProspectRedisDown
+        expr: redis_up == 0
+        for: 2m
+        labels: { severity: critical, service: redis }
+        annotations: { summary: "Redis (np-server) down" }
+      - alert: NetProspectRedisMemHigh
+        expr: redis_memory_used_bytes / redis_config_maxmemory > 0.9 and redis_config_maxmemory > 0
+        for: 10m
+        labels: { severity: warning, service: redis }
+        annotations: { summary: "Redis >90% do maxmemory (LRU a despejar)" }
+
+      # --- ClickHouse (hel1-analytics) / MinIO (de-minio) ---
+      - alert: NetProspectClickHouseDown
+        expr: up{job="clickhouse"} == 0
+        for: 5m
+        labels: { severity: warning, service: clickhouse }
+        annotations: { summary: "ClickHouse :9363 não responde (analytics fail-soft, mas perde observações)" }
+      - alert: NetProspectMinIODown
+        expr: up{job="minio"} == 0
+        for: 5m
+        labels: { severity: warning, service: minio }
+        annotations: { summary: "MinIO :9000 metrics não responde" }
+
+      # --- node-exporter / filesystem ---
+      - alert: NetProspectNodeExporterDown
+        expr: up{job="node"} == 0
+        for: 5m
+        labels: { severity: warning, service: node }
+        annotations: { summary: "node-exporter down em {{ $labels.host }}" }
+      - alert: NetProspectFilesystemFull
+        expr: (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay|squashfs"} / node_filesystem_size_bytes) < 0.1
+        for: 15m
+        labels: { severity: warning, service: node }
+        annotations: { summary: "Filesystem <10% livre em {{ $labels.host }} ({{ $labels.mountpoint }})" }
+
+      # --- ZFS (nós Proxmox) ---
+      - alert: NetProspectZpoolDegraded
+        expr: zpool_health < 1
+        for: 5m
+        labels: { severity: critical, service: zfs }
+        annotations: { summary: "ZFS pool {{ $labels.pool }} NÃO-ONLINE (degraded/faulted)" }
+      - alert: NetProspectZpoolCapacityHigh
+        expr: zpool_capacity_ratio > 80
+        for: 30m
+        labels: { severity: warning, service: zfs }
+        annotations: { summary: "ZFS pool {{ $labels.pool }} >80% cheio ({{ $value }}%)" }

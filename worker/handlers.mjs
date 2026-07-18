@@ -212,7 +212,7 @@ export function makeFineHandlers(ctx, js) {
     }
     const headerBlob = JSON.stringify(snap.headers || {}) + ' ' + (snap.setCookies || []).join(' ');
     const fp = detectPlatforms(snap.html, headerBlob);
-    let tech = null;
+    let tech = []; // sentinela "correu": [] (não null) quando o wappalyzer está ausente/lança/devolve não-array → conta na cobertura
     if (ctx.analyze) { try { const hdrs = {}; for (const [k, v] of Object.entries(snap.headers || {})) hdrs[k] = [v]; const t = await ctx.analyze({ url: snap.finalUrl, html: snap.html, headers: hdrs, statusCode: snap.status }); if (Array.isArray(t)) tech = t.map((x) => ({ name: x.name, slug: x.slug, version: x.version || null, categories: (x.categories || []).map((c) => c.slug) })); } catch { /* opcional */ } }
     const primaryId = fp.primarySlug ? ctx.platformIdBySlug[fp.primarySlug] || null : null;
     // Versão do CMS (do wappalyzer) + staleness vs config/cms-latest.json.
@@ -259,7 +259,14 @@ export function makeFineHandlers(ctx, js) {
 
   async function handleEmailauth(job) {
     const domain = domainToASCII(job.domain) || job.domain;
-    try { const a = await checkEmailAuth(domain); await client.request(updateItem('sites', job.siteId, { spf_status: a.spf, dmarc_status: a.dmarc })); } catch { /* DNS indisponível */ }
+    // checkEmailAuth devolve 'missing'/'ok'/'weak'/'invalid' (resposta real) OU null em DNS transitório
+    // (SERVFAIL/timeout). Gravar null marcava o job como "correu" sem ter corrido → subcontava. Agora:
+    // transitório → 'retry' (nak/backoff; ack gracioso ao fim das tentativas), nunca grava spf_status=null.
+    try {
+      const a = await checkEmailAuth(domain);
+      if (a?.spf == null) return 'retry';
+      await client.request(updateItem('sites', job.siteId, { spf_status: a.spf, dmarc_status: a.dmarc }));
+    } catch { return 'retry'; /* DNS indisponível → re-tenta */ }
     await pub(SUBJECTS.score, { domain: job.domain, siteId: job.siteId }, `score:${job.domain}`);
     return 'ack';
   }
@@ -348,6 +355,9 @@ export function makeFineHandlers(ctx, js) {
     }
     // 1.ª vez que fica qualificado, sem auditoria feita → dispara auditorias pesadas.
     if (AUDIT_ENABLED && q.qualified && !wasQualified && !s.audit_checked_at) {
+      // Marca "entrou no pipeline de auditoria". O DAG fino (fan-out abaixo) nunca escrevia audit_checked_at
+      // — só o handleAudit coarse legado — pelo que a linha `audit` da cobertura estava morta (~0). Stamp aqui.
+      await client.request(updateItem('sites', job.siteId, { audit_checked_at: new Date().toISOString() })).catch(() => {});
       for (const subj of [SUBJECTS.lighthouseMobile, SUBJECTS.nuclei, SUBJECTS.ssl, SUBJECTS.whois, SUBJECTS.dnsprovider]) await pub(subj, { domain: job.domain, siteId: job.siteId }, `${subj}:${job.domain}`);
       if (GMB_ENABLED) await pub(SUBJECTS.gmb, { domain: job.domain, siteId: job.siteId }, `gmb:${job.domain}`);
     }

@@ -191,7 +191,14 @@ function makeHeavyFineHandlers(ctx, audit, js) {
       await client.request(updateItem('sites', site.id, { security_findings: r.findings, security_severity: r.severity }));
       await upsertReport(client, site.id, 'nuclei', { score: r.findings, summary: { findings: r.findings, severity: r.severity, bySeverity: r.bySeverity }, report: { _full: await putReport(site.id, "nuclei", { results: r.results }) } });
       await rescore({ domain: site.domain, siteId: site.id });
-    } catch (e) { if (/não instalado|not installed/i.test(e.message)) throw e; log(`nuclei ${site.domain}: ${e.message}`); }
+    } catch (e) {
+      // Antes: ack silencioso SEM escrever security_findings E sem re-tentar → o site ficava NULL para
+      // sempre (cobertura subcontava + nunca re-corria). Agora, como o lighthouse: 'retry' (nuclei é
+      // instável sob carga) → nak/backoff; ao fim das tentativas, ack gracioso (honesto, sem stuck).
+      if (/não instalado|not installed/i.test(e.message)) throw e; // → nak, corre noutro host com a ferramenta
+      log(`nuclei ${site.domain}: ${e.message}`);
+      return 'retry';
+    }
     return 'ack';
   }
   async function wpscan(job) {
@@ -207,7 +214,12 @@ function makeHeavyFineHandlers(ctx, audit, js) {
       const r = await audit.wpscan.runWpscan(site.final_url || `https://${site.domain}/`, { token, keyless });
       await client.request(updateItem('sites', site.id, { wp_vuln_count: r.vulnCount }));
       await upsertReport(client, site.id, 'wpscan', { score: r.vulnCount, summary: { vulnCount: r.vulnCount }, report: r.report });
-    } catch (e) { if (/não instalado|not installed/i.test(e.message)) throw e; log(`wpscan ${site.domain}: ${e.message}`); }
+    } catch (e) {
+      // Igual ao nuclei/lighthouse: 'retry' em vez de ack silencioso sem escrever (subcontava + nunca re-corria).
+      if (/não instalado|not installed/i.test(e.message)) throw e;
+      log(`wpscan ${site.domain}: ${e.message}`);
+      return 'retry';
+    }
     return 'ack';
   }
   async function gmb(job) {

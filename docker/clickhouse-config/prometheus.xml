@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<!-- Expõe o endpoint Prometheus nativo do ClickHouse (:9363/metrics) — system.metrics/events/
+     asynchronous_metrics. Raspado pelo Prometheus CT200 (job 'clickhouse'). Só tailnet. -->
+<clickhouse>
+    <prometheus>
+        <endpoint>/metrics</endpoint>
+        <port>9363</port>
+        <metrics>true</metrics>
+        <events>true</events>
+        <asynchronous_metrics>true</asynchronous_metrics>
+        <errors>true</errors>
+    </prometheus>
+</clickhouse>

@@ -1,0 +1,112 @@
+# Global configuration
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: 'hel1-proxmox'
+    environment: 'production'
+
+# Alertmanager configuration
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+          - '100.96.102.84:9093'  # Alertmanager Tailscale IP
+
+# Load rules
+rule_files:
+  - "/etc/prometheus/rules/*.yml"
+
+# Scrape configurations
+scrape_configs:
+  - job_name: 'netprospect'
+    metrics_path: /metrics
+    scrape_interval: 30s
+    static_configs:
+      - targets: ['100.114.17.74:3001']
+        labels:
+          service: 'netprospect'
+  # Prometheus itself
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+        labels:
+          app: 'prometheus'
+
+  # Proxmox VE Exporter
+  - job_name: 'proxmox'
+    static_configs:
+      - targets: ['100.107.0.111:9221', '100.116.29.90:9221']  # PVE Exporter Tailscale IP
+        labels:
+          app: 'proxmox-exporter'
+          environment: 'production'
+
+  # Blackbox Exporter
+  - job_name: 'blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - https://65.108.120.25:8006  # Proxmox Web UI (public)
+          - https://100.86.211.70:8006  # Proxmox Web UI (Tailscale)
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: '100.86.22.83:9115'  # Blackbox Exporter Tailscale IP
+
+  # Alertmanager
+  - job_name: 'alertmanager'
+    static_configs:
+      - targets: ['100.96.102.84:9093']  # Alertmanager Tailscale IP
+        labels:
+          app: 'alertmanager'
+
+  # --- Exporters da stack server np-server (C5) — nats/redis/postgres ---
+  - job_name: 'nats'
+    static_configs:
+      - targets: ['100.114.17.74:7777']
+        labels:
+          app: 'nats'
+  - job_name: 'redis'
+    static_configs:
+      - targets: ['100.114.17.74:9121']
+        labels:
+          app: 'redis'
+  - job_name: 'postgres'
+    static_configs:
+      - targets: ['100.114.17.74:9187']
+        labels:
+          app: 'postgres'
+
+  # --- node-exporter (OS por-guest) + cAdvisor (por-container) — P2 ---
+  - job_name: 'node'
+    static_configs:
+      - {targets: ['100.108.94.126:9100'], labels: {host: 'hel1-docker'}}
+      - {targets: ['100.114.17.74:9100'], labels: {host: 'np-server'}}
+      - {targets: ['100.120.43.49:9100'], labels: {host: 'hel1-analytics'}}
+      - {targets: ['100.124.43.117:9100'], labels: {host: 'de-minio'}}
+      - {targets: ['100.120.214.45:9100'], labels: {host: 'np-wk-de1'}}
+      - {targets: ['100.75.209.61:9100'], labels: {host: 'oracle-e2-1'}}
+      - {targets: ['100.123.27.23:9100'], labels: {host: 'oracle-e2-2'}}
+  - job_name: 'cadvisor'
+    static_configs:
+      - {targets: ['100.108.94.126:8098'], labels: {host: 'hel1-docker'}}
+      - {targets: ['100.114.17.74:8098'], labels: {host: 'np-server'}}
+      - {targets: ['100.120.43.49:8098'], labels: {host: 'hel1-analytics'}}
+      - {targets: ['100.124.43.117:8098'], labels: {host: 'de-minio'}}
+      - {targets: ['100.120.214.45:8098'], labels: {host: 'np-wk-de1'}}
+      - {targets: ['100.75.209.61:8098'], labels: {host: 'oracle-e2-1'}}
+      - {targets: ['100.123.27.23:8098'], labels: {host: 'oracle-e2-2'}}
+
+  # --- ClickHouse (hel1-analytics) + MinIO (de-minio) — P2 ---
+  - job_name: 'clickhouse'
+    static_configs:
+      - {targets: ['100.120.43.49:9363'], labels: {host: 'hel1-analytics', app: 'clickhouse'}}
+  - job_name: 'minio'
+    metrics_path: /minio/v2/metrics/cluster
+    static_configs:
+      - {targets: ['100.124.43.117:9000'], labels: {host: 'de-minio', app: 'minio'}}

@@ -25,9 +25,12 @@ services:
       - /srv/analytics/clickhouse:/var/lib/clickhouse                                    # o disco barato
       - ../../db/clickhouse-schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro      # só corre em DB vazia
       - ../../docker/clickhouse-config/listen-ipv4.xml:/etc/clickhouse-server/config.d/listen-ipv4.xml:ro
+      - ../../docker/clickhouse-config/prometheus.xml:/etc/clickhouse-server/config.d/prometheus.xml:ro
     ports:
       - '${TAILNET_IP}:8123:8123'   # HTTP — dashboard/workers pela tailnet
       - '127.0.0.1:8123:8123'       # local (debug)
+      - '${TAILNET_IP}:9363:9363'   # métricas Prometheus (job 'clickhouse')
+      - '127.0.0.1:9363:9363'
     healthcheck:
       test: ['CMD', 'wget', '--no-verbose', '--tries=1', '--spider', 'http://127.0.0.1:8123/ping']
       interval: 30s

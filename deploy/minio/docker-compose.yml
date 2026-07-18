@@ -11,6 +11,8 @@ services:
       # Consola atrás do NPMPlus/Authentik em https://netprospect.minio.netmaster.pt.
       # Sem isto, o MinIO redireciona para o host:porta interno e o login parte. Vazio = desligado.
       MINIO_BROWSER_REDIRECT_URL: ${MINIO_BROWSER_REDIRECT_URL:-}
+      # Métricas Prometheus sem bearer (só tailnet, sem creds sensíveis) → job 'minio' do CT200.
+      MINIO_PROMETHEUS_AUTH_TYPE: 'public'
     volumes:
       - /srv/minio:/data            # o HDD
     ports:

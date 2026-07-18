@@ -34,7 +34,7 @@ services:
     privileged: true
     command:
       - '--listen_ip=${TAILNET_IP}'
-      - '--port=8080'
+      - '--port=${CADVISOR_PORT:-8098}'   # 8098 (não 8080: colide com o Adminer no np-server)
       - '--docker_only=true'
       - '--housekeeping_interval=30s'
       - '--store_container_labels=false'

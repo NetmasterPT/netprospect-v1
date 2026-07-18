@@ -1975,7 +1975,7 @@ app.get('/api/fleet/pull/:host', (req, res) => {
 // hosts silenciosos aparecem "sem dados" na página Servidores). Mesmo token que o pull do .env.
 // Só campos conhecidos (whitelist) e limitados em tamanho → não guardamos lixo arbitrário.
 const METRIC_FIELDS = ['cpu', 'load', 'cores', 'mem_used', 'mem_total', 'swap_used', 'swap_total', 'disk_used', 'disk_total',
-  'io_read', 'io_write', 'net_rx', 'net_tx', 'lat_directus', 'lat_pg', 'lat_minio', 'uptime', 'ts', 'addr'];
+  'io_read', 'io_write', 'net_rx', 'net_tx', 'lat_directus', 'lat_pg', 'lat_minio', 'uptime', 'ts', 'addr', 'tailnet'];
 app.post('/api/fleet/metrics/:host', async (req, res) => {
   const host = req.params.host;
   if (!HOST_RE.test(host)) return res.status(400).json({ error: 'host inválido' });

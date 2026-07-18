@@ -142,6 +142,8 @@ collect_and_post() {
   np_ip=$(printf '%s' "${SERVER_URL:-}" | sed -E 's#^https?://([^:/]+).*#\1#')
   addr=$(ip route get "$np_ip" 2>/dev/null | grep -oE 'src [0-9.]+' | awk '{print $2}' | head -1)
   latmatrix=$(latency_matrix); [ -z "$latmatrix" ] && latmatrix='{}'
+  # Tailnet a que este host pertence (MagicDNSSuffix), p/ os badges Tailnet/Tailnet-TFAA. Vazio se sem tailscale.
+  local tailnet=""; command -v tailscale >/dev/null 2>&1 && tailnet=$(tailscale status --json 2>/dev/null | grep -oE '"MagicDNSSuffix"[^,]*' | grep -oE '[a-z0-9]+\.ts\.net' | head -1)
   units=$(merge_json_arrays "$(containers_json)" "$(services_json)")
   units=$(merge_json_arrays "$units" "$(timers_json)")
   # Hook opcional: se o reporter definir extra_units_json (ex.: Proxmox → LXC/VMs), junta-se aqui.

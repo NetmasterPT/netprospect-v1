@@ -1486,7 +1486,7 @@ const containerMini = (c) => { if (!c) return ''; const cpu = c.cpu ? parseFloat
 const contForWorker = (hosts, w) => { const cs = ((hosts || {})[w.host] || {}).containers || []; return cs.find((c) => c.id && (c.id === w.id || w.id.startsWith(c.id) || c.id.startsWith(w.id))) || null; };
 // Botões das unidades (container/serviço/lxc/vm) de um host — nome + ponto de estado; não-container = tracejado.
 const containerChips = (host, cs) => (cs && cs.length)
-  ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = { lxc: 'LXC·', vm: 'VM·', storage: 'disco·', zfs: 'zfs·', datastore: 'ds·', timer: 'cron·', snapshot: 'snap·' }[c.kind] || ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}</button>`; }).join(' ')
+  ? cs.map((c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = { lxc: 'LXC·', vm: 'VM·', storage: 'disco·', zfs: 'zfs·', datastore: 'ds·', timer: 'cron·', snapshot: 'snap·' }[c.kind] || ''; const tfaaMk = TFAA_GUESTS.includes(c.name) ? ' <span style="color:#7c3aed;font-weight:800" title="na tailnet Tailscale do cliente TFAA (tail9be421.ts.net)">·TFAA</span>' : ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}${TFAA_GUESTS.includes(c.name) ? ';border-color:#c4b5fd' : ''}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}${tfaaMk}</button>`; }).join(' ')
   : '<span class="muted" style="font-size:10px">sem unidades reportadas</span>';
 // Unidades AGRUPADAS por tipo (para os drawers): Docker / LXC / VMs / Serviços / Storage / ZFS / Datastores.
 const UNIT_ORDER = [['container', 'Containers Docker'], ['lxc', 'Containers LXC'], ['vm', 'VMs'], ['service', 'Serviços (OS)'], ['timer', 'Agendamentos (timers/cron)'], ['storage', 'Storage'], ['zfs', 'Pools ZFS'], ['datastore', 'Datastores'], ['snapshot', 'Snapshots']];
@@ -1609,6 +1609,28 @@ function pveStorageBars(H) {
 }
 const vmBusy = (v) => v.workers.some((w) => w.cur);
 const vmBtnInner = (v) => `${esc(v.host)}${vmBusy(v) ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''} <span class="muted tnum" style="font-size:10px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : ''}</span>`;
+// --- Badges de Tailnet (Tailscale) ---
+// Regra: um host que REPORTA ao np-server está, por construção, na tailnet PRINCIPAL — o np-server vive nela
+// e da tailnet do cliente TFAA não se lhe alcança. O campo `tailnet` (MagicDNSSuffix, reportado pelo agente)
+// refina: deteta a tailnet TFAA e a dupla-pertença. Guests só-TFAA (ex. tailscale-tfaa) não reportam;
+// aparecem como unidades no seu -pve → marcados por TFAA_GUESTS.
+const TN_MAIN_SFX = 'taild948a2', TN_TFAA_SFX = 'tail9be421';
+const TFAA_GUESTS = ['tailscale-tfaa']; // guests na tailnet do cliente TFAA (não reportam; são unidades)
+const tnPill = (label, bg, fg, bd, title) => `<span class="np-badge" style="height:16px;font-size:9px;padding:0 6px;font-weight:700;background:${bg};color:${fg};border:1px solid ${bd}" title="${title}">${label}</span>`;
+const tnMain = () => tnPill('Tailnet', '#e0edff', '#1d4ed8', '#bfdbfe', `na tailnet Tailscale principal (${TN_MAIN_SFX}.ts.net)`);
+const tnTfaa = () => tnPill('Tailnet-TFAA', '#f3e8ff', '#7c3aed', '#e9d5ff', `na tailnet Tailscale do cliente TFAA (${TN_TFAA_SFX}.ts.net)`);
+function tnBadges(cap, reports) {
+  const m = (cap && cap.metrics) || {};
+  const tn = String(m.tailnet || '');
+  const onMain = tn.includes(TN_MAIN_SFX) || /^100\./.test(m.addr || '') || !!reports;
+  const onTfaa = tn.includes(TN_TFAA_SFX);
+  const b = []; if (onMain) b.push(tnMain()); if (onTfaa) b.push(tnTfaa());
+  return b.join(' ');
+}
+const tnRow = (html) => html ? `<div style="margin-top:5px;display:flex;gap:4px;flex-wrap:wrap">${html}</div>` : '';
+// Badge(s) ao nível do DC: sempre Tailnet (todos os seus hosts reportam) + Tailnet-TFAA se algum host estiver
+// na tailnet TFAA OU o DC alojar um guest TFAA (ex. HEL1 aloja o tailscale-tfaa).
+const dcTnBadges = (list) => { const tfaa = (list || []).some((v) => String((v.cap && v.cap.metrics && v.cap.metrics.tailnet) || '').includes(TN_TFAA_SFX) || ((v.cap && v.cap.containers) || []).some((c) => TFAA_GUESTS.includes(c.name))); return tnMain() + (tfaa ? ' ' + tnTfaa() : ''); };
 async function viewVms() {
   renderNav('vms');
   const head = `<div class="np-head"><div><div class="np-eyebrow">Frota</div><h1 class="np-h1">VMs</h1><div class="np-sub">Máquinas com workers + infra (só telemetria) · capacidade · containers · click → drawer · atualiza 10 s</div></div></div>`;
@@ -1628,7 +1650,7 @@ async function viewVms() {
     const wkSec = v.workers.length ? `<div class="muted" style="font-size:9px;margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Workers</div><div id="vm_${k}_wk" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${wkBtns(v)}</div>` : '';
     const contSec = (v.cap && v.cap.containers) ? `<div class="muted" style="font-size:9px;margin-top:10px;text-transform:uppercase;letter-spacing:.04em">Containers / serviços</div><div id="vm_${k}_cont" style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px">${contInner(v)}</div>` : '';
     return `<section class="np-card"><div class="np-card-b">
-    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="cursor:pointer;min-width:0" onclick="openVm('${esc(v.host)}')"><div style="font-weight:800;font-size:14px">${esc(v.host)} <span style="font-size:11px;color:var(--np-brand-ink,#2563eb)">›</span></div><div class="muted" style="font-size:11px">${esc(v.dc)} · ${sub}</div></div>
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="cursor:pointer;min-width:0" onclick="openVm('${esc(v.host)}')"><div style="font-weight:800;font-size:14px">${esc(v.host)} <span style="font-size:11px;color:var(--np-brand-ink,#2563eb)">›</span></div><div class="muted" style="font-size:11px">${esc(v.dc)} · ${sub}</div>${tnRow(tnBadges(v.cap, true))}</div>
       <span id="vm_${k}_stat">${statInner(v)}</span></div>
     <div id="vm_${k}_load" style="margin-top:10px">${loadBar(v.load, v.cores)}</div>
     <div id="vm_${k}_cap">${v.workers.length ? capBlock(v.cap) : ''}</div>
@@ -1662,7 +1684,7 @@ async function viewServers() {
     return;
   }
   const card = (dc) => { const list = dcs[dc]; const k = idsafe(dc); const workers = list.reduce((a, v) => a + v.workers.length, 0); return `<section class="np-card"><div class="np-card-b">
-    <div style="cursor:pointer" onclick="openServer('${esc(dc)}')"><div style="font-weight:800;font-size:15px">${esc(dc)} <span style="font-size:11px;color:var(--np-brand-ink,#2563eb)">ver ›</span></div><div class="muted" style="font-size:11px">${list.length} VMs · ${workers} workers</div></div>
+    <div style="cursor:pointer" onclick="openServer('${esc(dc)}')"><div style="font-weight:800;font-size:15px">${esc(dc)} <span style="font-size:11px;color:var(--np-brand-ink,#2563eb)">ver ›</span></div><div class="muted" style="font-size:11px">${list.length} VMs · ${workers} workers</div>${tnRow(dcTnBadges(list))}</div>
     <div id="sv_${k}_load" style="margin-top:10px">${dynLoad(list)}</div>
     <div id="sv_${k}_stats" style="display:flex;gap:16px;margin-top:10px">${dynStats(list)}</div>
     <div id="sv_${k}_cap">${dynCap(list)}</div>
@@ -1693,7 +1715,7 @@ window.openVm = async (host) => {
       <div class="np-sec-t">Config <span class="np-badge" style="height:15px;font-size:9px" title="versão do código dos workers">${esc(ver)}</span></div>${cfg}`;
   }
   const sub = v.infra ? `${esc(v.dc)} · infra · ${cs.length} containers` : `${esc(v.dc)} · ${v.workers.length} workers · ${esc(v.roles.join(', '))}`;
-  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(v.host)}</div><div class="muted" style="font-size:12px">${sub}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(v.host)}</div><div class="muted" style="font-size:12px">${sub}</div>${tnRow(tnBadges(v.cap, true))}</div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
     <div style="padding:16px 18px">
       ${loadBar(v.load, v.cores)}
       ${hostMetricsBlock(v.cap)}
@@ -1719,7 +1741,7 @@ window.openServer = async (dc) => {
       ? v.workers.map((w) => `<button class="np-btn np-btn--sm" style="font-size:9px;padding:1px 6px" onclick="openWorker('${esc(w.id)}')" title="${esc(w.role)}">${esc(w.id.slice(0, 8))}${w.cur ? ' <span style="color:var(--np-ok-mark)">●</span>' : ''}</button>`).join('')
       : unitGroups(v.host, v.cap && v.cap.containers);
     return `<div style="border:1px solid var(--np-border);border-radius:8px;padding:8px">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><button class="np-btn np-btn--sm" onclick="openVm('${esc(v.host)}')">${esc(v.host)} ›</button><span class="tnum muted" style="font-size:11px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : '—'}${v.infra ? ' · infra' : ' · ' + fmt(v.done1h) + '/h'}</span></div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0"><button class="np-btn np-btn--sm" onclick="openVm('${esc(v.host)}')">${esc(v.host)} ›</button>${tnBadges(v.cap, true)}</div><span class="tnum muted" style="font-size:11px">${v.load != null ? v.load + '/' + (v.cores || '?') + 'c' : '—'}${v.infra ? ' · infra' : ' · ' + fmt(v.done1h) + '/h'}</span></div>
       ${v.workers.length ? capBlock(v.cap) : ''}
       ${hostMetricsBlock(v.cap)}
       <div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:3px">${inner}</div>
@@ -1925,7 +1947,7 @@ async function viewWorkers() {
     return;
   }
   const card = (w) => { const k = idsafe(w.id); const caps = (w.consumers || []).map((c) => `<span class="np-chip" style="height:16px;font-size:9px">${esc(c)}</span>`).join(' ') || '<span class="muted" style="font-size:10px">—</span>'; return `<section class="np-card" style="cursor:pointer" onclick="openWorker('${esc(w.id)}')"><div class="np-card-b">
-    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="min-width:0"><div style="font-weight:800;font-size:14px">${esc(w.host || w.id)}</div><div class="muted" style="font-size:11.5px">${esc(w.id.slice(0, 12))} · ${(w.consumers || []).length} capacidades</div></div>
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="min-width:0"><div style="font-weight:800;font-size:14px">${esc(w.host || w.id)}</div><div class="muted" style="font-size:11.5px">${esc(w.id.slice(0, 12))} · ${(w.consumers || []).length} capacidades</div>${tnRow(tnBadges((d.hosts || {})[w.host], true))}</div>
       <span class="np-badge ${w.role === 'verify' ? 'info' : 'ok'}" style="height:20px">${esc(w.role)}</span></div>
     <div id="wk_${k}_cur" style="margin-top:10px">${curInner(w)}</div>
     <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:3px">${caps}</div>
@@ -1943,7 +1965,7 @@ window.openWorker = async (id) => {
   let w; try { w = await api('/api/workers/' + encodeURIComponent(id)); } catch (e) { return; }
   const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
   const kv = (k, v) => `<div class="k">${k}</div><div class="v">${v}</div>`;
-  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(w.host || w.id)}</div><div class="muted" style="font-size:12px">${esc(w.role)} · ${esc(w.id)}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(w.host || w.id)}</div><div class="muted" style="font-size:12px">${esc(w.role)} · ${esc(w.id)}</div>${tnRow(tnBadges(w.hostCap, true))}</div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
     <div style="padding:16px 18px">
       <div class="np-kv">${kv('Tarefa atual', w.cur ? esc(w.cur) + ' <span class="muted">(' + (w.curStarted ? durMs(Date.now() - w.curStarted) : '') + ')</span>' : '<span class="muted">idle</span>')}${kv('Feitas (esta hora)', fmt(w.done1h))}${kv('Feitas (24h)', fmt(w.done24h))}${kv('Falhas (esta hora)', fmt(w.fail1h))}${kv('Falhas (24h)', fmt(w.fail24h))}${kv('Duração média', durMs(w.avgMs))}${kv('Role', esc(w.role))}${kv('Capacidades', (w.consumers || []).map((c) => `<span class="np-chip" style="height:18px">${esc(c)}</span>`).join(' ') || '—')}</div>
       <div class="np-sec-t">Capacidade (usado / total · livre)</div>${workerCapBlock(w)}

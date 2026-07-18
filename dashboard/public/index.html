@@ -1463,7 +1463,7 @@ function b64utf8(b64) { try { const bin = atob(b64 || ''); const bytes = Uint8Ar
 // Unidade (container/serviço) está "a correr"? container: running/Up · serviço: active/running.
 const unitUp = (c) => /running|^active|healthy|online|^Up/i.test(c && c.state || '') || /running|healthy|online|^Up/i.test(c && c.status || '');
 const cpuSecFmt = (s) => { const n = +s; return n >= 3600 ? (n / 3600).toFixed(1) + ' h' : n >= 60 ? (n / 60).toFixed(0) + ' min' : n + ' s'; };
-const kindLabel = (k) => ({ service: 'serviço systemd', lxc: 'container LXC', vm: 'VM (Proxmox)', storage: 'storage (Proxmox)', zfs: 'pool ZFS', datastore: 'datastore (PBS)', timer: 'agendamento (timer/cron)', snapshot: 'snapshot' }[k] || 'container Docker');
+const kindLabel = (k) => ({ service: 'serviço systemd', lxc: 'container LXC', vm: 'VM (Proxmox)', storage: 'storage (Proxmox)', zfs: 'pool ZFS', datastore: 'datastore (PBS)', timer: 'agendamento (timer/cron)', snapshot: 'snapshot', template: 'template (VM/CT)', backup: 'backup', vmdisk: 'disco de VM/CT', iso: 'imagem ISO', cttemplate: 'template de CT' }[k] || 'container Docker');
 // Bloco de recursos de uma unidade. container(docker) → CPU%/RAM/rede/IO; serviço → RAM+CPU acumulado (cgroup);
 // lxc/vm → RAM + CPU% (pvesh).
 function containerStatsBlock(c) {
@@ -1477,8 +1477,12 @@ function containerStatsBlock(c) {
       let used = n(c.memb), total = n(c.memtotal);
       if (total == null) { const m = /([\d.]+\s*[KMGTPE]?i?B)\s*\/\s*([\d.]+\s*[KMGTPE]?i?B)/.exec(c.status || ''); if (m) { used = parseSize(m[1]); total = parseSize(m[2]); } }
       if (used != null && total) bars.push(usageBar('Uso', used, total, '', fmtBytes)); else if (used != null) bars.push(memLine('Uso', used));
+    } else if (c.kind === 'backup' || c.kind === 'vmdisk' || c.kind === 'iso' || c.kind === 'cttemplate') {
+      const b = n(c.memb); if (b != null) bars.push(memLine('Tamanho', b));
+      if (c.vmid) chips.push(`<span class="np-chip" style="font-size:10px" title="VM/CT associado">VM/CT ${esc(c.vmid)}</span>`);
+      if (c.storage) chips.push(`<span class="np-chip" style="font-size:10px" title="storage onde reside">${esc(c.storage)}</span>`);
     } else {
-      // lxc/vm → RAM + disco (used/total) + rede acumulada + uptime.
+      // lxc/vm/template → RAM + disco (used/total) + rede acumulada + uptime.
       const mu = n(c.memb), mt = n(c.memtotal); if (mu != null && mt) bars.push(usageBar('RAM', mu, mt, '', fmtBytes)); else if (mu != null) bars.push(memLine('RAM', mu));
       const du = n(c.diskb), dt = n(c.disktotal); if (du != null && dt) bars.push(usageBar('Disco', du, dt, '', fmtBytes)); else if (du != null && du > 0) bars.push(memLine('Disco', du));
       const ni = n(c.netin), no = n(c.netout); if (ni != null || no != null) chips.push(`<span class="np-chip" style="font-size:10px" title="rede acumulada desde o arranque (in/out)">rede ↓${fmtBytes(ni || 0)} ↑${fmtBytes(no || 0)}</span>`);
@@ -1506,7 +1510,7 @@ const containerMini = (c) => { if (!c) return ''; const cpu = c.cpu ? parseFloat
 // Encontra o container de um worker (id do worker = id do container) nos hosts reportados.
 const contForWorker = (hosts, w) => { const cs = ((hosts || {})[w.host] || {}).containers || []; return cs.find((c) => c.id && (c.id === w.id || w.id.startsWith(c.id) || c.id.startsWith(w.id))) || null; };
 // Botão de UMA unidade (container/serviço/lxc/vm/zfs/…): nome + ponto de estado; não-container = tracejado.
-const unitBtn = (host, c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = { lxc: 'LXC·', vm: 'VM·', storage: 'disco·', zfs: 'zfs·', datastore: 'ds·', timer: 'cron·', snapshot: 'snap·' }[c.kind] || ''; const tfaaMk = TFAA_GUESTS.includes(c.name) ? ' <span style="color:#7c3aed;font-weight:800" title="na tailnet Tailscale do cliente TFAA (tail9be421.ts.net)">·TFAA</span>' : ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}${TFAA_GUESTS.includes(c.name) ? ';border-color:#c4b5fd' : ''}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}${tfaaMk}</button>`; };
+const unitBtn = (host, c) => { const col = unitUp(c) ? 'var(--np-ok-mark)' : 'var(--np-bad,#dc2626)'; const dk = !c.kind || c.kind === 'container'; const tag = { lxc: 'LXC·', vm: 'VM·', storage: 'disco·', zfs: 'zfs·', datastore: 'ds·', timer: 'cron·', snapshot: 'snap·', template: 'tmpl·', backup: 'bak·', vmdisk: 'disk·', iso: 'iso·', cttemplate: 'cttmpl·' }[c.kind] || ''; const tfaaMk = TFAA_GUESTS.includes(c.name) ? ' <span style="color:#7c3aed;font-weight:800" title="na tailnet Tailscale do cliente TFAA (tail9be421.ts.net)">·TFAA</span>' : ''; return `<button class="np-btn np-btn--sm" style="font-size:9px${dk ? '' : ';border-style:dashed'}${TFAA_GUESTS.includes(c.name) ? ';border-color:#c4b5fd' : ''}" onclick="event.stopPropagation();openContainer('${esc(host)}','${esc(c.name)}')" title="${esc(kindLabel(c.kind))} · ${esc(c.image || '')} · ${esc(c.status || c.state || '')}"><span style="display:inline-block;width:6px;height:6px;border-radius:50%;background:${col};margin-right:4px;vertical-align:middle"></span>${tag}${esc(c.name)}${tfaaMk}</button>`; };
 // Botões das unidades de um host (nome + ponto de estado; não-container = tracejado).
 const containerChips = (host, cs) => (cs && cs.length) ? cs.map((c) => unitBtn(host, c)).join(' ') : '<span class="muted" style="font-size:10px">sem unidades reportadas</span>';
 // Unidades de TODOS os hosts de um DC (server), com o host de origem taggeado (_host) → cards/drawers de Servidor.
@@ -1522,6 +1526,37 @@ function unitGroups(host, cs) {
   for (const [k, label] of UNIT_ORDER) { if (byKind[k]) { parts.push(sec(k, label)); delete byKind[k]; } }
   for (const k in byKind) parts.push(sec(k, k)); // kinds desconhecidos
   return parts.join('');
+}
+// Conteúdo de um storage/datastore: as unidades content (backup/disco/iso/cttemplate) com storage == nome.
+function storeContentBlock(host, cs, name) {
+  const items = (cs || []).filter((x) => x.storage === name && ['backup', 'vmdisk', 'iso', 'cttemplate'].includes(x.kind));
+  if (!items.length) return `<div class="np-sec-t">Conteúdo</div><span class="muted" style="font-size:10px">(sem conteúdo reportado — ${esc(name)})</span>`;
+  const byKind = {}; for (const x of items) (byKind[x.kind] = byKind[x.kind] || []).push(x);
+  const LABEL = { backup: 'Backups', vmdisk: 'Discos (VM/CT)', iso: 'Imagens ISO', cttemplate: 'CT Templates' };
+  const secs = Object.keys(byKind).map((k) => `<div style="margin-top:8px"><div class="muted" style="font-size:9px;text-transform:uppercase;letter-spacing:.04em">${LABEL[k] || k} (${byKind[k].length})</div><div style="margin-top:3px;display:flex;flex-wrap:wrap;gap:4px">${byKind[k].map((x) => unitBtn(host, x)).join('')}</div></div>`).join('');
+  return `<div class="np-sec-t">Conteúdo (${items.length})</div>${secs}`;
+}
+// Topologia ZFS (pool → mirrors/vdevs → discos) parseada do `zpool status` (logb64).
+function zfsTopoBlock(c) {
+  const txt = b64utf8(c && c.logb64); if (!txt) return '';
+  const raw = []; let cap = false;
+  for (const ln0 of txt.split('\n')) {
+    if (/^\s*config:/.test(ln0)) { cap = true; continue; }
+    if (cap && /^\s*errors:/.test(ln0)) break;
+    if (!cap) continue;
+    const ln = ln0.replace(/\t/g, '  '); const m = /^(\s*)(\S+)\s+(\S+)/.exec(ln);
+    if (!m || m[2] === 'NAME') continue;
+    raw.push({ indent: m[1].length, name: m[2], state: m[3] });
+  }
+  if (!raw.length) return '';
+  const base = Math.min(...raw.map((r) => r.indent));
+  const rows = raw.map((r) => {
+    const depth = Math.max(0, Math.round((r.indent - base) / 2));
+    const isVdev = /^(mirror|raidz|draid|spare|log|cache|special|replacing)/.test(r.name);
+    const col = /ONLINE/.test(r.state) ? 'var(--np-ok-mark)' : /DEGRADED|OFFLINE|UNAVAIL|FAULTED|REMOVED/.test(r.state) ? 'var(--np-bad,#dc2626)' : 'var(--np-warn,#d97706)';
+    return `<div style="font-size:11px;padding-left:${depth * 14}px;display:flex;justify-content:space-between;gap:8px"><span class="np-mono">${isVdev ? '▸ ' : depth > 0 ? '· ' : ''}${esc(r.name)}</span><span style="color:${col};font-weight:700">${esc(r.state)}</span></div>`;
+  });
+  return `<div class="np-sec-t">Topologia (mirrors / vdevs)</div><div style="display:flex;flex-direction:column;gap:2px">${rows.join('')}</div>`;
 }
 // Drawer de um container (mostra-o "como um worker": host, imagem, estado, uptime, portas).
 window.openContainer = async (host, name) => {
@@ -1541,6 +1576,8 @@ window.openContainer = async (host, name) => {
     <div style="padding:16px 18px">
       <div class="np-kv">${kv('Tipo', esc(kindLabel(c.kind)))}${kv('Estado', `<span class="np-badge ${up ? 'ok' : 'warn'}" style="height:18px">${esc(c.status || c.state || '?')}</span>`)}${kv(imgLabel, `<span class="np-mono" style="font-size:11px">${esc(c.image || '—')}</span>`)}${kv('Host', esc(host))}</div>
       ${stats ? `<div class="np-sec-t">Recursos</div>${stats}` : ''}
+      ${c.kind === 'zfs' ? zfsTopoBlock(c) : ''}
+      ${(c.kind === 'storage' || c.kind === 'datastore') ? storeContentBlock(host, H.containers, c.name) : ''}
       ${ports.length ? `<div class="np-sec-t">Portas</div><div style="display:flex;flex-wrap:wrap;gap:4px">${ports.map((p) => `<span class="np-chip" style="font-size:10px">${esc(p)}</span>`).join('')}</div>` : ''}
       ${dk || hasLogs ? `<div class="np-sec-t">Logs (tail)</div>${containerLogsBlock(c)}` : c.kind === 'vm' ? `<div class="np-sec-t">Logs</div><div class="muted" style="font-size:11px">Os logs de uma VM vivem dentro do guest (não acessíveis do host). Abre o host que a VM reporta:</div><div style="margin-top:6px"><button class="np-btn np-btn--sm" onclick="openVm('${esc(c.name)}')">abrir ${esc(c.name)} ›</button></div>` : ''}
       <div class="muted" style="font-size:11px;margin-top:12px">Snapshot (<code>${src}</code>) reportado pelo agente (~5 min).${dk ? ' Rede/IO acumulados desde o arranque.' : c.kind === 'service' ? ' CPU = tempo acumulado (cgroup).' : (c.kind === 'lxc' || c.kind === 'vm') ? ' RAM/disco/rede/uptime via pvesh; logs LXC via pct exec journalctl.' : ''}</div>
@@ -1714,7 +1751,7 @@ function physBlock(pfx, pve) {
 }
 // Secção <details> com ids estáveis (o <details> e o inner div persistem → estado aberto mantido no patch).
 const srvDetails = (pfx, kind, label, count, inner, open) => `<details class="np-details" id="svd_${pfx}_${kind}"${open ? ' open' : ''}><summary><span id="svs_${pfx}_${kind}">${label} <span class="muted">(${count})</span></span></summary><div id="svu_${pfx}_${kind}" style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px">${inner}</div></details>`;
-const SRV_UNIT_ORDER = [['vm', 'VMs'], ['lxc', 'CTs (LXC)'], ['container', 'Containers Docker'], ['service', 'Serviços'], ['timer', 'Crons / timers'], ['zfs', 'Pools ZFS'], ['storage', 'Storage'], ['datastore', 'Datastores'], ['snapshot', 'Snapshots']];
+const SRV_UNIT_ORDER = [['vm', 'VMs'], ['lxc', 'CTs (LXC)'], ['container', 'Containers Docker'], ['service', 'Serviços'], ['timer', 'Crons / timers'], ['template', 'Templates'], ['snapshot', 'Snapshots'], ['backup', 'Backups'], ['vmdisk', 'VM Disks'], ['iso', 'VM Images'], ['cttemplate', 'CT Templates'], ['zfs', 'Pools ZFS'], ['storage', 'Storage'], ['datastore', 'Datastores']];
 // Secções expansíveis (TODAS fechadas por defeito exceto Workers), agregadas de todos os hosts do servidor.
 function srvUnitSections(pfx, list) {
   const units = dcUnits(list);

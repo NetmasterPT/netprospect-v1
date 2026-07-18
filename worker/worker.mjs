@@ -143,7 +143,10 @@ function makeHeavyFineHandlers(ctx, audit, js) {
         const s = summarizeForClassify(html, {});
         cls = (INDUSTRY_LLM && audit) ? await audit.ollama.classifyIndustry(s) : classifyIndustryHeuristic(s);
       }
-      if (cls.industry) await client.request(updateItem('sites', site.id, { industry: cls.industry, industry_confidence: cls.confidence }));
+      // industry_checked_at = marcador "correu" (a `industry` é escrita só quando CLASSIFICA → condicional).
+      const patch = { industry_checked_at: new Date().toISOString() };
+      if (cls.industry) { patch.industry = cls.industry; patch.industry_confidence = cls.confidence; }
+      await client.request(updateItem('sites', site.id, patch));
     } catch (e) { log(`industry ${site.domain}: ${e.message}`); }
     return 'ack';
   }

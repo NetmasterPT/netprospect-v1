@@ -253,7 +253,8 @@ export function makeFineHandlers(ctx, js) {
         if (loc.address && loc.city) break;
       }
     }
-    await client.request(updateItem('sites', job.siteId, { business_city: clip(loc.city, 120), business_region: clip(loc.region, 120), business_address: clip(loc.address) }));
+    // locality_checked_at = marcador "correu" (a morada/cidade é condicional → não serve de marcador).
+    await client.request(updateItem('sites', job.siteId, { business_city: clip(loc.city, 120), business_region: clip(loc.region, 120), business_address: clip(loc.address), locality_checked_at: new Date().toISOString() }));
     return 'ack';
   }
 

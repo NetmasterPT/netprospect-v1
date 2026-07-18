@@ -1,0 +1,70 @@
+{
+  "uid": "netprospect-logs",
+  "title": "NetProspect — Logs (Loki)",
+  "tags": ["netprospect", "logs", "loki"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "time": { "from": "now-1h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "host",
+        "type": "query",
+        "label": "Host",
+        "datasource": { "type": "loki", "uid": "netprospect-loki" },
+        "query": "label_values(host)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".+",
+        "current": { "text": "All", "value": "$__all" }
+      },
+      {
+        "name": "search",
+        "type": "textbox",
+        "label": "Filtro (regex, opcional)",
+        "current": { "text": "", "value": "" }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Volume de logs / min por host",
+      "datasource": { "type": "loki", "uid": "netprospect-loki" },
+      "gridPos": { "h": 7, "w": 18, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "custom": { "drawStyle": "bars", "fillOpacity": 40, "stacking": { "mode": "normal" } }, "unit": "short" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "netprospect-loki" }, "expr": "sum by (host) (count_over_time({host=~\"$host\"} |~ \"$search\" [$__auto]))", "legendFormat": "{{host}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Erros/fatais no intervalo",
+      "datasource": { "type": "loki", "uid": "netprospect-loki" },
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "color": { "mode": "thresholds" }, "thresholds": { "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 1 }, { "color": "red", "value": 50 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["sum"] }, "colorMode": "background", "graphMode": "area", "textMode": "value" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "netprospect-loki" }, "expr": "sum(count_over_time({host=~\"$host\"} |~ \"(?i)(error|fatal|panic|traceback|exception)\" [$__auto]))", "legendFormat": "erros" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "Logs · {host=~\"$host\"} |~ \"$search\"",
+      "datasource": { "type": "loki", "uid": "netprospect-loki" },
+      "gridPos": { "h": 22, "w": 24, "x": 0, "y": 7 },
+      "options": { "showTime": true, "showLabels": false, "showCommonLabels": false, "wrapLogMessage": true, "prettifyLogMessage": false, "enableLogDetails": true, "dedupStrategy": "none", "sortOrder": "Descending" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "netprospect-loki" }, "expr": "{host=~\"$host\"} |~ \"$search\"", "maxLines": 1000 }
+      ]
+    }
+  ]
+}

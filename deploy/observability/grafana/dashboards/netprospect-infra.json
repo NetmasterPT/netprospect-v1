@@ -1,0 +1,104 @@
+{
+  "uid": "netprospect-infra",
+  "title": "NetProspect — Infra (exporters nativos)",
+  "tags": ["netprospect", "infra", "node", "postgres", "redis", "zfs"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "editable": true,
+  "time": { "from": "now-3h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "host",
+        "type": "query",
+        "label": "Host",
+        "datasource": { "type": "prometheus", "uid": "netprospect-fleet" },
+        "query": "label_values(node_uname_info, host)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "allValue": ".+",
+        "current": { "text": "All", "value": "$__all" }
+      }
+    ]
+  },
+  "panels": [
+    { "id": 100, "type": "row", "title": "Hosts (node-exporter)", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 } },
+    {
+      "id": 1, "type": "timeseries", "title": "CPU usado por host (%)",
+      "datasource": { "type": "prometheus", "uid": "netprospect-fleet" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "expr": "100 - (avg by (host) (rate(node_cpu_seconds_total{mode=\"idle\",host=~\"$host\"}[5m])) * 100)", "legendFormat": "{{host}}" } ]
+    },
+    {
+      "id": 2, "type": "timeseries", "title": "RAM usada por host (%)",
+      "datasource": { "type": "prometheus", "uid": "netprospect-fleet" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "expr": "100 * (1 - node_memory_MemAvailable_bytes{host=~\"$host\"} / node_memory_MemTotal_bytes{host=~\"$host\"})", "legendFormat": "{{host}}" } ]
+    },
+    {
+      "id": 3, "type": "timeseries", "title": "Disco / usado por host (%)",
+      "datasource": { "type": "prometheus", "uid": "netprospect-fleet" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 1 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "expr": "100 * (1 - node_filesystem_avail_bytes{mountpoint=\"/\",host=~\"$host\"} / node_filesystem_size_bytes{mountpoint=\"/\",host=~\"$host\"})", "legendFormat": "{{host}}" } ]
+    },
+    { "id": 101, "type": "row", "title": "Postgres (np-db) + Redis (np-server)", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 8 } },
+    {
+      "id": 4, "type": "timeseries", "title": "Postgres — ligações vs max_connections",
+      "datasource": { "type": "prometheus", "uid": "netprospect-fleet" },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [ { "matcher": { "id": "byName", "options": "max_connections" }, "properties": [ { "id": "custom.lineStyle", "value": { "fill": "dash" } }, { "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } } ] } ] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "expr": "sum(pg_stat_database_numbackends)", "legendFormat": "backends" },
+        { "refId": "B", "expr": "max(pg_settings_max_connections)", "legendFormat": "max_connections" }
+      ]
+    },
+    {
+      "id": 5, "type": "stat", "title": "Postgres / Redis / ClickHouse / MinIO up",
+      "datasource": { "type": "prometheus", "uid": "netprospect-fleet" },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "short", "mappings": [ { "type": "value", "options": { "0": { "text": "DOWN", "color": "red" }, "1": { "text": "UP", "color": "green" } } } ], "color": { "mode": "thresholds" }, "thresholds": { "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "textMode": "value_and_name", "orientation": "horizontal" },
+      "targets": [
+        { "refId": "A", "expr": "pg_up", "legendFormat": "Postgres" },
+        { "refId": "B", "expr": "redis_up", "legendFormat": "Redis" },
+        { "refId": "C", "expr": "up{job=\"clickhouse\"}", "legendFormat": "ClickHouse" },
+        { "refId": "D", "expr": "up{job=\"minio\"}", "legendFormat": "MinIO" }
+      ]
+    },
+    {
+      "id": 6, "type": "timeseries", "title": "Redis — memória usada",
+      "datasource": { "type": "prometheus", "uid": "netprospect-fleet" },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 9 },
+      "fieldConfig": { "defaults": { "unit": "bytes" }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
+      "targets": [ { "refId": "A", "expr": "redis_memory_used_bytes", "legendFormat": "usada" } ]
+    },
+    { "id": 102, "type": "row", "title": "ZFS (nós Proxmox)", "gridPos": { "h": 1, "w": 24, "x": 0, "y": 16 } },
+    {
+      "id": 7, "type": "timeseries", "title": "ZFS — capacidade usada por pool (%)",
+      "datasource": { "type": "prometheus", "uid": "netprospect-fleet" },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 17 },
+      "fieldConfig": { "defaults": { "unit": "percent", "min": 0, "max": 100, "custom": { "drawStyle": "line", "fillOpacity": 10 }, "thresholds": { "steps": [ { "color": "green", "value": null }, { "color": "yellow", "value": 70 }, { "color": "red", "value": 85 } ] } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] }, "tooltip": { "mode": "multi", "sort": "desc" } },
+      "targets": [ { "refId": "A", "expr": "zpool_capacity_ratio", "legendFormat": "{{host}} / {{pool}}" } ]
+    },
+    {
+      "id": 8, "type": "stat", "title": "ZFS — saúde das pools",
+      "datasource": { "type": "prometheus", "uid": "netprospect-fleet" },
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 17 },
+      "fieldConfig": { "defaults": { "mappings": [ { "type": "value", "options": { "0": { "text": "DEGRADED", "color": "red" }, "1": { "text": "ONLINE", "color": "green" } } } ], "color": { "mode": "thresholds" }, "thresholds": { "steps": [ { "color": "red", "value": null }, { "color": "green", "value": 1 } ] } }, "overrides": [] },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background", "textMode": "value_and_name", "orientation": "horizontal" },
+      "targets": [ { "refId": "A", "expr": "zpool_health", "legendFormat": "{{host}} / {{pool}}" } ]
+    }
+  ]
+}

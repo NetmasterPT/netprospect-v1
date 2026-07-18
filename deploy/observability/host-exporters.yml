@@ -48,3 +48,23 @@ services:
       - '/dev/kmsg:/dev/kmsg'
     deploy:
       replicas: ${CADVISOR_REPLICAS:-1}
+
+  # Grafana Alloy — shipper de logs (docker + journald) → Loki (hel1-loki). Gate ALLOY_REPLICAS.
+  alloy:
+    image: grafana/alloy:v1.5.1
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/log/journal:/var/log/journal:ro
+      - /etc/machine-id:/etc/machine-id:ro
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+    environment:
+      HOSTNAME_LABEL: ${HOSTNAME_LABEL:-unknown}
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --server.http.listen-addr=${TAILNET_IP}:12345
+      - --storage.path=/tmp/alloy-data
+    deploy:
+      replicas: ${ALLOY_REPLICAS:-1}

@@ -1,0 +1,48 @@
+// Grafana Alloy — shipper de logs por-host → Loki (hel1-loki 100.95.20.65).
+// Recolhe: (1) logs de TODOS os containers Docker deste host; (2) journald (host + serviços systemd).
+// Label `host` vem do env HOSTNAME_LABEL. Ver deploy/observability/host-exporters.yml (serviço alloy).
+
+logging {
+  level = "warn"
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://100.95.20.65:3100/loki/api/v1/push"
+  }
+}
+
+// --- Docker container logs ---
+discovery.docker "dc" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "dc" {
+  targets = discovery.docker.dc.targets
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+}
+
+loki.source.docker "dc" {
+  host       = "unix:///var/run/docker.sock"
+  targets    = discovery.relabel.dc.output
+  forward_to = [loki.process.add_host.receiver]
+}
+
+// --- Journald (host + serviços systemd) ---
+loki.source.journal "jd" {
+  max_age    = "12h"
+  labels     = { job = "journald" }
+  forward_to = [loki.process.add_host.receiver]
+}
+
+// Acrescenta a label `host` a tudo (do env).
+loki.process "add_host" {
+  stage.static_labels {
+    values = { host = sys.env("HOSTNAME_LABEL") }
+  }
+  forward_to = [loki.write.default.receiver]
+}

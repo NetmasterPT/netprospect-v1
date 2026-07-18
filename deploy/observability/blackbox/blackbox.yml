@@ -1,0 +1,27 @@
+# blackbox_exporter — módulos de prova (de1-blackbox CT204 + espelho no hel1 CT204).
+# http_2xx com insecure_skip_verify (as UIs Proxmox são self-signed).
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_status_codes: []          # 2xx
+      fail_if_not_ssl: false
+      tls_config:
+        insecure_skip_verify: true
+  http_2xx_public:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      tls_config:
+        insecure_skip_verify: true
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+  icmp:
+    prober: icmp
+    timeout: 5s
+    icmp:
+      preferred_ip_protocol: ip4

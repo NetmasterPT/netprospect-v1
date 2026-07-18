@@ -108,7 +108,9 @@ services:
   nats:
     image: nats:2.10-alpine
     restart: unless-stopped
-    command: ['-js', '-sd', '/data']
+    # -m 8222 → porta HTTP de monitorização (varz/connz/jsz) SÓ na rede compose (o nats-exporter
+    # lê-a por http://nats:8222; não é publicada no host). Necessária para o prometheus-nats-exporter.
+    command: ['-js', '-sd', '/data', '-m', '8222']
     volumes:
       - ./.data/nats:/data
     ports:
@@ -125,6 +127,38 @@ services:
       - '${LAN_IP}:6379:6379'
       - '${TAILNET_IP}:6379:6379'
       - '127.0.0.1:6379:6379'
+
+  # --- Exporters Prometheus (C5) — scrape pelo Prometheus CT200 via TAILNET_IP. Só métricas, read-only.
+  # Todos ligam aos serviços LOCAIS pela rede compose (nats/redis) ou ao np-db pela tailnet (postgres).
+  nats-exporter:
+    image: natsio/prometheus-nats-exporter:0.15.0
+    restart: unless-stopped
+    # -jsz=all → métricas JetStream (streams/consumers/backlog); -varz/-connz → servidor/ligações.
+    command: ['-varz', '-connz', '-jsz=all', 'http://nats:8222']
+    depends_on: [nats]
+    ports:
+      - '${TAILNET_IP}:7777:7777'
+      - '127.0.0.1:7777:7777'
+
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.66.0
+    restart: unless-stopped
+    environment:
+      REDIS_ADDR: redis://redis:6379
+    depends_on: [redis]
+    ports:
+      - '${TAILNET_IP}:9121:9121'
+      - '127.0.0.1:9121:9121'
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    restart: unless-stopped
+    # Liga ao np-db (Postgres nativo no CT) pela tailnet — diagnostica o watchlist de PG ETIMEDOUT/ligações.
+    environment:
+      DATA_SOURCE_NAME: 'postgresql://${POSTGRES_USER:-netprospect}:${POSTGRES_PASSWORD}@${PG_HOST:-100.77.60.44}:5432/${POSTGRES_DB:-netprospect}?sslmode=disable'
+    ports:
+      - '${TAILNET_IP}:9187:9187'
+      - '127.0.0.1:9187:9187'
 
   # Tracing distribuído (OpenTelemetry) — Jaeger all-in-one recebe OTLP (do dashboard/workers) e serve a UI.
   # O menu "Observabilidade → OpenTelemetry" abre a UI (:16686). OTLP fica interno (mesma rede compose).

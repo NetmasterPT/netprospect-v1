@@ -1469,13 +1469,25 @@ const kindLabel = (k) => ({ service: 'serviço systemd', lxc: 'container LXC', v
 function containerStatsBlock(c) {
   if (!c) return '';
   if (c.kind && c.kind !== 'container') {
-    const mb = c.memb ? +c.memb : null; const bars = [];
-    const memLabel = (c.kind === 'storage' || c.kind === 'zfs' || c.kind === 'datastore') ? 'Uso' : 'RAM';
-    if (mb) bars.push(`<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;font-size:10px"><span class="muted">${memLabel}</span><span class="tnum">${fmtBytes(mb)}</span></div></div>`);
-    const chips = []; const cpuPct = c.cpu ? parseFloat(c.cpu) : null;
+    const bars = [], chips = []; const n = (x) => (x == null || x === '' ? null : +x);
+    const upFmt = (u) => u >= 86400 ? Math.floor(u / 86400) + 'd' : u >= 3600 ? Math.floor(u / 3600) + 'h' : Math.floor(u / 60) + 'm';
+    const memLine = (label, b) => `<div style="margin-top:6px"><div style="display:flex;justify-content:space-between;font-size:10px"><span class="muted">${label}</span><span class="tnum">${fmtBytes(b)}</span></div></div>`;
+    if (c.kind === 'storage' || c.kind === 'zfs' || c.kind === 'datastore') {
+      // Barra de uso: memtotal do agente, ou parse do status ("2.4TB/9.1TB (27%)").
+      let used = n(c.memb), total = n(c.memtotal);
+      if (total == null) { const m = /([\d.]+\s*[KMGTPE]?i?B)\s*\/\s*([\d.]+\s*[KMGTPE]?i?B)/.exec(c.status || ''); if (m) { used = parseSize(m[1]); total = parseSize(m[2]); } }
+      if (used != null && total) bars.push(usageBar('Uso', used, total, '', fmtBytes)); else if (used != null) bars.push(memLine('Uso', used));
+    } else {
+      // lxc/vm → RAM + disco (used/total) + rede acumulada + uptime.
+      const mu = n(c.memb), mt = n(c.memtotal); if (mu != null && mt) bars.push(usageBar('RAM', mu, mt, '', fmtBytes)); else if (mu != null) bars.push(memLine('RAM', mu));
+      const du = n(c.diskb), dt = n(c.disktotal); if (du != null && dt) bars.push(usageBar('Disco', du, dt, '', fmtBytes)); else if (du != null && du > 0) bars.push(memLine('Disco', du));
+      const ni = n(c.netin), no = n(c.netout); if (ni != null || no != null) chips.push(`<span class="np-chip" style="font-size:10px" title="rede acumulada desde o arranque (in/out)">rede ↓${fmtBytes(ni || 0)} ↑${fmtBytes(no || 0)}</span>`);
+      const up = n(c.up); if (up) chips.push(`<span class="np-chip" style="font-size:10px" title="uptime do guest">up ${upFmt(up)}</span>`);
+    }
+    const cpuPct = c.cpu ? parseFloat(c.cpu) : null;
     if (cpuPct != null && !isNaN(cpuPct)) chips.push(`<span class="np-chip" style="font-size:10px" title="CPU instantâneo (pvesh)">CPU ${esc(c.cpu)}</span>`);
     else if (c.cpuSec) chips.push(`<span class="np-chip" style="font-size:10px" title="tempo de CPU acumulado (cgroup)">CPU ${cpuSecFmt(c.cpuSec)} total</span>`);
-    return bars.join('') + (chips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${chips.join('')}</div>` : (mb ? '' : '<span class="muted" style="font-size:10px">sem contabilidade de recursos</span>'));
+    return bars.join('') + (chips.length ? `<div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">${chips.join('')}</div>` : (bars.length ? '' : '<span class="muted" style="font-size:10px">sem contabilidade de recursos</span>'));
   }
   const cpu = c.cpu ? parseFloat(c.cpu) : null;
   const [mu, ml] = pairOf(c.mem), [rx, tx] = pairOf(c.net), [br, bw] = pairOf(c.blk);
@@ -1530,8 +1542,8 @@ window.openContainer = async (host, name) => {
       <div class="np-kv">${kv('Tipo', esc(kindLabel(c.kind)))}${kv('Estado', `<span class="np-badge ${up ? 'ok' : 'warn'}" style="height:18px">${esc(c.status || c.state || '?')}</span>`)}${kv(imgLabel, `<span class="np-mono" style="font-size:11px">${esc(c.image || '—')}</span>`)}${kv('Host', esc(host))}</div>
       ${stats ? `<div class="np-sec-t">Recursos</div>${stats}` : ''}
       ${ports.length ? `<div class="np-sec-t">Portas</div><div style="display:flex;flex-wrap:wrap;gap:4px">${ports.map((p) => `<span class="np-chip" style="font-size:10px">${esc(p)}</span>`).join('')}</div>` : ''}
-      ${dk || hasLogs ? `<div class="np-sec-t">Logs (tail)</div>${containerLogsBlock(c)}` : ''}
-      <div class="muted" style="font-size:11px;margin-top:12px">Snapshot (<code>${src}</code>) reportado pelo agente (~5 min).${dk ? ' Rede/IO acumulados desde o arranque.' : c.kind === 'service' ? ' CPU = tempo acumulado (cgroup).' : ''}</div>
+      ${dk || hasLogs ? `<div class="np-sec-t">Logs (tail)</div>${containerLogsBlock(c)}` : c.kind === 'vm' ? `<div class="np-sec-t">Logs</div><div class="muted" style="font-size:11px">Os logs de uma VM vivem dentro do guest (não acessíveis do host). Abre o host que a VM reporta:</div><div style="margin-top:6px"><button class="np-btn np-btn--sm" onclick="openVm('${esc(c.name)}')">abrir ${esc(c.name)} ›</button></div>` : ''}
+      <div class="muted" style="font-size:11px;margin-top:12px">Snapshot (<code>${src}</code>) reportado pelo agente (~5 min).${dk ? ' Rede/IO acumulados desde o arranque.' : c.kind === 'service' ? ' CPU = tempo acumulado (cgroup).' : (c.kind === 'lxc' || c.kind === 'vm') ? ' RAM/disco/rede/uptime via pvesh; logs LXC via pct exec journalctl.' : ''}</div>
     </div>`;
 };
 // Soma capacidades (usado/total/livre) de uma janela por um conjunto de VMs (aditivo).

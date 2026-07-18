@@ -2045,7 +2045,7 @@ app.post('/api/fleet/metrics/:host', async (req, res) => {
     // Containers Docker do host (docker ps) → mostrados na página VMs como "workers" da VM.
     if (Array.isArray(body.containers)) {
       const S = (v, n) => String(v == null ? '' : v).slice(0, n);
-      const cs = body.containers.slice(0, 120).map((c) => ({ kind: S(c && c.kind, 12) || 'container', id: S(c && c.id, 24), name: S(c && c.name, 64), state: S(c && c.state, 16), status: S(c && c.status, 60), image: S(c && c.image, 90), ports: S(c && c.ports, 160), cpu: S(c && c.cpu, 12), mem: S(c && c.mem, 40), net: S(c && c.net, 40), blk: S(c && c.blk, 40), memb: S(c && c.memb, 24), cpuSec: S(c && c.cpuSec, 16), logb64: S(c && c.logb64, 8000) })).filter((c) => c.name);
+      const cs = body.containers.slice(0, 120).map((c) => ({ kind: S(c && c.kind, 12) || 'container', id: S(c && c.id, 24), name: S(c && c.name, 64), state: S(c && c.state, 16), status: S(c && c.status, 60), image: S(c && c.image, 90), ports: S(c && c.ports, 160), cpu: S(c && c.cpu, 12), mem: S(c && c.mem, 40), net: S(c && c.net, 40), blk: S(c && c.blk, 40), memb: S(c && c.memb, 24), memtotal: S(c && c.memtotal, 24), diskb: S(c && c.diskb, 24), disktotal: S(c && c.disktotal, 24), netin: S(c && c.netin, 24), netout: S(c && c.netout, 24), up: S(c && c.up, 16), cpuSec: S(c && c.cpuSec, 16), logb64: S(c && c.logb64, 8000) })).filter((c) => c.name);
       await r.set(`np:host:${host}:containers`, JSON.stringify(cs), { EX: 900 });
     }
   } catch (e) { return res.status(502).json({ error: e.message }); }

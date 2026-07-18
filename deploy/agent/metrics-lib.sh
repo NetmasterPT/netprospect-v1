@@ -65,16 +65,20 @@ services_json() {
 # Timers systemd (≈ crons) → pseudo-unidades (kind=timer). Estado + próxima execução + descrição.
 timers_json() {
   command -v systemctl >/dev/null 2>&1 || { printf '[]'; return; }
-  local first=1 unit active desc nextus nexts k v
+  local first=1 unit svc active desc nextus nexts lastus lasts k v logb64
   printf '['
   while read -r unit; do
     [ -z "$unit" ] && continue
-    active=""; desc=""; nextus=""
-    while IFS='=' read -r k v; do case "$k" in ActiveState) active=$v ;; Description) desc=$v ;; NextElapseUSecRealtime) nextus=$v ;; esac; done < <(systemctl show "$unit" -p ActiveState -p Description -p NextElapseUSecRealtime 2>/dev/null)
+    active=""; desc=""; nextus=""; lastus=""
+    while IFS='=' read -r k v; do case "$k" in ActiveState) active=$v ;; Description) desc=$v ;; NextElapseUSecRealtime) nextus=$v ;; LastTriggerUSec) lastus=$v ;; esac; done < <(systemctl show "$unit" -p ActiveState -p Description -p NextElapseUSecRealtime -p LastTriggerUSec 2>/dev/null)
     nexts=""; case "$nextus" in ''|*[!0-9]*) ;; *) nexts=$(date -d "@$((nextus / 1000000))" '+%d/%m %H:%M' 2>/dev/null) ;; esac
+    lasts=""; case "$lastus" in ''|0|*[!0-9]*) ;; *) lasts=$(date -d "@$((lastus / 1000000))" '+%d/%m %H:%M' 2>/dev/null) ;; esac
+    # Log = journalctl do serviço que o timer dispara (mostra as últimas execuções + resultado).
+    svc="${unit%.timer}.service"
+    logb64=$(journalctl -u "$svc" -n 12 --no-pager -o cat 2>/dev/null | tail -c 3000 | base64 -w0 2>/dev/null)
     [ "$first" = 1 ] && first=0 || printf ','
-    printf '{"kind":"timer","id":"timer:%s","name":"%s","state":"%s","status":"%s","image":"%s","cpu":"","memb":"","logb64":""}' \
-      "$(esc_json "$unit")" "$(esc_json "${unit%.timer}")" "$(esc_json "$active")" "$(esc_json "${nexts:+próx. $nexts · }$desc")" "$(esc_json "$desc")"
+    printf '{"kind":"timer","id":"timer:%s","name":"%s","state":"%s","status":"%s","image":"%s","cpu":"","memb":"","logb64":"%s"}' \
+      "$(esc_json "$unit")" "$(esc_json "${unit%.timer}")" "$(esc_json "$active")" "$(esc_json "${nexts:+próx. $nexts · }${lasts:+últ. $lasts · }$desc")" "$(esc_json "$desc")" "$logb64"
   done < <(systemctl list-units --type=timer --all --no-legend --plain 2>/dev/null | awk '{print $1}' | head -25)
   printf ']'
 }

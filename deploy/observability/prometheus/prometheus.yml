@@ -92,6 +92,8 @@ scrape_configs:
       - {targets: ['100.120.214.45:9100'], labels: {host: 'np-wk-de1'}}
       - {targets: ['100.75.209.61:9100'], labels: {host: 'oracle-e2-1'}}
       - {targets: ['100.123.27.23:9100'], labels: {host: 'oracle-e2-2'}}
+      - {targets: ['100.86.211.70:9100'], labels: {host: 'hel1-pve'}}      # nó Proxmox (nativo, +ZFS)
+      - {targets: ['100.87.226.117:9100'], labels: {host: 'de1-pve'}}      # nó Proxmox (nativo, +ZFS)
   - job_name: 'cadvisor'
     static_configs:
       - {targets: ['100.108.94.126:8098'], labels: {host: 'hel1-docker'}}

@@ -165,3 +165,8 @@ scrape_configs:
       - {targets: ['100.65.117.95:9100'], labels: {host: 'de1-pbs'}}
       - {targets: ['100.116.29.90:9100'], labels: {host: 'de1-pve-exporter'}}
       - {targets: ['100.105.222.100:9100'], labels: {host: 'de1-blackbox'}}
+
+  # --- laptop Windows (windows_exporter :9182; residencial/intermitente) — P3 ---
+  - job_name: 'windows'
+    static_configs:
+      - {targets: ['100.107.10.15:9182'], labels: {host: 'gpedro-laptop'}}

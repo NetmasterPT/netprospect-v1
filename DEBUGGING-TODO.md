@@ -33,6 +33,13 @@ quando estás a testar algo novo, marca `[resolvido]` quando fechares.
   `worker/worker.mjs` (industry).
 - [ ] **Cobertura >55 (datacenter)** — `lighthouse`/`nuclei`/`industry` devem chegar a 0 pendentes.
   Problema se ficarem presos com `redelivered` a subir até esgotar `maxDeliver` (órfãos).
+- [ ] **subdomains — teto crt.sh (rate-limit por IP)** — o `maxAckPending` foi subido `4→8→16` pelo
+  autoscaler (backlog ~4800, hosts `base` folgados). ⚠️ O autoscaler **só vê CPU** e vai continuar a pedir
+  `16→32→…` porque **NÃO modela o crt.sh**, que é a fonte real do subdomains e **limita POR IP**. A 16/~5
+  hosts `base` ≈ 3/IP (prudente). **Vigiar:** picos de falhas/`✗`/`↻` no `subdomains` com assinatura de
+  crt.sh (429, `rate limit`, timeouts a subir, respostas vazias) → é o teto EXTERNO; **não subir mais**
+  (nem seguir a sugestão do autoscaler) e, se persistir, **baixar** o `SUBDOMAINS_MAX_ACK`. A escala real é
+  +IPs (como o gmb/verify), não +conc. Só subir acima de 16 se o crt.sh estiver limpo E o backlog o exigir.
 - [ ] **Auto-deploy PULL** — os agentes de cada host devem correr sem erro. Problema se: um host para
   de puxar (log do agente sem "sem alterações"/recreate), recreate em loop, ou containers duplicados.
   Ver `deploy/agent/pull-deploy.sh` + `docs/runbook-laptop-autodeploy.md`.
@@ -72,7 +79,7 @@ quando estás a testar algo novo, marca `[resolvido]` quando fechares.
   4. **Veredicto:** saudável K rondas → **VALIDADO** (sai da observação); **regressão** (crash-loop, pico de
      falhas, erro novo, consumers errados) → abrir incidente + reportar na conversa.
   5. **Reescrever a baseline** em `docs/deploy-watch.md` no fim da ronda.
-  Genérico sobre QUALQUER host que apareça — inclui os futuros `de-minio`, `de-analytics`, `np-server`,
+  Genérico sobre QUALQUER host que apareça — inclui os futuros `de-minio`, `hel1-analytics`, `np-server`,
   `np-db` quando entrarem no dashboard como VMs (mesmo modelo: git + `.env` central + agente a recriar).
 
 ## Conhecido/esperado (NÃO reportar como bug)

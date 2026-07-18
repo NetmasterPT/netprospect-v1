@@ -79,7 +79,6 @@
   - [ ] Sell
   - [ ] Client Portal
 - [ ] Pendentes
-  - [ ] ...
   - [ ] Cobertura de jobs — terminar >50 (só >70/>60 feitos). Gargalos: lighthouse (Chromium, lento → horas), industry ~6,6k, whois ~1,3k; gmb ~13k é impraticável no laptop (ver GMB abaixo). Enfileirar por bandas quando houver capacidade.
   - [ ] Backfill snapshot-regen (`fetch snapshotOnly`, ~1M na fila, ~9,5/s → ~30h) — regenera snapshots no MinIO + reclassifica a indústria base-wide; enche o industry de >50 ao longo do tempo.
   - [ ] SSL Labs em batch para leads de topo — job pronto (`enqueue-ssllabs.js --qualified` / `--min-score`); lento/rate-limited (~7/IP), correr num lote pequeno.

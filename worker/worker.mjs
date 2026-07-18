@@ -383,38 +383,51 @@ function makeHandlers(ctx, audit, js) {
 // --- Loops de consumo -------------------------------------------------------
 // enrich/contacts: consumo contínuo com concorrência limitada.
 async function consumeLoop(js, durable, concurrency, fn) {
-  const consumer = await js.consumers.get(STREAM, durable);
-  const messages = await consumer.consume({ max_messages: concurrency });
   const inflight = new Set();
   log(`consumer '${durable}' a consumir (conc ${concurrency})`);
-  for await (const m of messages) {
-    const p = (async () => {
-      const job = decodeJob(m);
-      const label = job?.domain || job?.emailId || job?.ip || durable;
-      const started = Date.now();
-      taskStart(durable, `${durable} · ${label}`); // fire-and-forget (fail-soft)
-      try {
-        const outcome = await fn(job);
-        if (outcome === 'term') { m.term(); taskEnd(durable, started, false); return; }
-        // 'retry' (opt-in do handler, ex.: lighthouse instável): re-tenta com backoff enquanto houver
-        // tentativas; na ÚLTIMA faz ack gracioso (não deixa órfão no workqueue) — sem dados escritos,
-        // por isso a cobertura fica honesta (o site aparece como sem-score, não como "feito").
-        if (outcome === 'retry') {
-          const dc = m.info?.deliveryCount || 1; // 1-based; NATS maxDeliver do lighthouse = 3
-          if (dc < RETRY_MAX_DELIVERIES) { m.nak(RETRY_BACKOFF_MS); taskEnd(durable, started, false); log(`↻ ${durable} ${job?.domain}: retry ${dc}/${RETRY_MAX_DELIVERIES}`); logLine(`↻ ${durable} ${label}: retry ${dc}/${RETRY_MAX_DELIVERIES}`); }
-          else { m.ack(); taskEnd(durable, started, false); log(`✗ ${durable} ${job?.domain}: desisto após ${dc} tentativas (sem dados)`); logLine(`✗ ${durable} ${label}: desisto após ${dc}`); }
-          return;
-        }
-        m.ack(); taskEnd(durable, started, true); logLine(`✓ ${durable} ${label} (${Date.now() - started}ms)`);
-      } catch (e) {
-        const msg = e?.errors ? JSON.stringify(e.errors) : (e?.message || String(e));
-        taskEnd(durable, started, false);
-        if (isTransientJobErr(e)) { m.nak(); log(`↻ ${durable} ${job?.domain}: ${msg}`); logLine(`↻ ${durable} ${label}: ${msg}`); }
-        else { m.term(); log(`✗ ${durable} ${job?.domain}: ${msg}`); logLine(`✗ ${durable} ${label}: ${msg}`); }
+  // RESILIENTE: o iterador do consume() TERMINA se a subscrição fechar (reconexão/drain do NATS). Antes,
+  // o for-await acabava e consumeLoop retornava → com todos os loops a resolver, o Promise.all(loops) em
+  // main() resolvia, o event-loop drenava e o processo saía com EXIT 0 SILENCIOSO — o restart-loop dos
+  // workers browser do incidente 20260716 (RestartCount alto, ExitCode=0, sem crash/OOM). Agora re-subscreve
+  // em vez de morrer; o processo só termina por SIGTERM (shutdown) ou erro fatal em main() (exit 1, visível).
+  for (;;) {
+    try {
+      const consumer = await js.consumers.get(STREAM, durable);
+      const messages = await consumer.consume({ max_messages: concurrency });
+      for await (const m of messages) {
+        const p = (async () => {
+          const job = decodeJob(m);
+          const label = job?.domain || job?.emailId || job?.ip || durable;
+          const started = Date.now();
+          taskStart(durable, `${durable} · ${label}`); // fire-and-forget (fail-soft)
+          try {
+            const outcome = await fn(job);
+            if (outcome === 'term') { m.term(); taskEnd(durable, started, false); return; }
+            // 'retry' (opt-in do handler, ex.: lighthouse instável): re-tenta com backoff enquanto houver
+            // tentativas; na ÚLTIMA faz ack gracioso (não deixa órfão no workqueue) — sem dados escritos,
+            // por isso a cobertura fica honesta (o site aparece como sem-score, não como "feito").
+            if (outcome === 'retry') {
+              const dc = m.info?.deliveryCount || 1; // 1-based; NATS maxDeliver do lighthouse = 3
+              if (dc < RETRY_MAX_DELIVERIES) { m.nak(RETRY_BACKOFF_MS); taskEnd(durable, started, false); log(`↻ ${durable} ${job?.domain}: retry ${dc}/${RETRY_MAX_DELIVERIES}`); logLine(`↻ ${durable} ${label}: retry ${dc}/${RETRY_MAX_DELIVERIES}`); }
+              else { m.ack(); taskEnd(durable, started, false); log(`✗ ${durable} ${job?.domain}: desisto após ${dc} tentativas (sem dados)`); logLine(`✗ ${durable} ${label}: desisto após ${dc}`); }
+              return;
+            }
+            m.ack(); taskEnd(durable, started, true); logLine(`✓ ${durable} ${label} (${Date.now() - started}ms)`);
+          } catch (e) {
+            const msg = e?.errors ? JSON.stringify(e.errors) : (e?.message || String(e));
+            taskEnd(durable, started, false);
+            if (isTransientJobErr(e)) { m.nak(); log(`↻ ${durable} ${job?.domain}: ${msg}`); logLine(`↻ ${durable} ${label}: ${msg}`); }
+            else { m.term(); log(`✗ ${durable} ${job?.domain}: ${msg}`); logLine(`✗ ${durable} ${label}: ${msg}`); }
+          }
+        })().finally(() => inflight.delete(p));
+        inflight.add(p);
+        if (inflight.size >= concurrency) await Promise.race(inflight);
       }
-    })().finally(() => inflight.delete(p));
-    inflight.add(p);
-    if (inflight.size >= concurrency) await Promise.race(inflight);
+      log(`⚠ consumer '${durable}': iterador terminou (reconexão/drain do NATS?) — re-subscrevo em 2s`);
+    } catch (e) {
+      log(`⚠ consumer '${durable}': erro no consumo (${e?.message || e}) — re-subscrevo em 2s`);
+    }
+    await sleep(2000);
   }
 }
 
@@ -583,7 +596,15 @@ async function main() {
   process.on('SIGINT', shutdown);
 
   log(`consumers ativos: ${active.join(', ')}`);
+  // Watcher da ligação: se o NATS fechar DE VEZ (não reconecta), sai LOUD (exit 1, visível) em vez de
+  // deixar os loops morrerem em silêncio. Os consumeLoop já re-subscrevem em reconexões transitórias.
+  nc.closed().then((err) => { console.error(`NATS fechou${err ? `: ${err.message}` : ''} — a sair (exit 1)`); process.exit(1); });
   await Promise.all(loops);
+  // Os loops NUNCA devem resolver (correm para sempre). Se chegámos aqui, todos terminaram → condição
+  // anómala (ligação perdida) → sai LOUD para o Docker reiniciar. O exit-0 SILENCIOSO era o restart-loop
+  // invisível do incidente 20260716 (RestartCount alto, ExitCode=0, sem crash/OOM).
+  console.error('todos os loops de consumo terminaram — condição anómala, a sair (exit 1)');
+  process.exit(1);
 }
 
 main().catch((err) => { console.error('Erro fatal no worker:', err); process.exit(1); });

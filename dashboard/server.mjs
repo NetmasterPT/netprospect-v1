@@ -2294,6 +2294,20 @@ app.get('/api/autoscale', async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
+// ── Moloni — sync de leitura (A3). On-demand a partir do dashboard.
+// Import DINÂMICO da lib/: o container do dashboard só serve isto se montar ../lib
+// (como os workers). Falha graciosa (502) enquanto não estiver montada — não parte o arranque.
+app.post('/api/moloni/sync', async (req, res) => {
+  try {
+    const entity = String(req.query.entity || 'all');
+    let mod;
+    try { mod = await import('./lib/moloni-sync.js'); }        // container: /app/lib
+    catch { mod = await import('../lib/moloni-sync.js'); }     // host: repo/lib
+    const result = entity === 'all' ? await mod.syncAll() : await mod.syncEntity(entity);
+    res.json({ ok: true, result });
+  } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => { ensureFleetDir(); console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`); });

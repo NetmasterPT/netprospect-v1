@@ -16,6 +16,7 @@
     "posthog-js": "^1.402.0",
     "@opentelemetry/sdk-node": "^0.54.0",
     "@opentelemetry/auto-instrumentations-node": "^0.52.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.54.0"
+    "@opentelemetry/exporter-trace-otlp-http": "^0.54.0",
+    "@directus/sdk": "^23.0.0"
   }
 }

@@ -141,6 +141,11 @@ async function main() {
   // Outreach Fase 2 — envio cold multi-conta + supressão.
   await ensureCollection('sending_accounts', { icon: 'alternate_email', note: 'Mailboxes de envio (estado + warmup + contadores; credenciais em config/sending-accounts.json)' });
   await ensureCollection('dnc', { icon: 'block', note: 'Do-Not-Contact (unsubscribes, bounces, complaints)' });
+  // Integrações — Moloni (Contabilidade) + Agendamentos.
+  await ensureCollection('products', { icon: 'inventory_2', note: 'Produtos/serviços (sync Moloni)' });
+  await ensureCollection('moloni_documents', { icon: 'receipt_long', note: 'Documentos Moloni (faturas, recibos, NC/ND, fornecedores…)' });
+  await ensureCollection('moloni_avencas', { icon: 'event_repeat', note: 'Avenças / recorrências fiscais (Moloni)' });
+  await ensureCollection('agendamentos', { icon: 'calendar_month', note: 'Agendamentos (Google Calendar + Notion ligados)' });
 
   // 2) Campos escalares
   console.log('Campos: platforms');
@@ -343,6 +348,9 @@ async function main() {
   await ensureField('companies', 'client_since', ts());
   await ensureField('companies', 'client_mrr', float());   // mensalidade (manutenção + alojamento), €
   await ensureField('companies', 'client_notes', text());
+  // Integrações — ligação ao cliente Moloni.
+  await ensureField('companies', 'moloni_customer_id', str()); // customer_id no Moloni
+  await ensureField('companies', 'nif', str());                // NIF/VAT — chave de match c/ Moloni
 
   console.log('Campos: contacts');
   await ensureField('contacts', 'name', str());
@@ -391,6 +399,66 @@ async function main() {
   await ensureField('segments', 'owner', str());
   await ensureField('segments', 'created_at', dateCreated());
 
+  console.log('Campos: subscriptions (ligação Moloni)');
+  // subscriptions foi criada ad-hoc no admin (fora deste bootstrap) — só acrescenta o campo se existir.
+  {
+    const cols = await client.request(readCollections());
+    if (cols.some((c) => c.collection === 'subscriptions')) {
+      await ensureField('subscriptions', 'moloni_service_id', str()); // product_id (serviço) no Moloni
+    } else {
+      console.log('= subscriptions ausente (criada no admin?) — salto moloni_service_id');
+    }
+  }
+
+  console.log('Campos: products');
+  await ensureField('products', 'moloni_id', str());   // product_id no Moloni
+  await ensureField('products', 'name', str());
+  await ensureField('products', 'reference', str());
+  await ensureField('products', 'summary', text());
+  await ensureField('products', 'kind', enumS(['produto', 'servico'])); // Moloni type 1=produto / 2=serviço
+  await ensureField('products', 'price', float());     // preço unitário (líquido)
+  await ensureField('products', 'tax_id', int());      // tax_id Moloni do IVA aplicável
+  await ensureField('products', 'created_at', dateCreated());
+
+  console.log('Campos: moloni_documents');
+  const MOLONI_DOC_TYPES = ['fatura', 'fatura_simplificada', 'fatura_recibo', 'recibo', 'nota_credito', 'nota_debito', 'fatura_fornecedor', 'fatura_recibo_fornecedor', 'orcamento', 'guia_transporte'];
+  await ensureField('moloni_documents', 'moloni_id', str());   // document_id no Moloni
+  await ensureField('moloni_documents', 'document_type', enumS(MOLONI_DOC_TYPES));
+  await ensureField('moloni_documents', 'number', str());
+  await ensureField('moloni_documents', 'customer_moloni_id', str());
+  await ensureField('moloni_documents', 'customer_name', str());
+  await ensureField('moloni_documents', 'date', ts());
+  await ensureField('moloni_documents', 'net', float());
+  await ensureField('moloni_documents', 'vat', float());
+  await ensureField('moloni_documents', 'total', float());
+  await ensureField('moloni_documents', 'status', int());      // 0=rascunho, 1=fechado (comunicado à AT)
+  await ensureField('moloni_documents', 'pdf_cached', bool(false));
+  await ensureField('moloni_documents', 'created_at', dateCreated());
+
+  console.log('Campos: moloni_avencas');
+  await ensureField('moloni_avencas', 'moloni_id', str());
+  await ensureField('moloni_avencas', 'name', str());
+  await ensureField('moloni_avencas', 'customer_moloni_id', str());
+  await ensureField('moloni_avencas', 'amount', float());
+  await ensureField('moloni_avencas', 'period', str());        // mensal/trimestral/anual
+  await ensureField('moloni_avencas', 'next_date', ts());
+  await ensureField('moloni_avencas', 'active', bool(true));
+  await ensureField('moloni_avencas', 'created_at', dateCreated());
+
+  console.log('Campos: agendamentos');
+  await ensureField('agendamentos', 'title', str());
+  await ensureField('agendamentos', 'contact_name', str());
+  await ensureField('agendamentos', 'contact_email', str());
+  await ensureField('agendamentos', 'start', ts());
+  await ensureField('agendamentos', 'end', ts());
+  await ensureField('agendamentos', 'status', enumS(['agendado', 'realizado', 'cancelado', 'no_show']));
+  await ensureField('agendamentos', 'meet_link', str());
+  await ensureField('agendamentos', 'gcal_event_id', str());
+  await ensureField('agendamentos', 'notion_page_id', str());
+  await ensureField('agendamentos', 'notion_url', str());
+  await ensureField('agendamentos', 'notes', text());
+  await ensureField('agendamentos', 'created_at', dateCreated());
+
   // 3) Campos relacionais (M2O FK + junção)
   await ensureField('sites', 'company', m2oField());
   await ensureField('sites', 'primary_platform', m2oField());
@@ -404,6 +472,10 @@ async function main() {
   await ensureField('emails', 'campaign', m2oField());
   await ensureField('emails', 'contact', m2oField());
   await ensureField('emails', 'site', m2oField());
+  // Integrações — Moloni / Agendamentos → companies
+  await ensureField('moloni_documents', 'company', m2oField());
+  await ensureField('moloni_avencas', 'company', m2oField());
+  await ensureField('agendamentos', 'company', m2oField());
 
   // Aliases reversos (O2M / M2M)
   await ensureField('companies', 'sites', aliasO2M());
@@ -411,6 +483,8 @@ async function main() {
   await ensureField('sites', 'platforms', aliasM2M());
   await ensureField('sites', 'reports', aliasO2M());
   await ensureField('campaigns', 'emails', aliasO2M());
+  await ensureField('companies', 'moloni_documents', aliasO2M());
+  await ensureField('companies', 'agendamentos', aliasO2M());
 
   // 4) Relações
   console.log('Relações');
@@ -492,6 +566,28 @@ async function main() {
     field: 'site',
     related_collection: 'sites',
     meta: { many_field: 'site', one_field: null, sort_field: null },
+    schema: { on_delete: 'SET NULL' },
+  });
+  // Integrações — Moloni / Agendamentos → companies
+  await ensureRelation({
+    collection: 'moloni_documents',
+    field: 'company',
+    related_collection: 'companies',
+    meta: { many_field: 'company', one_field: 'moloni_documents', sort_field: null, one_deselect_action: 'nullify' },
+    schema: { on_delete: 'SET NULL' },
+  });
+  await ensureRelation({
+    collection: 'moloni_avencas',
+    field: 'company',
+    related_collection: 'companies',
+    meta: { many_field: 'company', one_field: null, sort_field: null },
+    schema: { on_delete: 'SET NULL' },
+  });
+  await ensureRelation({
+    collection: 'agendamentos',
+    field: 'company',
+    related_collection: 'companies',
+    meta: { many_field: 'company', one_field: 'agendamentos', sort_field: null, one_deselect_action: 'nullify' },
     schema: { on_delete: 'SET NULL' },
   });
 

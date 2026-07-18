@@ -60,6 +60,11 @@ services:
     build: ../../dashboard
     restart: unless-stopped
     depends_on: [directus, redis]
+    # Injeta TODO o .env sincronizado do store (inclui os blocos de integração:
+    # MOLONI_*, SANDBOX_MOLONI_*, GOOGLE_SA_*, NOTION_*, DOCUMENSO_*, OPENPROVIDER_*,
+    # STRIPE_*, … ) no container — o `environment:` abaixo continua a ter precedência.
+    env_file:
+      - .env
     environment:
       PORT: '3000'
       DIRECTUS_URL: http://directus:8055
@@ -100,6 +105,8 @@ services:
       - '127.0.0.1:3001:3000'
     volumes:
       - ../../config:/app/config:ro
+      # lib/ partilhada (clientes de integração: moloni, moloni-sync, notion, google, … )
+      - ../../lib:/app/lib:ro
       # Store dos .env por host (auto-deploy por pull). RW — o dashboard edita, os agentes puxam.
       - ../../fleet-env:/app/fleet-env
 

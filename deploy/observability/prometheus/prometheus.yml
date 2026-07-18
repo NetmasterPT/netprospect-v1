@@ -94,6 +94,13 @@ scrape_configs:
       - {targets: ['100.123.27.23:9100'], labels: {host: 'oracle-e2-2'}}
       - {targets: ['100.86.211.70:9100'], labels: {host: 'hel1-pve'}}      # nó Proxmox (nativo, +ZFS)
       - {targets: ['100.87.226.117:9100'], labels: {host: 'de1-pve'}}      # nó Proxmox (nativo, +ZFS)
+      # VMs não-NP (hel1, vmbr1)
+      - {targets: ['10.10.10.58:9100'], labels: {host: 'speech'}}
+      - {targets: ['10.10.10.63:9100'], labels: {host: 'intern-4'}}
+      - {targets: ['10.10.10.70:9100'], labels: {host: 'tailscale-tfaa'}}
+      - {targets: ['10.10.10.71:9100'], labels: {host: 'non-tailscale-tfaa'}}
+      - {targets: ['10.10.10.90:9100'], labels: {host: 'factory-prod'}}
+      - {targets: ['10.10.10.91:9100'], labels: {host: 'factory-staging'}}
   - job_name: 'cadvisor'
     static_configs:
       - {targets: ['100.108.94.126:8098'], labels: {host: 'hel1-docker'}}
@@ -139,6 +146,7 @@ scrape_configs:
       - {targets: ['10.10.10.2:9100'], labels: {host: 'pbs'}}
       - {targets: ['10.10.10.3:9100'], labels: {host: 'pdm'}}
       - {targets: ['10.10.10.4:9100'], labels: {host: 'pmg'}}
+      - {targets: ['10.10.10.5:9100'], labels: {host: 'npm'}}          # alpine/OpenRC
       - {targets: ['10.10.10.10:9100'], labels: {host: 'prometheus'}}
       - {targets: ['10.10.10.11:9100'], labels: {host: 'grafana'}}
       - {targets: ['10.10.10.13:9100'], labels: {host: 'pve-exporter'}}

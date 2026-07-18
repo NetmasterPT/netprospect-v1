@@ -1,0 +1,25 @@
+// Grafana Alloy (nativo) — journald → Loki. Para hosts SEM Docker: nós Proxmox + CTs (np-db/Postgres, etc).
+// Label `host` do env HOSTNAME_LABEL. Ver deploy/observability/alloy/install-alloy-native.sh.
+
+logging {
+  level = "warn"
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://100.95.20.65:3100/loki/api/v1/push"
+  }
+}
+
+loki.source.journal "jd" {
+  max_age    = "12h"
+  labels     = { job = "journald" }
+  forward_to = [loki.process.add_host.receiver]
+}
+
+loki.process "add_host" {
+  stage.static_labels {
+    values = { host = sys.env("HOSTNAME_LABEL") }
+  }
+  forward_to = [loki.write.default.receiver]
+}

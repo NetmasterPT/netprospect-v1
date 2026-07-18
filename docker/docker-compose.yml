@@ -102,112 +102,116 @@ services:
 #       timeout: 5s
 #       retries: 5
 
-  directus:
-    image: directus/directus:11.3.5
-    restart: unless-stopped
-    environment:
-      KEY: ${DIRECTUS_KEY}
-      SECRET: ${DIRECTUS_SECRET}
-      ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
-      ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
-      # Token estático atribuído ao admin no bootstrap do Directus v11.
-      # É com este token que bootstrap-directus.js e enrich-sites.js autenticam.
-      ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
-      DB_CLIENT: pg
-      DB_HOST: 100.77.60.44
-      DB_PORT: '5432'
-      DB_DATABASE: ${POSTGRES_DB}
-      DB_USER: ${POSTGRES_USER}
-      DB_PASSWORD: ${POSTGRES_PASSWORD}
-      # Pool de ligações ao Postgres — default ~10 é o TETO real de queries simultâneas
-      # (os host jobs + workers batem tudo via REST). Subido p/ mais concorrência.
-      DB_POOL_MIN: '4'
-      DB_POOL_MAX: '40'
-      CACHE_ENABLED: 'false'
-      TELEMETRY: 'false'
-      # Limitador de pressão mais tolerante: várias pipelines (enrich/extract) em
-      # paralelo bloqueiam o event loop com queries grandes; o default 500ms
-      # devolvia 503 "Under pressure". Damos mais folga (a instância é isolada).
-      PRESSURE_LIMITER_MAX_EVENT_LOOP_DELAY: '1500'
-      PRESSURE_LIMITER_MAX_EVENT_LOOP_UTILIZATION: '0.99'
-      PUBLIC_URL: ${DIRECTUS_PUBLIC_URL:-http://localhost:8056}
-      CORS_ENABLED: 'true'
-      CORS_ORIGIN: 'true'
-    volumes:
-      - ./.data/directus:/directus/uploads
-    ports:
-      - '${DIRECTUS_PORT:-8056}:8055'
-    healthcheck:
-      test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8055/server/health']
-      interval: 15s
-      timeout: 5s
-      retries: 10
+  # ─── Directus → MOVIDO para o np-server (instância isolada · http://100.114.17.74:8056). A frota usa DIRECTUS_URL. Comentado (2026-07-18).
+#   directus:
+#     image: directus/directus:11.3.5
+#     restart: unless-stopped
+#     environment:
+#       KEY: ${DIRECTUS_KEY}
+#       SECRET: ${DIRECTUS_SECRET}
+#       ADMIN_EMAIL: ${DIRECTUS_ADMIN_EMAIL}
+#       ADMIN_PASSWORD: ${DIRECTUS_ADMIN_PASSWORD}
+#       # Token estático atribuído ao admin no bootstrap do Directus v11.
+#       # É com este token que bootstrap-directus.js e enrich-sites.js autenticam.
+#       ADMIN_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+#       DB_CLIENT: pg
+#       DB_HOST: 100.77.60.44
+#       DB_PORT: '5432'
+#       DB_DATABASE: ${POSTGRES_DB}
+#       DB_USER: ${POSTGRES_USER}
+#       DB_PASSWORD: ${POSTGRES_PASSWORD}
+#       # Pool de ligações ao Postgres — default ~10 é o TETO real de queries simultâneas
+#       # (os host jobs + workers batem tudo via REST). Subido p/ mais concorrência.
+#       DB_POOL_MIN: '4'
+#       DB_POOL_MAX: '40'
+#       CACHE_ENABLED: 'false'
+#       TELEMETRY: 'false'
+#       # Limitador de pressão mais tolerante: várias pipelines (enrich/extract) em
+#       # paralelo bloqueiam o event loop com queries grandes; o default 500ms
+#       # devolvia 503 "Under pressure". Damos mais folga (a instância é isolada).
+#       PRESSURE_LIMITER_MAX_EVENT_LOOP_DELAY: '1500'
+#       PRESSURE_LIMITER_MAX_EVENT_LOOP_UTILIZATION: '0.99'
+#       PUBLIC_URL: ${DIRECTUS_PUBLIC_URL:-http://localhost:8056}
+#       CORS_ENABLED: 'true'
+#       CORS_ORIGIN: 'true'
+#     volumes:
+#       - ./.data/directus:/directus/uploads
+#     ports:
+#       - '${DIRECTUS_PORT:-8056}:8055'
+#     healthcheck:
+#       test: ['CMD', 'wget', '-qO-', 'http://127.0.0.1:8055/server/health']
+#       interval: 15s
+#       timeout: 5s
+#       retries: 10
 
   # Dashboard / Diretório de Empresas (Node + Express) — consulta o Directus do
   # lado do servidor. Atrás do Authentik/npmPlus em produção.
-  dashboard:
-    build: ../dashboard
-    restart: unless-stopped
-    depends_on:
-      - directus
-      - redis
-    environment:
-      PORT: '3000'
-      DIRECTUS_URL: ${DIRECTUS_URL:-http://directus:8055}
-      DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
-      # Cache (fail-soft) das agregações pesadas (/api/stats ~18 queries, contagens
-      # de segmentos). REDIS_URL vazio = desligado (tudo live). TTL curto p/ frescura.
-      REDIS_URL: ${REDIS_URL:-redis://redis:6379}
-      CACHE_TTL: ${CACHE_TTL:-60}
-      # Publica jobs de auditoria on-demand (POST /api/audit) — Fase 2b.
-      NATS_URL: ${NATS_URL:-nats://nats:4222}
-      # Agentes IA (B4) — Ollama on-prem (perfil `audit`). Fail-soft se em baixo.
-      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
-      OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-240000}
-      DIRECTUS_PUBLIC_URL: ${DIRECTUS_PUBLIC_URL:-http://localhost:8056}
-      # Analytics (Fase E) — timeline por site + view de gatilhos. Vazio = desligado.
-      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-}
-      CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
-      CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}
-      CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-clickhouse}
-      # Campanhas (Fase F) — só p/ o dashboard mostrar o modo (smtp vs dry-run).
-      SMTP_HOST: ${SMTP_HOST:-}
-      # PostHog (product analytics do dashboard): serve o client SDK via /api/posthog-config e
-      # envia os eventos server-side ao /capture/. Vazio = desligado (fail-soft). Valor em docker/.env.
-      POSTHOG_PUBLIC_KEY: ${POSTHOG_PUBLIC_KEY:-}
-      POSTHOG_PUBLIC_HOST: ${POSTHOG_PUBLIC_HOST:-}
-    ports:
-      - '${DASHBOARD_PORT:-3001}:3000'
-    volumes:
-      # Config (ro) p/ a página Configuração ler RESUMOS (nº de chaves/proxies/ângulos).
-      # Os segredos são lidos server-side mas NUNCA servidos ao browser (só contagens).
-      - ../config:/app/config:ro
+  # ─── Dashboard → MOVIDO para o np-server (canónico, containers server-* · http://100.114.17.74:3001). Comentado (2026-07-18).
+#   dashboard:
+#     build: ../dashboard
+#     restart: unless-stopped
+#     depends_on:
+#       - directus
+#       - redis
+#     environment:
+#       PORT: '3000'
+#       DIRECTUS_URL: ${DIRECTUS_URL:-http://directus:8055}
+#       DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
+#       # Cache (fail-soft) das agregações pesadas (/api/stats ~18 queries, contagens
+#       # de segmentos). REDIS_URL vazio = desligado (tudo live). TTL curto p/ frescura.
+#       REDIS_URL: ${REDIS_URL:-redis://redis:6379}
+#       CACHE_TTL: ${CACHE_TTL:-60}
+#       # Publica jobs de auditoria on-demand (POST /api/audit) — Fase 2b.
+#       NATS_URL: ${NATS_URL:-nats://nats:4222}
+#       # Agentes IA (B4) — Ollama on-prem (perfil `audit`). Fail-soft se em baixo.
+#       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+#       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
+#       OLLAMA_TIMEOUT_MS: ${OLLAMA_TIMEOUT_MS:-240000}
+#       DIRECTUS_PUBLIC_URL: ${DIRECTUS_PUBLIC_URL:-http://localhost:8056}
+#       # Analytics (Fase E) — timeline por site + view de gatilhos. Vazio = desligado.
+#       CLICKHOUSE_URL: ${CLICKHOUSE_URL:-}
+#       CLICKHOUSE_DB: ${CLICKHOUSE_DB:-netprospect}
+#       CLICKHOUSE_USER: ${CLICKHOUSE_USER:-netprospect}
+#       CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:-change-me-clickhouse}
+#       # Campanhas (Fase F) — só p/ o dashboard mostrar o modo (smtp vs dry-run).
+#       SMTP_HOST: ${SMTP_HOST:-}
+#       # PostHog (product analytics do dashboard): serve o client SDK via /api/posthog-config e
+#       # envia os eventos server-side ao /capture/. Vazio = desligado (fail-soft). Valor em docker/.env.
+#       POSTHOG_PUBLIC_KEY: ${POSTHOG_PUBLIC_KEY:-}
+#       POSTHOG_PUBLIC_HOST: ${POSTHOG_PUBLIC_HOST:-}
+#     ports:
+#       - '${DASHBOARD_PORT:-3001}:3000'
+#     volumes:
+#       # Config (ro) p/ a página Configuração ler RESUMOS (nº de chaves/proxies/ângulos).
+#       # Os segredos são lidos server-side mas NUNCA servidos ao browser (só contagens).
+#       - ../config:/app/config:ro
 
   # Fila de jobs (NATS JetStream). Por omissão só em 127.0.0.1 (produtores enqueue-*.js
   # no host). Para a FROTA REMOTA de workers (VMs cloud) alcançar a fila, expor na
   # interface TAILNET: pôr NATS_BIND=<ip-tailscale-deste-host> no docker/.env (NUNCA
   # 0.0.0.0 sem firewall — NATS não tem auth aqui). Ver docs/distributed-fleet.md.
-  nats:
-    image: nats:2.10-alpine
-    restart: unless-stopped
-    command: ['-js', '-sd', '/data']
-    ports:
-      - '127.0.0.1:4222:4222'
-      - '${TAILNET_IP}:4222:4222'   # frota (tailnet) — NATS sem auth → NUNCA público
-    volumes:
-      - ./.data/nats:/data
+  # ─── NATS → MOVIDO para o np-server (nats://100.114.17.74:4222). A frota usa NATS_URL. Comentado (2026-07-18).
+#   nats:
+#     image: nats:2.10-alpine
+#     restart: unless-stopped
+#     command: ['-js', '-sd', '/data']
+#     ports:
+#       - '127.0.0.1:4222:4222'
+#       - '${TAILNET_IP}:4222:4222'   # frota (tailnet) — NATS sem auth → NUNCA público
+#     volumes:
+#       - ./.data/nats:/data
 
   # Cache (Redis) — acelera as agregações pesadas do dashboard (/api/stats etc.).
   # SÓ cache: sem persistência (--save '' + appendonly no), LRU quando cheio. O
   # dashboard é fail-soft (Redis em baixo → corre tudo live). Só em 127.0.0.1.
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '128mb', '--maxmemory-policy', 'allkeys-lru']
-    ports:
-      - '127.0.0.1:6379:6379'
-      - '${TAILNET_IP}:6379:6379'   # telemetria da frota (tailnet)
+  # ─── Redis → MOVIDO para o np-server (redis://100.114.17.74:6379). A frota usa REDIS_URL. Comentado (2026-07-18).
+#   redis:
+#     image: redis:7-alpine
+#     restart: unless-stopped
+#     command: ['redis-server', '--save', '', '--appendonly', 'no', '--maxmemory', '128mb', '--maxmemory-policy', 'allkeys-lru']
+#     ports:
+#       - '127.0.0.1:6379:6379'
+#       - '${TAILNET_IP}:6379:6379'   # telemetria da frota (tailnet)
 
   # MinIO (S3) — snapshots de páginas (Fase B) + reports INTEGRAIS das auditorias.
   #
@@ -216,24 +220,25 @@ services:
   # latency-tolerante, logo desperdiçava o NVMe do HEL1. A frota toda aponta ao
   # de-minio via MINIO_URL. Este serviço fica como ROLLBACK (dados em .data/minio)
   # e para dev local. Ver docs/runbook-minio-de1.md.
-  minio:
-    image: minio/minio:latest
-    restart: unless-stopped
-    command: ['server', '/data', '--console-address', ':9001']
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-netprospect}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
-    ports:
-      - '127.0.0.1:9000:9000'
-      - '${TAILNET_IP}:9000:9000'   # snapshots p/ os workers da frota (tailnet)
-      - '127.0.0.1:9001:9001'
-    volumes:
-      - ./.data/minio:/data
-    healthcheck:
-      test: ['CMD', 'mc', 'ready', 'local']
-      interval: 15s
-      timeout: 5s
-      retries: 5
+  # ─── MinIO → MOVIDO para o de-minio (VM 300 @ de1-pve · http://100.124.43.117:9000). A frota usa MINIO_URL; .data/minio fica p/ rollback/dev. Comentado (2026-07-18).
+#   minio:
+#     image: minio/minio:latest
+#     restart: unless-stopped
+#     command: ['server', '/data', '--console-address', ':9001']
+#     environment:
+#       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-netprospect}
+#       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-me-minio}
+#     ports:
+#       - '127.0.0.1:9000:9000'
+#       - '${TAILNET_IP}:9000:9000'   # snapshots p/ os workers da frota (tailnet)
+#       - '127.0.0.1:9001:9001'
+#     volumes:
+#       - ./.data/minio:/data
+#     healthcheck:
+#       test: ['CMD', 'mc', 'ready', 'local']
+#       interval: 15s
+#       timeout: 5s
+#       retries: 5
 
   # Worker replicável da pipeline (enrich + contactos; auditoria pesada na 2b).
   #   docker compose -f docker/docker-compose.yml up -d --build worker
@@ -244,11 +249,11 @@ services:
       dockerfile: worker/Dockerfile
     restart: unless-stopped
     init: true  # PID 1 = tini, reap dos zombies do Chromium (Lighthouse/GMB)
-    depends_on:
-      directus:
-        condition: service_healthy
-      nats:
-        condition: service_started
+#     depends_on:
+#       directus:
+#         condition: service_healthy
+#       nats:
+#         condition: service_started
     environment:
       DIRECTUS_URL: ${DIRECTUS_URL:-http://directus:8055}
       DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
@@ -324,11 +329,11 @@ services:
       dockerfile: worker/Dockerfile.base
     restart: unless-stopped
     init: true
-    depends_on:
-      directus:
-        condition: service_healthy
-      nats:
-        condition: service_started
+#     depends_on:
+#       directus:
+#         condition: service_healthy
+#       nats:
+#         condition: service_started
     environment:
       DIRECTUS_URL: ${DIRECTUS_URL:-http://directus:8055}
       DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
@@ -407,9 +412,9 @@ services:
       dockerfile: worker/Dockerfile.base
     restart: unless-stopped
     init: true
-    depends_on:
-      nats:
-        condition: service_started
+#     depends_on:
+#       nats:
+#         condition: service_started
     environment:
       DIRECTUS_URL: ${DIRECTUS_URL:-http://directus:8055}
       DIRECTUS_TOKEN: ${DIRECTUS_ADMIN_TOKEN}
@@ -494,8 +499,8 @@ services:
     profiles: ['tailscale']
     hostname: ${TS_HOSTNAME:-netprospect-directus}
     restart: unless-stopped
-    depends_on:
-      - directus
+#     depends_on:
+#       - directus
     environment:
       TS_AUTHKEY: ${TS_AUTHKEY:-}
       TS_STATE_DIR: /var/lib/tailscale

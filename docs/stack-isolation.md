@@ -18,7 +18,7 @@
 |---|---|---|---|
 | **postgres + pgbouncer** | disco rápido + latência à app | **`np-db`** (CT, HEL1) | ✅ **FEITO** |
 | **minio** | **disco-pesado**, escreve-1×/lê-raro, latency-**tolerante** | **`de-minio`** (DE1, 500 GB) | ✅ **FEITO** |
-| **clickhouse + posthog** | disco-pesado, analítico, latency-tolerante | **`de-analytics`** (DE1) | 🟠 VM por criar |
+| **clickhouse + posthog** | disco-pesado, analítico, latency-tolerante | **`hel1-analytics`** (HEL1, VM 509) | ✅ **FEITO** (PostHog ainda opt-in) |
 | **ollama** | **CPU-pesado** (inferência), latency-tolerante (segundos) | **`hel1-ollama`** (CPU, sem GPU) | 🟠 VM criada, deploy pendente |
 | **nats** | ⚡ **latência-CRÍTICA** (os workers puxam em loop) | **`np-server`** — VM no MESMO Proxmox (LAN) | 🟡 a separar |
 | **redis** | latência-sensível (cache + telemetria), minúsculo | **`np-server`** (idem) | 🟡 a separar |
@@ -40,11 +40,12 @@ Era **o caso mais óbvio de todos**. Object storage: escreve-se uma vez no fim d
 escreve lá (HEL1 + os **dois** projetos compose do DE1). Round-trip validado das duas pontas.
 👉 [`runbook-minio-de1.md`](./runbook-minio-de1.md) · falta só parar o MinIO local do HEL1 (§8, rollback).
 
-### 🟠 ClickHouse + PostHog → `de-analytics` (DE1)
+### ✅ ClickHouse → `hel1-analytics` (HEL1, VM 509)
 Mesmo perfil do MinIO (armazém analítico, colunar, latency-tolerante, e a crescer).
-**Decisão: MANTER** — a Fase E tem **10M observações**, é dado real. Vai para o disco barato do DE1.
-O PostHog usa ClickHouse como backend → vivem juntos (é o pesado: traz Postgres+Redis+Kafka próprios,
-+4-6 GB → *opt-in*).
+**Decisão: MANTER** — a Fase E tem **~13,8M observações**, é dado real. Vive numa VM dedicada
+`hel1-analytics` (200 GB). Foi migrado HEL1→`de-analytics`(DE1) e depois **re-consolidado de volta no HEL1**
+(a `de-analytics` foi apagada para aliviar o de1-pve). O PostHog usa ClickHouse como backend → viveria
+junto (é o pesado: traz Postgres+Redis+Kafka próprios, +4-6 GB → *opt-in*, ainda não instalado).
 👉 [`runbook-analytics-de.md`](./runbook-analytics-de.md)
 
 ### 🟠 Ollama → `hel1-ollama` (CPU, **sem GPU**)
@@ -81,7 +82,7 @@ tailnet → para esses nada muda.
 1. ~~**MinIO → DE1**~~ — ✅ **FEITO** (maior ganho de disco, risco quase nulo).
 2. **Free VMs como Worker L** (`security` + `whois`) — add-only, sem tocar no HEL1; precisa da imagem
    `worker-security` (sem Chromium, arm64).
-3. **`de-analytics`** (ClickHouse + PostHog) e **`hel1-ollama`** — ambos fail-soft, risco baixo.
+3. **`hel1-analytics`** (ClickHouse; PostHog opt-in) e **`hel1-ollama`** — ambos fail-soft, risco baixo.
 4. **`np-server`** (Directus+Dashboard+NATS+Redis) — a maior libertação de CPU no HEL1, mas mexe no que
    corre → fazer com os backfills drenados.
 5. **Workers pesados → VMs de CPU** (com a fila dedicada) — escala as auditorias para lá do teto do HEL1.

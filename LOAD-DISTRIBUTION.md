@@ -14,7 +14,7 @@
 | **np-wk-de1** | 100.120.214.45 | de1 | `security` (nuclei/wpscan) + `ai` — projeto `/root/np-worker-heavy` (`.env.heavy`) | worker | 3 | ✅ a correr |
 | **de-minio** | 100.124.43.117 | de1 | MinIO — 500G storage-zfs / ext4 (VMID 300) | minio | 1 | ✅ **MIGRADO — toda a frota escreve aqui** |
 | **hel1-ollama** | 100.126.196.112 (LAN `10.10.10.53`) | hel1 | Ollama (CPU, sem GPU) — LXC CT, nativo | — | — | ✅ a servir on-demand |
-| **de-analytics** | 100.115.240.35 | de1 | ClickHouse (10,2M observações) — 200G ext4 (VMID 301) | clickhouse | 1 | ✅ **MIGRADO** |
+| **hel1-analytics** | 100.120.43.49 | hel1 | ClickHouse (~13,8M observações) — 200G ext4 (VMID 509) | clickhouse | 1 | ✅ **MIGRADO** (re-consolidado no HEL1; a `de-analytics`/DE1 foi apagada) |
 | **de1-pve** | 100.87.226.117 | de1 | *host Proxmox* (não é da stack — exit node, `tag:proxmox`) | — | — | ✅ |
 | **gpedro-laptop** | 100.107.10.15 | laptop | `residential` (**GMB** — IP residencial) + overflow opcional | worker | 1 | ✅ a correr (intermitente ⁸) |
 | **oracle-e2-1** | 100.75.209.61 | oracle (free) | `base` → só **whois** (E2.1.Micro 2 vCPU/950 MB) — proj. `~/np-worker` | worker-base | 1 | ✅ a correr (2026-07-14) |
@@ -88,7 +88,7 @@ E cada VM extra traz o **seu IP** → quota própria de rate-limit (registries d
 | **redis** | latência-sensível (cache+telemetria), minúsculo | **np-server** | — | ✅ **FEITO** ¹ |
 | **directus** | REST sobre a DB (os workers já a contornam via A2) | **np-server** | — | ✅ **FEITO** ¹ |
 | **dashboard** | leve, user-facing | **np-server** | — | ✅ **FEITO** ¹ |
-| **clickhouse** (+ posthog opt-in) | disco-pesado, analítico (a Fase E tem **10,2M observações**) | **de-analytics** (DE1) | — | ✅ **FEITO** ³ |
+| **clickhouse** (+ posthog opt-in) | disco-pesado, analítico (a Fase E tem **~13,8M observações**) | **hel1-analytics** (HEL1) | — | ✅ **FEITO** ³ |
 | **ollama** | CPU-bound — **sem GPU** (decisão de custo: fica em CPU) | **hel1-ollama** | — | ✅ **FEITO** ⁴ |
 
 <sub>
@@ -101,9 +101,10 @@ O único estado a migrar é o JetStream do NATS. Runbook: <a href="docs/runbook-
 Runbook: <a href="docs/runbook-minio-de1.md">docs/runbook-minio-de1.md</a>. O MinIO local do HEL1 fica
 parado como rollback (dados intactos em <code>docker/.data/minio</code>).
 <br>
-³ **Feito** (2026-07): ClickHouse migrado para a <strong>de-analytics</strong> (DE1) — 10.236.938
-observations + 43.106 change_events, contagem exata; escrita+leitura remotas validadas; o CH local do
-HEL1 desmantelado (rollback em <code>docker/.data/clickhouse</code>). O <strong>PostHog</strong> (opt-in
+³ **Feito** (2026-07): ClickHouse na <strong>hel1-analytics</strong> (HEL1, VM 509) — ~13,8M observations
++ change_events; escrita+leitura remotas validadas. Primeiro foi movido HEL1→<code>de-analytics</code> (DE1),
+depois <strong>re-consolidado de volta no HEL1</strong> (VM <code>hel1-analytics</code>) e a
+<code>de-analytics</code>/DE1 <strong>apagada</strong> (aliviar o de1-pve). O <strong>PostHog</strong> (opt-in
 pesado, +4-6 GB) fica para depois, na mesma VM. Runbook: <a href="docs/runbook-analytics-de.md">docs/runbook-analytics-de.md</a>.
 <br>
 ⁴ **Sem GPU (decisão de custo).** O Ollama fica em CPU no `hel1-ollama` (VM dedicada → não rouba CPU ao
@@ -129,7 +130,7 @@ Runbook: <a href="docs/runbook-ollama-hel1.md">docs/runbook-ollama-hel1.md</a>.
 | hel1 | **hel1-docker** *(ex-monólito)* | — | 18 | 251 GB | 99 GB NVMe | Workers `browser`+`base`+`security`+`ai` (4H+5B) + MinIO-rollback | ✅ |
 | hel1 | **hel1-ollama** | 503 | 6 | 8 GB | 300 GB (CT/ZFS) | Ollama CPU (LXC CT) — on-demand | ✅ |
 | de1 | **de-minio** | 300 | 2 | 4 GB | 500 GB storage-zfs | MinIO (reports + snapshots) | ✅ |
-| de1 | **de-analytics** | 301 | 6 | 16 GB | 20 GB root + **200 GB** dados | ClickHouse ✅ (PostHog ⏸️ — ver §6) | ✅ |
+| hel1 | **hel1-analytics** | 509 | 6 | 16 GB | 20 GB root + **200 GB** dados | ClickHouse ✅ (PostHog ⏸️ — ver §6) | ✅ |
 | de1 | **np-wk-de1** | — | 6 | 23 GB | 99 GB | Workers `base` (proj. `np-worker`) + `security`+`ai` (proj. `np-worker-heavy`) | ✅ |
 | laptop | **gpedro-laptop** | — | 22 | 16 GB | 30 GB | `residential` (GMB) + overflow opcional — Windows/Docker Desktop | ✅ ⁸ |
 | oracle (free) | **oracle-e2-1** | — | 2 | 950 MB | 46 GB + 1 GB swap | Worker `base`→**whois** (E2.1.Micro always-free ⁹) | ✅ (2026-07-14) |
@@ -196,9 +197,10 @@ host remoto uma fatia de um job que os locais **também** consomem.
 **~~Fase 3 — Analytics + IA para fora do HEL1~~** · ✅ **FEITO** *(2026-07)*
 
 - `hel1-ollama` (Ollama CPU, nativo num LXC CT) a servir o on-demand; Ollama local do HEL1 desmantelado.
-- `de-analytics` (ClickHouse, 10,2M observações) migrado e validado; CH local do HEL1 desmantelado.
-- Resultado: o HEL1 largou o Ollama **e** o ClickHouse → mais CPU + disco para o Lighthouse.
-- Falta só o **PostHog** (opt-in) na `de-analytics`, quando/se quiseres product-analytics.
+- `hel1-analytics` (ClickHouse, ~13,8M observações) migrado e validado. (Nota: 1º foi para a `de-analytics`/DE1,
+  depois re-consolidado no HEL1 numa VM dedicada `hel1-analytics` e a `de-analytics` apagada.)
+- Resultado: o `hel1-docker` largou o Ollama **e** o ClickHouse → mais CPU + disco para o Lighthouse.
+- Falta só o **PostHog** (opt-in) na `hel1-analytics`, quando/se quiseres product-analytics.
 
 **Fase 4 — Decompor o HEL1 monolítico** · *risco médio (mexe no que corre) → fazer com os backfills drenados*
 
@@ -259,12 +261,12 @@ host remoto uma fatia de um job que os locais **também** consomem.
 | # | Decisão | Estado |
 | --- | --- | --- |
 | 1 | **Método de deploy** | ✅ **Tu** crias a VM + corres o `bootstrap-vm.sh`; o **Claude** faz o deploy do role e mantém este inventário. Ambos com SSH. |
-| 2 | **ClickHouse — usar ou desmantelar?** | ✅ **Manter** (10M observações) → vai para a `de-analytics`. |
+| 2 | **ClickHouse — usar ou desmantelar?** | ✅ **Manter** (~13,8M observações) → `hel1-analytics` (HEL1, VM 509). |
 | 3 | **industry (IA) — GPU ou heurístico?** | ✅ **Heurístico** no batch (154× mais rápido, custo 0). O Ollama fica em CPU no `hel1-ollama` para on-demand. **Sem compra de GPU.** |
 | 4 | **Directus — np-server ou co-localizar no np-db?** | ✅ **np-server** (os workers já escrevem direto ao PG via A2 → a chattiness dele importa menos). |
 | 5 | **Oracle A1 = ARM** | 🟡 **Aberto** — construir a `worker-security` multi-arch (arm64)? Sem Chromium é trivial. **Prioridade subiu:** é o que acelera o batch WPScan (24,8k em curso, só HEL1+DE1). |
 | 6 | **WPScan** | ✅ **Resolvido** — **batch keyless** (`enqueue-wpscan.js`) p/ todos os ~1,57M sites WP (enumera, sem vuln-DB); a **API key fica só p/ on-demand** (1 key por host, 25/dia). |
-| 7 | **PostHog** | ⛔ **Precisa de VM própria.** O compose hand-rolled partia no bootstrap do CH; o `install.sh` **oficial** é o caminho certo MAS o stack "hobby" são **~40 serviços** (Elasticsearch, Temporal, Kafka, Zookeeper, 2× ClickHouse, browserless, SeaweedFS…) — não cabe na `de-analytics` (6c/16GB, que já corre o ClickHouse de analytics **em uso**); ia dar OOM. **Decisão pendente:** VM dedicada `de-posthog` (~8c/32GB) **ou** PostHog Cloud (free tier) **ou** deixar de fora (a analítica do NetProspect NÃO depende disto). |
+| 7 | **PostHog** | ⛔ **Precisa de VM própria.** O compose hand-rolled partia no bootstrap do CH; o `install.sh` **oficial** é o caminho certo MAS o stack "hobby" são **~40 serviços** (Elasticsearch, Temporal, Kafka, Zookeeper, 2× ClickHouse, browserless, SeaweedFS…) — não cabe na `hel1-analytics` (6c/16GB, que já corre o ClickHouse de analytics **em uso**); ia dar OOM. **Decisão pendente:** VM dedicada `hel1-posthog` (~8c/32GB) **ou** PostHog Cloud (free tier) **ou** deixar de fora (a analítica do NetProspect NÃO depende disto). |
 
 ## 7. Concorrência DINÂMICA por core (padrão auto-escala) — 2026-07-14
 

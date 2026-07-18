@@ -32,7 +32,7 @@ reporters), com um hook `extra_units_json` para telemetria específica.
 
 | Reporter | Onde corre | Como | Reporta |
 |---|---|---|---|
-| `pull-deploy.sh` (passo 4) | hosts com repo+docker (hel1, de1, oracle, np-server, de-minio, de-analytics) | systemd/user timer | host + serviços + containers Docker |
+| `pull-deploy.sh` (passo 4) | hosts com repo+docker (hel1, de1, oracle, np-server, de-minio, hel1-analytics) | systemd/user timer | host + serviços + containers Docker |
 | `metrics-report.sh` | infra sem repo (np-db, de1-pdm) | systemd timer (root) | host + serviços |
 | `proxmox-report.sh` | hel1-pve, de1-pve (user **npmetrics**, não-root) | systemd timer | host + serviços + **LXC + VMs + storage + ZFS** |
 | `pbs-report.sh` | de1-pbs (dentro do LXC) | systemd timer (root) | host + serviços + **datastores** |
@@ -95,17 +95,21 @@ exceções em [[fleet-autodeploy]].
 
 ## 5. Alertas
 
-`deploy/observability/netprospect.rules.yml` → instalado em `/etc/prometheus/rules/netprospect.yml`
-(o `rule_files` já é `/etc/prometheus/rules/*.yml`). Encaminhados pelo **Alertmanager** (CT 203) →
-receivers default/warning/critical. Alertas: `NetProspectDashboardDown`, `NetProspectNoWorkers`,
-`NetProspectHostMetricsStale`, `NetProspectHostHighCPU/HighMem/DiskFull`, `NetProspectHighDirectusLatency`,
-`NetProspectHostOverloaded`.
+Regras versionadas em `deploy/observability/prometheus/rules/*.yml` (4 ficheiros: `netprospect.yml`,
+`netprospect-infra.yml`, `netprospect-queues.yml`, `proxmox.yml`) → instaladas em `/etc/prometheus/rules/`
+(o `rule_files` já é `/etc/prometheus/rules/*.yml`) via **`deploy/observability/push-configs.sh`** (valida
+com `promtool check rules` antes de aplicar + SIGHUP). Encaminhadas pelo **Alertmanager** (CT 203) →
+receivers default/warning/critical → **ntfy** (webhook do dashboard). Alertas: dashboard/workers down,
+telemetria stale, CPU/RAM/disco altos, latência ao Directus, load/core, **swap alto** (de1), filas presas
+e órfãos, Postgres/Redis/ClickHouse/MinIO/node down, filesystem cheio, ZFS degraded/cheio.
 
 ## 6. Grafana
 
-Dashboard em `deploy/observability/grafana-netprospect.json` (datasource Prometheus). Importar em
-`hel1-grafana` (Import → cola o JSON) ou provisionar por ficheiro em
-`/etc/grafana/provisioning/dashboards/`. Painéis: CPU/RAM/disco por host, latências, throughput (jobs/h),
+3 dashboards **provisionados** em `deploy/observability/grafana/dashboards/` (deploy via `push-configs.sh`):
+`netprospect.json` (Frota — Prometheus/np_host_*), `netprospect-logs.json` (Logs — Loki), `netprospect-infra.json`
+(Infra — exporters nativos: node/pg/redis/clickhouse/minio/zfs). Datasources provisionados em
+`grafana/provisioning/datasources/` (uids fixos `netprospect-fleet`/`netprospect-loki`/`netprospect-jaeger`).
+Painéis da Frota: CPU/RAM/disco por host, latências, throughput (jobs/h),
 workers vivos, unidades por tipo.
 
 ## 7. Tracing (OpenTelemetry) — LIVE

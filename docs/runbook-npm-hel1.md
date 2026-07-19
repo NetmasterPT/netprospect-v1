@@ -28,9 +28,10 @@ Os docs vivem sob `/docs/` (e, na F6, `/notebook/`) do proxy host **existente** 
 adicionar via **Advanced → Custom Nginx Configuration** desse proxy host:
 
 ```nginx
-# Site de docs (F2) — o docs-web (nginx) serve na raiz; o trailing slash tira o /docs/.
+# Site de docs (F2) — o docs-web (nginx) serve SOB /docs/ (o site tem base=/docs/).
+# proxy_pass SEM barra final → o /docs/ passa intacto (não fazer strip, senão os assets 404).
 location /docs/ {
-    proxy_pass http://100.114.17.74:8088/;
+    proxy_pass http://100.114.17.74:8088;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
 }

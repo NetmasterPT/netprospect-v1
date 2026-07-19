@@ -50,7 +50,7 @@ O `nginx` serve o `dist` novo sem recreate (é um bind-mount read-only).
 Adicionar uma **custom location** ao proxy host `netprospect.netmaster.pt` (que já vai para o dashboard):
 ```nginx
 location /docs/ {
-    proxy_pass http://<np-server-tailnet-ip>:8088/;   # trailing slash → tira o /docs/
+    proxy_pass http://<np-server-tailnet-ip>:8088;    # SEM barra final → /docs/ passa intacto
     proxy_set_header Host $host;
 }
 ```

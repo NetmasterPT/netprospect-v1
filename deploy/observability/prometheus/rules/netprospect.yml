@@ -17,7 +17,9 @@ groups:
         labels: { severity: warning, service: netprospect }
         annotations: { summary: "Host {{ $labels.host }} sem telemetria há >20min" }
       - alert: NetProspectHostHighCPU
-        expr: np_host_cpu_percent > 90
+        # cores >= 8 evita falsos-positivos em CTs pequenos (exporters/monitorização de 1-2c
+        # saturam 1 core = 100% mas é benigno) — mesmo guard que o NetProspectHostOverloaded.
+        expr: np_host_cpu_percent > 90 and np_host_cores >= 8
         for: 10m
         labels: { severity: warning, service: netprospect }
         annotations: { summary: "CPU alto em {{ $labels.host }} ({{ $value | printf \"%.0f\" }}%)" }

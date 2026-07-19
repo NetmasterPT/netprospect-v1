@@ -3,9 +3,9 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { embed } from '../../lib/kb/embed.mjs';
-import { search } from '../../lib/kb/qdrant.mjs';
-import { htmlToText } from '../../lib/kb/chunk.mjs';
+import { embed } from '../kb/embed.mjs';
+import { search } from '../kb/qdrant.mjs';
+import { htmlToText } from '../kb/chunk.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CONTENT = process.env.KB_CONTENT || path.join(HERE, '../src/content.json');

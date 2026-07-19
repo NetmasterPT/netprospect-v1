@@ -3,9 +3,9 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { embed } from '../../lib/kb/embed.mjs';
-import { ensureCollection, upsert, count } from '../../lib/kb/qdrant.mjs';
-import { htmlToText, chunk } from '../../lib/kb/chunk.mjs';
+import { embed } from '../kb/embed.mjs';
+import { ensureCollection, upsert, count } from '../kb/qdrant.mjs';
+import { htmlToText, chunk } from '../kb/chunk.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const content = JSON.parse(fs.readFileSync(path.join(HERE, '../src/content.json'), 'utf8'));

@@ -1,5 +1,5 @@
 ---
-title: "Mapa de Módulos (código)"
+title: Mapa de Módulos (código)
 type: reference
 tags: [code, modules, generated]
 related: [[README]]

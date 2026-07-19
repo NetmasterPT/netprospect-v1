@@ -42,16 +42,13 @@ if [ "$fwd" != "$IP_DE" ] || [ "$rev" != "$HELO." ]; then
 fi
 echo "   ✓ FCrDNS OK"
 
-# 2) password do proxy (estável) --------------------------------------------
-say "2) password do proxy"
-if [ ! -f "$PASSFILE" ]; then openssl rand -hex 16 > "$PASSFILE"; chmod 600 "$PASSFILE"; echo "   gerada"; else echo "   reusada"; fi
-PASS=$(cat "$PASSFILE")
+# 2) (sem password — o Dante usa socksmethod:none, só escuta em 127.0.0.1) ---
 
 # 3) config/verify-proxies.json (lido pelo worker verify no hel1-docker) -----
 say "3) config/verify-proxies.json"
-printf '[{ "id":"val1", "host":"127.0.0.1", "port":1080, "user":"proxyuser", "pass":"%s", "ip":"%s", "helo":"%s" }]\n' \
-  "$PASS" "$IP_DE" "$HELO" > "$REPO/config/verify-proxies.json"
-python3 -c "import json;json.load(open('$REPO/config/verify-proxies.json'));print('   ok (JSON válido)')"
+printf '[{ "id":"val1", "host":"127.0.0.1", "port":1080, "ip":"%s", "helo":"%s" }]\n' \
+  "$IP_DE" "$HELO" > "$REPO/config/verify-proxies.json"
+python3 -c "import json;json.load(open('$REPO/config/verify-proxies.json'));print('   ok (JSON válido, sem auth)')"
 
 # 4) deploy/reacher/.env -----------------------------------------------------
 say "4) deploy/reacher/.env"
@@ -59,8 +56,8 @@ printf 'TAILNET_IP=%s\nREACHER_HELLO=%s\nREACHER_FROM=%s\n' "$DEMINIO_TS" "$HELO
 echo "   HELO=$HELO  FROM=$FROM"
 
 # 5) de-minio: proxyuser + Dante + Reacher -----------------------------------
-say "5) de-minio: proxyuser + Dante + Reacher"
-$SSH "$DEMINIO" "id proxyuser >/dev/null 2>&1 || useradd --no-create-home --shell /usr/sbin/nologin proxyuser; echo 'proxyuser:$PASS' | chpasswd; mkdir -p /root/netprospect-v1/deploy/reacher"
+say "5) de-minio: Dante + Reacher"
+$SSH "$DEMINIO" "mkdir -p /root/netprospect-v1/deploy/reacher"
 scp -o StrictHostKeyChecking=no "$REPO/deploy/reacher/docker-compose.yml" "$REPO/deploy/reacher/danted.conf" "$REPO/deploy/reacher/.env" "$DEMINIO:/root/netprospect-v1/deploy/reacher/" >/dev/null
 $SSH "$DEMINIO" "cd /root/netprospect-v1/deploy/reacher && docker compose up -d 2>&1 | tail -3"
 

@@ -279,6 +279,9 @@ services:
       POSTHOG_KEY: ${POSTHOG_KEY:-}
       # Heavy image: só faz os roles pesados (browser/security/ai) quando AUDIT_ENABLED.
       WORKER_ROLES: ${WORKER_ROLES:-browser,security,ai}
+      # Reacher (verificação SMTP, role verify) — vazio = só APIs free. Ver deploy/reacher/.
+      REACHER_URL: ${REACHER_URL:-}
+      REACHER_FROM_EMAIL: ${REACHER_FROM_EMAIL:-}
       FLEET_HOST: ${FLEET_HOST:-hel1-docker}
       OTEL_ENABLED: ${OTEL_ENABLED:-1}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://100.114.17.74:4318}

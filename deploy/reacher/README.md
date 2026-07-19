@@ -35,26 +35,25 @@ Passo-a-passo detalhado (OpenProvider + Hetzner Robot, por-domínio) em
    `dig +short p1.<D>` = `49.12.120.250` **e** `dig +short -x 49.12.120.250` = `p1.<D>.`
 4. **Blocklist-clean** (re-confirmar): `for bl in zen.spamhaus.org b.barracudacentral.org bl.spamcop.net; do dig +short 250.120.12.49.$bl; done` → tudo vazio.
 
-## Fase 1 — deploy (em de-minio)
+## Fase 1 — deploy (um comando)
 
-1. **User `proxyuser`** no host (o Dante autentica por PAM):
-   ```bash
-   PASS=$(openssl rand -hex 16)
-   useradd --no-create-home --shell /usr/sbin/nologin proxyuser
-   echo "proxyuser:$PASS" | chpasswd
-   echo "guarda a PASS → vai para config/verify-proxies.json"
-   ```
-2. **Env**: `cd deploy/reacher && cp .env.example .env` e preencher `REACHER_HELLO=p1.<D>`, `REACHER_FROM=verify@<D>`
-   (o `TAILNET_IP=100.124.43.117` já está certo para de-minio).
-3. **Arrancar**: `docker compose -f deploy/reacher/docker-compose.yml up -d` (puxa a imagem, arranca dante + reacher).
-4. **`config/verify-proxies.json`** (na raiz do repo, gitignored) — 1 proxy:
+Tudo isto está automatizado em **`deploy/reacher/activate.sh <domínio>`** (gate FCrDNS → escreve
+`config/verify-proxies.json` + `.env` → deploya Dante+Reacher no de-minio → `REACHER_URL` no store +
+recria o worker → smoke-tests). O que ele faz, para referência:
+
+1. **`config/verify-proxies.json`** (raiz do repo, gitignored) — 1 proxy, **sem auth** (o Dante escuta só
+   em `127.0.0.1`, socksmethod:none → não precisa de user/pass):
    ```json
-   [{ "id":"val1", "host":"127.0.0.1", "port":1080, "user":"proxyuser", "pass":"<PASS>",
-      "ip":"49.12.120.250", "helo":"p1.<D>" }]
+   [{ "id":"val1", "host":"127.0.0.1", "port":1080, "ip":"49.12.120.250", "helo":"p1.<D>" }]
    ```
-   Distribuir para o host que corre `verify` (hel1-docker — o mount `./config` já existe).
-5. **REACHER_URL no worker**: `REACHER_URL=http://100.124.43.117:8080` + `REACHER_FROM_EMAIL=verify@<D>` no store
-   da frota do host verify (`PUT /api/fleet/env/hel1-docker`); o pull-agent recria o worker.
+   Lido pelo worker `verify` no hel1-docker (o mount `./config` já existe).
+2. **`deploy/reacher/.env`** em de-minio: `TAILNET_IP=100.124.43.117`, `REACHER_HELLO=p1.<D>`, `REACHER_FROM=verify@<D>`.
+3. **Arranca** `docker compose -f deploy/reacher/docker-compose.yml up -d` (Dante + Reacher).
+4. **`REACHER_URL=http://100.124.43.117:8080`** + `REACHER_FROM_EMAIL=verify@<D>` no store da frota
+   (`PUT /api/fleet/env/hel1-docker`) → recria o worker (o `docker/docker-compose.yml` já passa as vars).
+
+**Guarda de blocklist** (proteção do IP): `deploy/reacher/blocklist-guard.sh install` instala um timer
+`--user` horário que pausa o Reacher (move `verify-proxies.json`→`.paused`) + alerta se o IP for listado.
 
 ## Fase 2 — validar + ligar
 

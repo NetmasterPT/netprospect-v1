@@ -290,6 +290,7 @@ export function makeFineHandlers(ctx, js) {
       || (job.domain ? (await client.request(readItems('sites', { filter: { domain: { _eq: job.domain } }, fields: ['id', 'domain', 'company', 'ip_country', 'final_url'], limit: 1 })))[0] : null);
     if (!site) return 'ack';
     const defaultCountry = tldToCountry(site.domain, site.ip_country);
+    try { // falha a meio (fetch .nl pendura/lança, extração) → marca contacts_checked_at no catch (não orfaniza)
     // Snapshot do MinIO; se não houver (ex.: job coarse), faz fetch de recurso.
     let snap = await getSnapshot(site.id);
     if (!snap?.html) {
@@ -339,6 +340,7 @@ export function makeFineHandlers(ctx, js) {
     await client.request(updateItem('sites', site.id, patch));
     await pub(SUBJECTS.score, { domain: site.domain, siteId: site.id }, `score:${site.domain}`);
     return 'ack';
+    } catch { await client.request(updateItem('sites', site.id, { contacts_checked_at: new Date().toISOString() })).catch(() => {}); return 'ack'; }
   }
 
   // ---- SCORE (convergência: qualify + lead score; dispara auditorias) -------

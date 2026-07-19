@@ -18,6 +18,13 @@ Serve `netprospect.netmaster.pt/docs/` (e, nas fases seguintes, `/notebook/` + o
    `get_doc`, `list_related`). Corre via `node docs-site/mcp/stdio.mjs` e usa o mesmo Qdrant/Ollama.
 5. **Site**: a busca semântica chama `kb-http` `/search` (o NPMplus mapeia `/api/kb/` → `kb-http:8099`).
 
+> [!note] Modelo de embedding & relevância
+> Default `all-minilm` (384-dim) — leve, mas **fraco em Português** (relevância mista nos testes). Para
+> melhor qualidade PT, trocar `KB_EMBED_MODEL` por um **multilingue** e re-ingerir:
+> `paraphrase-multilingual` (384-dim, mesma velocidade, drop-in) **ou** `bge-m3` (1024-dim, melhor mas mais
+> lento → ajustar `KB_EMBED_DIM=1024` + apagar a coleção). O hel1-ollama é CPU (~2.6s/embed) → a ingestão é
+> um job de fundo; considerar um host com mais CPU/GPU se o corpus crescer muito.
+
 ## Como correr (np-server)
 ```bash
 # 1) construir o site a partir do vault (gera docs-site/dist)

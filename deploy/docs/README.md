@@ -56,6 +56,19 @@ location /docs/ {
 ```
 Herda o Authentik do proxy host (interno). O `docs-web` serve na raiz; o HTML tem `base=/docs/`.
 
+## Open Notebook (F6) — `/notebook/`
+NotebookLM self-hosted (`lfnovo/open_notebook:v1-latest` + `surrealdb/surrealdb:v2`). UI Streamlit (8502),
+API (5055), Surreal (8000, localhost).
+1. **Segredo** (1×, preservar): `deploy/docs/.env` na box com `OPEN_NOTEBOOK_ENCRYPTION_KEY=$(openssl rand -hex 32)`
+   + `LAN_IP`/`TAILNET_IP`. Encripta as chaves de modelo na DB — **não regenerar** (partiria as chaves guardadas).
+2. **Subir**: `docker compose --env-file deploy/docs/.env -p npdocs -f deploy/docs/docker-compose.yml up -d open-notebook open-notebook-surreal`.
+3. **Modelos** (na UI do Open Notebook → Settings): apontar ao **Ollama** (`http://100.126.196.112:11434`,
+   `gemma3:4b` p/ chat; embed `all-minilm`/`nomic-embed-text`) — self-hosted; ou uma cloud key para melhor qualidade.
+   *(É passo manual do user, como as outras integrações.)*
+4. **Proxy** (NPMplus, hel1-npm): o Streamlit não gosta de subpath → **preferir subdomínio**
+   `notebook.netmaster.pt → 100.114.17.74:8502` (Authentik). `/notebook/` só se o Streamlit tiver `baseUrlPath`.
+   **`/notebook/` com dados NUNCA aberto** — sempre atrás de Authentik.
+
 ## Ver localmente (dev)
 ```bash
 cd docs-site && npm install && npm run dev      # http://localhost:5173/docs/

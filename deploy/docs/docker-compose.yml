@@ -64,6 +64,7 @@ services:
   open-notebook-surreal:
     image: surrealdb/surrealdb:v2
     restart: unless-stopped
+    user: "0:0"                                 # o volume nomeado é root-owned; sem isto → PermissionDenied no RocksDB
     command: start --log info --user ${SURREAL_USER:-root} --pass ${SURREAL_PASSWORD:-root} rocksdb:/mydata/onb.db
     environment:
       SURREAL_EXPERIMENTAL_GRAPHQL: "true"

@@ -49,9 +49,10 @@ const resolve = (target, fromDir) => {
   return s ? '#/' + s + (anchorPart ? '#' + anchorPart : '') : null;
 };
 
-// pré-processa o corpo: wikilinks, links .md relativos, callouts.
-const preprocess = (body, it) => {
+// pré-processa o corpo: wikilinks, links .md relativos, callouts. Acumula arestas do grafo em `links`.
+const preprocess = (body, it, links) => {
   let out = body;
+  const track = (route) => { if (route) links.add(route.slice(2).split('#')[0]); };
   // callouts Obsidian: "> [!type] Título" → "> **TYPE** — Título"
   out = out.replace(/^> \[!(\w+)\]\s*(.*)$/gm, (_, t, title) =>
     `> **${t.toUpperCase()}**${title.trim() ? ' — ' + title.trim() : ''}`);
@@ -59,12 +60,14 @@ const preprocess = (body, it) => {
   out = out.replace(/\[\[([^\]]+)\]\]/g, (m, inner) => {
     const [target, alias] = inner.split('|');
     const route = resolve(target, it.dir);
+    track(route);
     const label = (alias || target.split('#')[0]).trim();
     return route ? `[${label}](${route})` : `**${label}**`;
   });
   // links markdown relativos para .md → rota #/
   out = out.replace(/\]\((\.[^)]+\.md)(#[^)]*)?\)/g, (m, p, a) => {
     const route = resolve(p + (a || ''), it.dir);
+    track(route);
     return route ? `](${route})` : m;
   });
   return out;
@@ -78,8 +81,11 @@ const md = new MarkdownIt({
   },
 }).use(anchor, { permalink: anchor.permalink.headerLink(), slugify: (s) => s.toLowerCase().replace(/[^\w]+/g, '-') });
 
+const edges = [];
 const pages = items.map((it) => {
-  const html = md.render(preprocess(it.body, it));
+  const links = new Set();
+  const html = md.render(preprocess(it.body, it, links));
+  for (const t of links) if (t !== it.slug) edges.push({ source: it.slug, target: t });
   const title = it.fm.title || (it.body.match(/^#\s+(.+)$/m)?.[1] || it.base).replace(/[`*_]/g, '').trim();
   const text = it.body.replace(/[#>*`_\-|[\]]/g, ' ').replace(/\s+/g, ' ').slice(0, 4000);
   return {
@@ -91,5 +97,16 @@ const pages = items.map((it) => {
   };
 });
 
-fs.writeFileSync(OUT, JSON.stringify({ generated: new Date().toISOString(), home: 'docs/README', pages }));
-console.log(`${pages.length} páginas → src/content.json`);
+// grafo (Graphify): nós = páginas, arestas = wikilinks resolvidos
+const nodes = pages.map((p) => ({ id: p.slug, title: p.title, type: p.type }));
+const ids = new Set(nodes.map((n) => n.id));
+const seen = new Set();
+const links = edges
+  .filter((e) => ids.has(e.target) && e.source !== e.target)
+  .filter((e) => { const k = e.source + '|' + e.target; if (seen.has(k)) return false; seen.add(k); return true; });
+const deg = {};
+for (const l of links) { deg[l.source] = (deg[l.source] || 0) + 1; deg[l.target] = (deg[l.target] || 0) + 1; }
+for (const n of nodes) n.deg = deg[n.id] || 0;
+
+fs.writeFileSync(OUT, JSON.stringify({ generated: new Date().toISOString(), home: 'docs/README', pages, graph: { nodes, links } }));
+console.log(`${pages.length} páginas, ${nodes.length} nós, ${links.length} arestas → src/content.json`);

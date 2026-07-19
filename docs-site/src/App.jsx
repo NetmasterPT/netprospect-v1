@@ -1,11 +1,16 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Routes, Route, Link, useParams, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, useParams, useLocation, useNavigate } from 'react-router-dom';
+import ForceGraph2D from 'react-force-graph-2d';
 import content from './content.json';
 
 const TYPE_ORDER = ['explanation', 'how-to', 'tutorial', 'reference', 'incident', 'working'];
 const TYPE_LABEL = {
   explanation: '🧠 Explanation', 'how-to': '🛠️ How-to', tutorial: '🚀 Tutorials',
   reference: '📖 Reference', incident: '🚨 Incidents', working: '📝 Working docs',
+};
+const TYPE_COLOR = {
+  explanation: '#a78bfa', 'how-to': '#34d399', tutorial: '#f472b6',
+  reference: '#60a5fa', incident: '#f87171', working: '#fbbf24',
 };
 const bySlug = Object.fromEntries(content.pages.map((p) => [p.slug, p]));
 
@@ -37,6 +42,7 @@ function Sidebar() {
   return (
     <aside className="sidebar">
       <Link to="/" className="brand">NetProspect · <b>Docs</b></Link>
+      <div className="topnav"><Link to="/graph">🕸️ Grafo do conhecimento</Link></div>
       <input className="search" placeholder="Procurar…" value={q} onChange={(e) => setQ(e.target.value)} />
       {results ? (
         <nav className="nav">
@@ -87,11 +93,52 @@ function Page() {
   );
 }
 
+function GraphView() {
+  const navigate = useNavigate();
+  const [dim, setDim] = useState({ w: 800, h: 600 });
+  useEffect(() => {
+    const fit = () => setDim({ w: Math.max(320, window.innerWidth - 330), h: Math.max(400, window.innerHeight - 190) });
+    fit(); window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+  }, []);
+  const data = useMemo(() => ({
+    nodes: content.graph.nodes.map((n) => ({ ...n })),
+    links: content.graph.links.map((l) => ({ ...l })),
+  }), []);
+  return (
+    <main className="content graphview">
+      <h1>Grafo do conhecimento</h1>
+      <p className="muted">{data.nodes.length} docs · {data.links.length} ligações (wikilinks). Passa o rato para ver o título; clica para abrir.</p>
+      <div className="legend">
+        {TYPE_ORDER.map((t) => (
+          <span key={t} className="leg"><i style={{ background: TYPE_COLOR[t] }} />{TYPE_LABEL[t]}</span>
+        ))}
+      </div>
+      <div className="graph-canvas">
+        <ForceGraph2D
+          graphData={data}
+          width={dim.w}
+          height={dim.h}
+          nodeLabel="title"
+          nodeRelSize={4}
+          nodeVal={(n) => 1 + (n.deg || 0)}
+          nodeColor={(n) => TYPE_COLOR[n.type] || '#9ca3af'}
+          linkColor={() => 'rgba(128,128,128,0.22)'}
+          linkDirectionalParticles={0}
+          cooldownTicks={120}
+          onNodeClick={(n) => navigate('/' + n.id)}
+        />
+      </div>
+    </main>
+  );
+}
+
 export default function App() {
   return (
     <div className="layout">
       <Sidebar />
       <Routes>
+        <Route path="/graph" element={<GraphView />} />
         <Route path="/*" element={<Page />} />
       </Routes>
     </div>

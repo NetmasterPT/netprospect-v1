@@ -157,9 +157,10 @@ function makeHeavyFineHandlers(ctx, audit, js) {
     try {
       const r = await audit.lh.runLighthouse(url, { formFactor });
       // Mobile → seo/mobile-friendliness + perf mobile; Desktop → só perf desktop (não mexe no SEO/mobile).
+      const _lhTs = new Date().toISOString(); // marcador "correu" (mesmo com score null — página sem categorias)
       const patch = formFactor === 'desktop'
-        ? { perf_desktop: r.performance }
-        : { seo_score: r.seo_score, mobile_score: r.mobile_score, mobile_friendly: r.mobile_friendly, perf_mobile: r.performance };
+        ? { perf_desktop: r.performance, lighthouse_desktop_checked_at: _lhTs }
+        : { seo_score: r.seo_score, mobile_score: r.mobile_score, mobile_friendly: r.mobile_friendly, perf_mobile: r.performance, lighthouse_mobile_checked_at: _lhTs };
       await client.request(updateItem('sites', site.id, patch));
       // Postgres = resumo (rápido p/ o dashboard); MinIO = relatório INTEGRAL sem screenshots
       // (71 KB gzip vs 396 KB com imagens) — é dele que sai o PDF/relatório do cliente.
@@ -177,6 +178,10 @@ function makeHeavyFineHandlers(ctx, audit, js) {
       // como auditado SEM score e nunca era re-tentado (cobertura "0 pendentes" oca). Agora devolve
       // 'retry' → o consumeLoop faz nak com backoff (re-tenta quando a carga baixa); ao fim das
       // tentativas faz ack gracioso (sem órfão, sem score — cobertura honesta).
+      // marca "correu" (attempted) → conta na cobertura de JOBS (tentámos; sem score vai p/ Cobertura de
+      // Dados); o 'retry' ainda pode obter score numa tentativa com menos carga (sobrepõe timestamp + score).
+      const _col = formFactor === 'desktop' ? 'lighthouse_desktop_checked_at' : 'lighthouse_mobile_checked_at';
+      await client.request(updateItem('sites', site.id, { [_col]: new Date().toISOString() })).catch(() => {});
       log(`lighthouse ${formFactor} ${site.domain}: ${e.message}`);
       return 'retry';
     }

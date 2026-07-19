@@ -1752,8 +1752,8 @@ SELECT
   count(*) FILTER (WHERE s.lead_score_at IS NOT NULL)::int AS score,
   count(*) FILTER (WHERE s.audit_checked_at IS NOT NULL)::int AS audit,
   count(*) FILTER (WHERE s.industry_checked_at IS NOT NULL)::int AS industry,
-  count(*) FILTER (WHERE s.mobile_score IS NOT NULL)::int AS lighthouse_mobile,
-  count(*) FILTER (WHERE s.perf_desktop IS NOT NULL)::int AS lighthouse_desktop,
+  count(*) FILTER (WHERE s.lighthouse_mobile_checked_at IS NOT NULL)::int AS lighthouse_mobile,
+  count(*) FILTER (WHERE s.lighthouse_desktop_checked_at IS NOT NULL)::int AS lighthouse_desktop,
   count(*) FILTER (WHERE s.security_findings IS NOT NULL)::int AS nuclei,
   count(*) FILTER (WHERE s.wp_vuln_count IS NOT NULL)::int AS wpscan,
   count(*) FILTER (WHERE s.gmb_checked_at IS NOT NULL)::int AS gmb

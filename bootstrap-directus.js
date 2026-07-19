@@ -235,6 +235,8 @@ async function main() {
   await ensureField('sites', 'industry_confidence', float());
   await ensureField('sites', 'seo_score', int());
   await ensureField('sites', 'mobile_score', int());
+  await ensureField('sites', 'lighthouse_mobile_checked_at', ts());  // marcador "lighthouse correu" (mesmo sem score)
+  await ensureField('sites', 'lighthouse_desktop_checked_at', ts());
   await ensureField('sites', 'mobile_friendly', bool(false));
   await ensureField('sites', 'wp_vuln_count', int());
   await ensureField('sites', 'security_findings', int());

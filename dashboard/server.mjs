@@ -2333,7 +2333,7 @@ app.get('/api/moloni/documents', async (req, res) => {
     const q = (req.query.q || '').trim();
     if (q) { const s = encodeURIComponent(q); parts.push(`filter[_or][0][number][_icontains]=${s}`); parts.push(`filter[_or][1][customer_name][_icontains]=${s}`); }
     const filter = parts.length ? '&' + parts.join('&') : '';
-    const fields = 'fields=id,moloni_id,document_type,number,customer_name,date,net,vat,total,status,pdf_cached,company.name';
+    const fields = 'fields=id,moloni_id,document_type,number,customer_name,date,net,vat,total,status,pdf_cached,related,company.name';
     const url = `/items/moloni_documents?${fields}${filter}&sort[]=-date&limit=${limit}&offset=${offset}&meta=filter_count`;
     const r = await fetch(`${DIRECTUS_URL}${url}`, { headers: { Authorization: `Bearer ${TOKEN}` } });
     const json = await r.json();
@@ -2397,6 +2397,15 @@ app.post('/api/moloni/documents/:id/finalize', async (req, res) => {
   try { const m = await importMoloniWrite(); const type = req.query.type || (req.body && req.body.type);
     res.json({ ok: true, result: await m.finalizeDocument(type, parseInt(req.params.id, 10)) }); }
   catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
+// Nota de Crédito ligada a um documento original (associated_documents + related_id). Rascunho por defeito.
+app.post('/api/moloni/credit-note', async (req, res) => {
+  try {
+    const m = await importMoloniWrite(); const b = req.body || {};
+    const orig = b.original_document_id || req.query.original;
+    if (!orig) return res.status(400).json({ ok: false, error: 'original_document_id obrigatório' });
+    res.json({ ok: true, result: await m.createNotaCredito(orig, b) });
+  } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
 
 // ── Agendamentos (G): GCal âncora + Meet → Notion ligado → Directus. ──

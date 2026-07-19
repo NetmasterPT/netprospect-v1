@@ -85,3 +85,13 @@
   - [ ] Verify (email) à escala — cap ~100/dia pela quota da API key; precisa de mais keys/IPs (frota free) para cobrir os ~2k+ sites >50 com contactos por verificar.
   - [ ] GMB é residencial-only (só o laptop, ~0,3/s + intermitente) — gargalo estrutural; escalar precisa de +IPs residenciais. Rever o resume (usa `gmb_name`, re-corre sites que já correram sem match → inflaciona a fila do laptop).
   - [ ] Poison-DB: corrigir os extractors on-site partidos (contacts/social/locality) — ver plano; até lá o snapshot-regen só reclassifica indústria (não re-corre esses).
+- [ ] Integrações (Moloni / Contabilidade / CRM) — construídas e em produção (2026-07-19). Falta:
+  - [ ] **Documenso — ligar:** criar conta admin na UI (http://100.114.17.74:3500) + gerar API token → pôr `DOCUMENSO_API_TOKEN` no store (o atual é o do netmaster, não serve). Instância self-host já no ar no np-server.
+  - [ ] **Escrita de VD (Venda a Dinheiro):** leitura confirmada (Moloni SAFT type 5); a geração tem de ser em LIVE (sandbox restrito) — determinar o endpoint de insert do Moloni v1 e testar por rascunho, EM CONJUNTO.
+  - [ ] **Subscrições ↔ Moloni** — ligar a coleção `subscriptions` (planos) às avenças/produtos do Moloni, mapeando por produto / `moloni_service_id` (nota: podem existir produtos Moloni sem Subscription no NetProspect):
+    - [ ] Do lado da **Subscription**: escolher uma avença Moloni existente OU criar uma; uma subscription tem de ter SEMPRE um produto Moloni associado.
+    - [ ] Do lado dos **Produtos**: opção de ligar um produto Moloni a uma Subscription, ou criar uma.
+  - [ ] **Wise** — `WISE_SANDBOX_API_TOKEN` expirado (401); renovar quando se quiser usar Wise.
+  - [ ] **FF (fatura de fornecedor)** — só leitura/sync (é documento recebido/compras); NÃO suportar escrita.
+  - [ ] Páginas dedicadas para tipos extra (guia_remessa/proforma/…) se surgirem documentos desses tipos.
+  - [ ] (opcional) Documenso/Google atrás de domínio público + reverse proxy; `google.service-account.json` no np-server só se precisar de Google além do Calendar.

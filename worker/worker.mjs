@@ -388,10 +388,19 @@ function makeHandlers(ctx, audit, js) {
 }
 
 // --- Loops de consumo -------------------------------------------------------
+// Rede de segurança: timeout DURO por job no dispatch (0.85×ackWait) → um handler que PENDURA (ex.: RDAP
+// .nl sem timeout efetivo, Chromium preso) LANÇA em vez de segurar o slot até o NATS re-entregar (slot
+// desperdiçado + órfãos). Marca `transient` → nak/retry. Jobs com timeout PRÓPRIO (lighthouse 90s) disparam
+// esse primeiro. Só apanha HANGS reais (op que excederia o ackWait de qualquer forma).
+function jobTimeout(promise, ms, label) {
+  let t; const to = new Promise((_, rej) => { t = setTimeout(() => { const e = new Error(`${label} dispatch-timeout ${ms}ms`); e.transient = true; rej(e); }, ms); });
+  return Promise.race([promise, to]).finally(() => clearTimeout(t));
+}
 // enrich/contacts: consumo contínuo com concorrência limitada.
-async function consumeLoop(js, durable, concurrency, fn) {
+async function consumeLoop(js, durable, concurrency, fn, ackWaitSec = 60) {
   const inflight = new Set();
-  log(`consumer '${durable}' a consumir (conc ${concurrency})`);
+  const jobTimeoutMs = Math.max(15000, Math.round((ackWaitSec || 60) * 1000 * 0.85));
+  log(`consumer '${durable}' a consumir (conc ${concurrency}, hang-timeout ${Math.round(jobTimeoutMs / 1000)}s)`);
   // RESILIENTE: o iterador do consume() TERMINA se a subscrição fechar (reconexão/drain do NATS). Antes,
   // o for-await acabava e consumeLoop retornava → com todos os loops a resolver, o Promise.all(loops) em
   // main() resolvia, o event-loop drenava e o processo saía com EXIT 0 SILENCIOSO — o restart-loop dos
@@ -408,7 +417,7 @@ async function consumeLoop(js, durable, concurrency, fn) {
           const started = Date.now();
           taskStart(durable, `${durable} · ${label}`); // fire-and-forget (fail-soft)
           try {
-            const outcome = await fn(job);
+            const outcome = await jobTimeout(fn(job), jobTimeoutMs, durable);
             if (outcome === 'term') { m.term(); taskEnd(durable, started, false); return; }
             // 'retry' (opt-in do handler, ex.: lighthouse instável): re-tenta com backoff enquanto houver
             // tentativas; na ÚLTIMA faz ack gracioso (não deixa órfão no workqueue) — sem dados escritos,
@@ -593,7 +602,7 @@ async function main() {
   for (const name of active) {
     if (DRAIN.has(name)) continue; // tratados pelo auditDrainLoop (coarse monolítico)
     const fn = REG[name]; if (!fn) continue;
-    loops.push(consumeLoop(js, CONSUMERS[name].durable, CONC[name] || 1, fn));
+    loops.push(consumeLoop(js, CONSUMERS[name].durable, CONC[name] || 1, fn, CONSUMERS[name].ackWait));
   }
   if (drainActive.length === 3) loops.push(auditDrainLoop(js, coarse.handleAudit));
   if (active.includes('result_site')) loops.push(writerLoop(js)); // A3 write-behind

@@ -1,3 +1,14 @@
+---
+title: Subscrições
+type: reference
+tags: [comercial, data-model]
+related: []
+owner: comercial
+status: stable
+updated: 2026-07-17
+visibility: internal
+---
+
 # Subscrições
 
 Produtos/pacotes que a Netmaster oferece (alojamento, manutenção, SSL, segurança, SEO técnico,

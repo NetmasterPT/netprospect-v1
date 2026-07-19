@@ -1,3 +1,14 @@
+---
+title: Runbook — VMs de Workers (Docker + Tailscale)
+type: how-to
+tags: [infra, runbook]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-16
+visibility: internal
+---
+
 # Runbook — VMs de Workers (Docker + Tailscale)
 
 Lança **workers da frota** em VMs que NÃO têm o stack central: juntam-se à **Tailnet**, drenam jobs do

@@ -1,3 +1,14 @@
+---
+title: 03 — Sending fleet: docker-mailserver + secondary domains + auth
+type: how-to
+tags: [outreach, email]
+related: []
+owner: outreach
+status: stable
+updated: 2026-07-11
+visibility: internal
+---
+
 # 03 — Sending fleet: docker-mailserver + secondary domains + auth
 
 Goal: 2–4 **separate** clean datacenter IPs (never the validation IPs, never production),

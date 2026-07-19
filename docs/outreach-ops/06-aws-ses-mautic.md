@@ -1,3 +1,14 @@
+---
+title: 06 — Warm tier: Mautic + AWS SES
+type: how-to
+tags: [outreach, email]
+related: []
+owner: outreach
+status: stable
+updated: 2026-07-11
+visibility: internal
+---
+
 # 06 — Warm tier: Mautic + AWS SES
 
 The final rung: high-value, already-engaged contacts on **super-validated domains** where reputation

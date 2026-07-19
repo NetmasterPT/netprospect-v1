@@ -1,3 +1,14 @@
+---
+title: Assessment — que containers devem sair do HEL1 (e para onde)
+type: explanation
+tags: [infra, architecture]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-18
+visibility: internal
+---
+
 # Assessment — que containers devem sair do HEL1 (e para onde)
 
 > **O princípio:** separar por **perfil de I/O**, não por "é grande". Um container só deve sair

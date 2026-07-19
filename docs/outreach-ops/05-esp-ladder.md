@@ -1,3 +1,14 @@
+---
+title: 05 — ESP ladder (Brevo / MailerLite)
+type: how-to
+tags: [outreach, email]
+related: []
+owner: outreach
+status: stable
+updated: 2026-07-11
+visibility: internal
+---
+
 # 05 — ESP ladder (Brevo / MailerLite)
 
 A **reputation-ladder rung** between cold (Phase 2) and the warm tier (Phase 4). Send an extra

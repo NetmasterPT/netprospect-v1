@@ -1,3 +1,14 @@
+---
+title: Lighthouse aborta cedo em >50% dos sites (Chrome instável) — auditorias perdidas e silenciadas
+type: incident
+tags: [incident, postmortem]
+related: []
+owner: infra
+status: historical
+updated: 2026-07-18
+visibility: internal
+---
+
 # Lighthouse aborta cedo em >50% dos sites (Chrome instável) — auditorias perdidas e silenciadas
 
 - **Estado:** ⚠️ **REOPENED** 2026-07-18T19:45Z — a mitigação de concorrência foi **revertida** (`maxAckPending` 6→12 em `dbd658f`, agora **default 20** com `LIGHTHOUSE_MAX_ACK` unset) e um **lote grande** (re-enqueue de 761 órfãos lighthouse) revelou **0% de sucesso** + órfãos por hang de sites. Como o fecho avisou, a instabilidade Chrome foi só **mitigada, não eliminada** — voltou ao de cima sob carga com o cap revertido. **Correções #1–#3 aplicadas e deployed 2026-07-18T22:50Z** (cap→6 + timeout duro + consumeLoop resiliente, commit `01e81b6`) — **em validação**. **Restart-loop exit-0 RESOLVIDO 23:05Z** — era `unhandledRejection` de uma promise CDP do Lighthouse (`Target closed`); `process.on('unhandledRejection')` apanha → worker sobrevive (RestartCount=0 sob carga). Resíduo: a instabilidade Chromium em si (audits falham mas **honestamente**, sem crash/órfão). Ver observações **2026-07-18** no fim.

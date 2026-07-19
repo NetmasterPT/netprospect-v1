@@ -1,3 +1,14 @@
+---
+title: Runbook — DNS (OpenProvider) + PTR (Hetzner Robot) por domínio/IP de validação
+type: how-to
+tags: [outreach, email]
+related: []
+owner: outreach
+status: stable
+updated: 2026-07-19
+visibility: internal
+---
+
 # Runbook — DNS (OpenProvider) + PTR (Hetzner Robot) por domínio/IP de validação
 
 Para cada **IP de validação** (de onde o Reacher faz o `RCPT` probing) escolhe-se um **domínio descartável**

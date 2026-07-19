@@ -1,3 +1,14 @@
+---
+title: Frota distribuída de workers (VMs cloud, free-tier)
+type: explanation
+tags: [infra, architecture]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-13
+visibility: internal
+---
+
 # Frota distribuída de workers (VMs cloud, free-tier)
 
 Como pôr **workers a correr noutras VMs** (Oracle, GCP, etc.) que reportam à **mesma

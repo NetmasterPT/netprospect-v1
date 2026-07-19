@@ -1,3 +1,14 @@
+---
+title: Runbook — Host de DB dedicado (Postgres + PgBouncer + Tailscale) num CT Proxmox
+type: how-to
+tags: [infra, runbook]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-13
+visibility: internal
+---
+
 # Runbook — Host de DB dedicado (Postgres + PgBouncer + Tailscale) num CT Proxmox
 
 Migra o **Postgres + PgBouncer** do host Docker partilhado para um **LXC CT dedicado** no Proxmox

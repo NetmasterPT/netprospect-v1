@@ -1,3 +1,14 @@
+---
+title: Runbook — ClickHouse numa VM dedicada de analytics
+type: how-to
+tags: [infra, clickhouse, runbook]
+related: []
+owner: infra
+status: historical
+updated: 2026-07-18
+visibility: internal
+---
+
 # Runbook — ClickHouse numa VM dedicada de analytics
 
 > ⚠️ **HISTÓRICO / LOCALIZAÇÃO ATUAL (2026-07):** o ClickHouse **já não vive na `de-analytics` (DE1)**.

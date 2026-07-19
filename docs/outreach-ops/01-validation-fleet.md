@@ -1,3 +1,14 @@
+---
+title: 01 — Validation fleet: Dante SOCKS5 proxies + DNS/PTR
+type: how-to
+tags: [outreach, email]
+related: []
+owner: outreach
+status: stable
+updated: 2026-07-11
+visibility: internal
+---
+
 # 01 — Validation fleet: Dante SOCKS5 proxies + DNS/PTR
 
 Goal: 2–4 clean datacenter IPs, each running a **SOCKS5 proxy** (Dante) that Reacher tunnels its SMTP

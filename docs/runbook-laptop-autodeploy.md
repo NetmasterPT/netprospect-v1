@@ -1,3 +1,14 @@
+---
+title: Runbook — Auto-deploy por PULL (laptop Windows + frota Linux)
+type: how-to
+tags: [infra, runbook]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-16
+visibility: internal
+---
+
 
 # Runbook — Auto-deploy por PULL (laptop Windows + frota Linux)
 

@@ -1,3 +1,14 @@
+---
+title: Campanhas
+type: reference
+tags: [comercial, data-model]
+related: []
+owner: comercial
+status: stable
+updated: 2026-07-17
+visibility: internal
+---
+
 # Campanhas
 
 Campanhas de email: constroem uma audiência a partir de filtros (de um segmento), geram a cópia (por

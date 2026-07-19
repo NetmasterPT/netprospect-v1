@@ -1,3 +1,14 @@
+---
+title: Contactos
+type: reference
+tags: [comercial, data-model]
+related: []
+owner: comercial
+status: stable
+updated: 2026-07-17
+visibility: internal
+---
+
 # Contactos
 
 Pessoas e endereços de email associados às empresas/sites. Página **`#/contacts`** (paginada no

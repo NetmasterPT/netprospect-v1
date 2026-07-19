@@ -1,3 +1,14 @@
+---
+title: Deploy-watch — deteção de rebuilds + observação pós-deploy por VM
+type: how-to
+tags: [deploy, infra]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-18
+visibility: internal
+---
+
 # Deploy-watch — deteção de rebuilds + observação pós-deploy por VM
 
 O monitor de saúde (loop de 15 min) usa este ficheiro para **detetar quando um host recebeu um deploy**

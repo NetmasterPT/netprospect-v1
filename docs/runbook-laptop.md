@@ -1,3 +1,14 @@
+---
+title: Runbook — gpedro-laptop: worker residencial (Windows + Docker Desktop)
+type: how-to
+tags: [infra, runbook]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-16
+visibility: internal
+---
+
 # Runbook — `gpedro-laptop`: worker residencial (Windows + Docker Desktop)
 
 > **Propósito.** É o daily-driver do Gonçalo (Windows), com **IP residencial** — algo que **nenhuma

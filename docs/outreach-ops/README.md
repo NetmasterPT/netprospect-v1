@@ -1,3 +1,14 @@
+---
+title: NetProspect — Outreach & Validation Ops Runbooks
+type: how-to
+tags: [outreach, email]
+related: []
+owner: outreach
+status: stable
+updated: 2026-07-11
+visibility: internal
+---
+
 # NetProspect — Outreach & Validation Ops Runbooks
 
 Operational runbooks for the e-mail **validation** and **cold-outreach** infrastructure. These are

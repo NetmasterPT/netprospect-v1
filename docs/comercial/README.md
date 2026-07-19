@@ -1,3 +1,14 @@
+---
+title: Modelo comercial / outreach — visão geral
+type: reference
+tags: [comercial, data-model]
+related: []
+owner: comercial
+status: stable
+updated: 2026-07-17
+visibility: internal
+---
+
 # Modelo comercial / outreach — visão geral
 
 Documenta o que está implementado nas áreas **Subscrições, Contactos, Empresas, ICPs, Templates de

@@ -1,3 +1,14 @@
+---
+title: 00 — Port-25 gate + IP hygiene (do this FIRST)
+type: how-to
+tags: [outreach, email]
+related: []
+owner: outreach
+status: stable
+updated: 2026-07-19
+visibility: internal
+---
+
 # 00 — Port-25 gate + IP hygiene (do this FIRST)
 
 Outbound **port 25** is required for both validation (Reacher `RCPT` probes) and cold sending

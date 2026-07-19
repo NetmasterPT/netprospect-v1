@@ -1,0 +1,15 @@
+{
+  "useMarkdownLinks": false,
+  "newLinkFormat": "shortest",
+  "attachmentFolderPath": "docs/assets",
+  "alwaysUpdateLinks": true,
+  "userIgnoreFilters": [
+    "node_modules/",
+    "dashboard/node_modules/",
+    ".git/",
+    "docker/",
+    "out/",
+    "scratchpad/",
+    "deploy/**/node_modules/"
+  ]
+}

@@ -1,3 +1,14 @@
+---
+title: Órfãos reincidentes (poison) — lista de retry-policy
+type: working
+tags: [ops, jobs]
+related: []
+owner: infra
+status: living
+updated: 2026-07-18
+visibility: internal
+---
+
 # Órfãos reincidentes (poison) — lista de retry-policy
 
 Jobs que **voltam a ficar órfãos** (esgotam o `maxDeliver`) ronda após ronda, **com o mesmo erro**.

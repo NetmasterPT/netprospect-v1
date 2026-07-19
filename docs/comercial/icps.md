@@ -1,3 +1,14 @@
+---
+title: Públicos-alvo (ICPs)
+type: reference
+tags: [comercial, data-model]
+related: []
+owner: comercial
+status: stable
+updated: 2026-07-17
+visibility: internal
+---
+
 # Públicos-alvo (ICPs)
 
 Ideal Customer Profiles — descrições dos públicos-alvo da Netmaster, reutilizáveis por subscrições,

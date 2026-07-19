@@ -1,3 +1,14 @@
+---
+title: 02 — Reacher (the validation engine)
+type: how-to
+tags: [outreach, email]
+related: []
+owner: outreach
+status: stable
+updated: 2026-07-19
+visibility: internal
+---
+
 # 02 — Reacher (the validation engine)
 
 [Reacher](https://github.com/reacherhq/check-if-email-exists) is the Rust engine that does the 5-step

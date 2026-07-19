@@ -1,3 +1,14 @@
+---
+title: Segmentos
+type: reference
+tags: [comercial, data-model]
+related: []
+owner: comercial
+status: stable
+updated: 2026-07-17
+visibility: internal
+---
+
 # Segmentos
 
 Vistas guardadas de filtros do directório de negócios. Um segmento **é uma audiência**: o seu objeto

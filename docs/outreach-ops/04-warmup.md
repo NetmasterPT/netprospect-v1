@@ -1,3 +1,14 @@
+---
+title: 04 — Domain & IP warm-up
+type: how-to
+tags: [outreach, email]
+related: []
+owner: outreach
+status: stable
+updated: 2026-07-11
+visibility: internal
+---
+
 # 04 — Domain & IP warm-up
 
 New domain+IP = zero sending history → Gmail/Outlook distrust it. Warm-up builds reputation

@@ -1,3 +1,14 @@
+---
+title: Runbook — MinIO numa VM dedicada no DE1 (object storage em disco barato)
+type: how-to
+tags: [infra, runbook]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-13
+visibility: internal
+---
+
 # Runbook — MinIO numa VM dedicada no DE1 (object storage em disco barato)
 
 > **Porquê.** O MinIO é *object storage*: escreve-se **uma vez** (fire-and-forget no fim da

@@ -1,3 +1,14 @@
+---
+title: Runbook — hel1-ollama: Ollama numa máquina dedicada (CPU, sem GPU) — ✅ FEITO
+type: how-to
+tags: [infra, runbook]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-13
+visibility: internal
+---
+
 # Runbook — `hel1-ollama`: Ollama numa máquina dedicada (CPU, sem GPU) — ✅ FEITO
 
 > **Porquê tirá-lo do HEL1.** O llama.cpp usa **todos** os cores por inferência — medimos **1427 % de

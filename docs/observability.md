@@ -1,3 +1,14 @@
+---
+title: Observabilidade & Telemetria da Frota
+type: explanation
+tags: [observability, infra]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-18
+visibility: internal
+---
+
 # Observabilidade & Telemetria da Frota
 
 Como o NetProspect recolhe telemetria de **toda** a frota (workers, VMs, hosts Proxmox, PBS/PDM) e a

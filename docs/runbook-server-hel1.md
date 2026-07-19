@@ -1,3 +1,14 @@
+---
+title: Runbook — np-server: Directus + Dashboard + NATS + Redis numa VM dedicada (HEL1)
+type: how-to
+tags: [infra, runbook]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-13
+visibility: internal
+---
+
 # Runbook — `np-server`: Directus + Dashboard + NATS + Redis numa VM dedicada (HEL1)
 
 > **Porquê.** Hoje o HEL1 corre um **monólito**: o control-plane (Directus, Dashboard, NATS, Redis)

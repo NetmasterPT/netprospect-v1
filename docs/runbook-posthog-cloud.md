@@ -1,3 +1,14 @@
+---
+title: Runbook — PostHog Cloud (product analytics, sem self-host)
+type: how-to
+tags: [infra, runbook]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-15
+visibility: internal
+---
+
 # Runbook — PostHog **Cloud** (product analytics, sem self-host)
 
 > **Decisão (2026-07):** o PostHog self-hosted é pesado demais (~40 serviços). O **Cloud** (região **EU /

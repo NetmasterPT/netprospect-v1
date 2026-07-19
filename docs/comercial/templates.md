@@ -1,3 +1,14 @@
+---
+title: Templates de email
+type: reference
+tags: [comercial, data-model]
+related: []
+owner: comercial
+status: stable
+updated: 2026-07-17
+visibility: internal
+---
+
 # Templates de email
 
 Assunto + corpo com `{{variáveis}}` do dataset dos contactos, reutilizáveis por subscrições, ICPs e

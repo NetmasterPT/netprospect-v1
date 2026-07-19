@@ -1,3 +1,14 @@
+---
+title: Relatórios de incidentes
+type: reference
+tags: [incidents, template]
+related: []
+owner: infra
+status: living
+updated: 2026-07-16
+visibility: internal
+---
+
 # Relatórios de incidentes
 
 Um ficheiro por incidente, criado/expandido pelo monitor de saúde (loop de 15 min). Nome:

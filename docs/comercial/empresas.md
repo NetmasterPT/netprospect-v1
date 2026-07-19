@@ -1,3 +1,14 @@
+---
+title: Empresas
+type: reference
+tags: [comercial, data-model]
+related: []
+owner: comercial
+status: stable
+updated: 2026-07-17
+visibility: internal
+---
+
 # Empresas
 
 As empresas por trás dos sites/prospetos. Não há uma página "Empresas" dedicada — vêem-se pelo

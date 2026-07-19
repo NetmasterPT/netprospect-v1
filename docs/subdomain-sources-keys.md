@@ -70,3 +70,13 @@ Para destravar os 100k, a **CERTSPOTTER_API_KEY** (grátis, fonte primária) é 
 outras (SecurityTrails/Censys) são complementos de cobertura, mas os free-tiers delas são baixos — úteis
 sobretudo para lookups on-demand, não para o backfill inteiro. O caminho robusto para escala real é o
 **subfinder** (agrega tudo) ou um tier pago de uma destas.
+
+---
+
+## Wordfence Intelligence (vulns WP) — `WORDFENCE_API_KEY`
+
+Para o **match de vulnerabilidades WP** no wpscan keyless (sem gastar a quota da WPScan API 25/dia):
+- **O que é:** feed v3 da Wordfence com todas as vulns de plugins/temas/core WordPress.
+- **Passos:** regista-te em **https://www.wordfence.com/products/wordfence-intelligence/** (grátis) → gera uma API key → `WORDFENCE_API_KEY=<key>` no `.env` da frota.
+- Depois corre uma vez `update-wordfence.js` (ou espera o timer de 7 dias): descarrega o feed, indexa e guarda em MinIO; os workers passam a marcar vulns na enumeração keyless.
+- Sem a key: o wpscan keyless continua a enumerar (plugins/versões) mas **sem** marcar vulns.

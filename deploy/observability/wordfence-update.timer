@@ -1,0 +1,10 @@
+[Unit]
+Description=Wordfence vuln DB — atualiza a cada 7 dias (WORDFENCE_UPDATE_DAYS)
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=7d
+Persistent=true
+
+[Install]
+WantedBy=timers.target

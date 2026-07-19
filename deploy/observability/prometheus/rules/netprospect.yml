@@ -36,8 +36,12 @@ groups:
         for: 10m
         labels: { severity: warning, service: netprospect }
         annotations: { summary: "Latência ao Directus alta em {{ $labels.host }} ({{ $value | printf \"%.0f\" }}ms)" }
+      # np_host_cores >= 8 exclui os LXC CTs (2-4 cores): o /proc/loadavg num CT é o load GLOBAL do
+      # host físico (hel1-pve), mas np_host_cores é o do CT → rácio inflado (falso positivo sempre que o
+      # hel1-pve tem carga normal-alta). O host físico já é coberto pelo nó -pve (load/36). Só VMs
+      # (hel1-docker 18c, np-server, np-wk-de1) e nós -pve (36c) reportam o seu PRÓPRIO load → >= 8 fica-se por esses.
       - alert: NetProspectHostOverloaded
-        expr: np_host_load1 / np_host_cores > 4 and np_host_cores >= 4
+        expr: np_host_load1 / np_host_cores > 4 and np_host_cores >= 8
         for: 10m
         labels: { severity: warning, service: netprospect }
         annotations: { summary: "Load/core alto em {{ $labels.host }} ({{ $value | printf \"%.1f\" }}×)" }

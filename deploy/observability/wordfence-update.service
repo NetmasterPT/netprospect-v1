@@ -1,0 +1,9 @@
+[Unit]
+Description=NetProspect — atualiza a Wordfence Intelligence vuln DB (índice compacto em MinIO)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+# Corre DENTRO de um worker (tem a env com WORDFENCE_API_KEY + MINIO_* + a lib). No-op se a key faltar.
+ExecStart=/bin/sh -c 'docker exec $(docker ps -q -f name=netprospect-worker- | head -1) node update-wordfence.js'

@@ -30,10 +30,17 @@ RUN NUCLEI_VER=$(curl -sL https://api.github.com/repos/projectdiscovery/nuclei/r
     && nuclei -version \
     && nuclei -update-templates
 
+# --- subfinder (ProjectDiscovery) — fonte de subdomínios que AGREGA dezenas de fontes passivas
+#     (usado por lib/subdomains.js se o binário existir; opcional, keyless funciona sem ele) ---
+RUN SUBF_VER=$(curl -sL https://api.github.com/repos/projectdiscovery/subfinder/releases/latest | grep -Po '"tag_name":\s*"v\K[0-9.]+') \
+    && curl -sL "https://github.com/projectdiscovery/subfinder/releases/download/v${SUBF_VER}/subfinder_${SUBF_VER}_linux_amd64.zip" -o /tmp/subfinder.zip \
+    && unzip -o /tmp/subfinder.zip -d /usr/local/bin subfinder && rm /tmp/subfinder.zip \
+    && subfinder -version
+
 # --- Código ---
 COPY lib ./lib
 COPY worker ./worker
-COPY enrich-sites.js extract-contacts.js update-geoip.js ./
+COPY enrich-sites.js extract-contacts.js update-geoip.js update-wordfence.js ./
 COPY config ./config
 
 ENV NODE_ENV=production \

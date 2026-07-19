@@ -215,8 +215,15 @@ function makeHeavyFineHandlers(ctx, audit, js) {
       const keyless = !!job.keyless;
       const token = keyless ? null : process.env.WPSCAN_API_TOKEN;
       const r = await audit.wpscan.runWpscan(site.final_url || `https://${site.domain}/`, { token, keyless });
-      await client.request(updateItem('sites', site.id, { wp_vuln_count: r.vulnCount }));
-      await upsertReport(client, site.id, 'wpscan', { score: r.vulnCount, summary: { vulnCount: r.vulnCount }, report: r.report });
+      let vulnCount = r.vulnCount, report = r.report;
+      // Keyless não traz o vuln-DB do WPScan → enriquece com a Wordfence Intelligence LOCAL (índice em
+      // MinIO, atualizado pelo update-wordfence.js). No-op se o índice não existir (sem WORDFENCE_API_KEY).
+      if (keyless) {
+        try { const { matchWpscanVulns } = await import('../lib/wordfence.js'); const wf = await matchWpscanVulns(r.report); if (wf) { vulnCount = wf.vulnCount; report = { ...r.report, wordfence_vulns: wf.vulns }; } }
+        catch { /* Wordfence indisponível → mantém o keyless simples */ }
+      }
+      await client.request(updateItem('sites', site.id, { wp_vuln_count: vulnCount }));
+      await upsertReport(client, site.id, 'wpscan', { score: vulnCount, summary: { vulnCount }, report });
     } catch (e) {
       // Igual ao nuclei/lighthouse: 'retry' em vez de ack silencioso sem escrever (subcontava + nunca re-corria).
       if (/não instalado|not installed/i.test(e.message)) throw e;

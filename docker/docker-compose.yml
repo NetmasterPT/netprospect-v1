@@ -285,6 +285,7 @@ services:
       OTEL_TRACES_SAMPLER: parentbased_traceidratio
       OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.02}
       EGRESS_PROXY: ${EGRESS_PROXY:-}
+      WPSCAN_PROXY: ${WPSCAN_PROXY:-}
       WPSCAN_API_TOKEN: ${WPSCAN_API_TOKEN:-}
       AUDIT_ENABLED: ${AUDIT_ENABLED:-false}
       # Auditorias em paralelo POR worker (cada uma ~1-2 cores: Chromium+Nuclei+Ollama).
@@ -372,6 +373,7 @@ services:
       OTEL_TRACES_SAMPLER: parentbased_traceidratio
       OTEL_TRACES_SAMPLER_ARG: ${OTEL_TRACES_SAMPLER_ARG:-0.02}
       EGRESS_PROXY: ${EGRESS_PROXY:-}
+      WPSCAN_PROXY: ${WPSCAN_PROXY:-}
       ENRICH_CONCURRENCY: ${ENRICH_CONCURRENCY:-10}
       CONTACTS_CONCURRENCY: ${CONTACTS_CONCURRENCY:-5}
       DOMAIN_HEALTH_CONC: ${DOMAIN_HEALTH_CONC:-8}
@@ -478,12 +480,14 @@ services:
     profiles: ['egress']
     restart: unless-stopped
     hostname: np-egress
-    environment:
-      TS_AUTHKEY: ${TS_AUTHKEY:-}
-      TS_USERSPACE: 'true'
-      TS_EXTRA_ARGS: --exit-node=${TS_EXIT_NODE:-} --exit-node-allow-lan-access --advertise-tags=tag:egress
-      TS_OUTBOUND_HTTP_PROXY_LISTEN: 0.0.0.0:1055
-      TS_STATE_DIR: /var/lib/tailscale
+    cap_add: [NET_ADMIN]
+    # Auth INTERATIVA (login URL), não por authkey → corre-se o `tailscaled` DIRETO, fazendo bypass ao
+    # containerboot (que assume TS_AUTHKEY e faz crash-loop com estado interativo). O login + o exit-node
+    # ficam PERSISTIDOS no volume (setados uma vez via `tailscale up` + `tailscale set --exit-node`); o
+    # tailscaled retoma-os no arranque (WantRunning=true). HTTP proxy em :1055 → o wpscan usa WPSCAN_PROXY.
+    # Setup inicial (uma vez): docker exec … tailscale up  (autoriza o URL) ; tailscale set --exit-node=<IP>.
+    entrypoint: ["tailscaled"]
+    command: ["--tun=userspace-networking", "--outbound-http-proxy-listen=0.0.0.0:1055", "--socks5-server=0.0.0.0:1056", "--state=/var/lib/tailscale/tailscaled.state"]
     volumes:
       - ./.data/tailscale-egress:/var/lib/tailscale
 

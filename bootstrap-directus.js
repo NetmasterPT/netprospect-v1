@@ -171,6 +171,7 @@ async function main() {
   await ensureField('sites', 'asn', int());
   await ensureField('sites', 'isp', str());
   await ensureField('sites', 'ip_country', str());
+  await ensureField('sites', 'business_country', str());  // país do NEGÓCIO (ccTLD-first) — distinto de ip_country (hosting/IP anycast)
   await ensureField('sites', 'ip_city', str());
   await ensureField('sites', 'cdn', str());
   await ensureField('sites', 'is_live', bool(false));

@@ -197,9 +197,11 @@ export function makeFineHandlers(ctx, js) {
 
   async function handleGeoip(job) {
     const geo = await ctx.geoip.lookup(job.ip);
-    // Fallback: IPs anycast/CDN (Cloudflare/One.com) resolvem ASN/ISP mas SEM país no MaxMind →
-    // usa o ccTLD (.se→SE etc.; gTLD fica null). Ver ccTldCountry() e o marcador do geoip em COVERAGE_SQL.
-    await client.request(updateItem('sites', job.siteId, { asn: geo.asn, isp: clip(geo.isp), ip_country: clip(geo.country || ccTldCountry(job.domain), 10), ip_city: clip(geo.city, 120) }));
+    // ip_country = país do HOSTING (o que o IP diz; NULL p/ anycast Cloudflare/One.com — honesto, não inventa).
+    // business_country = país do NEGÓCIO: ccTLD (.se→SE) primeiro, senão o país do IP (gTLD hospedado num DC).
+    // SEPARADOS de propósito (escolha C): um IP anycast/CDN geolocaliza no edge (US/DK) e não deve poluir o
+    // país do negócio. O ccTLD é determinístico e independente da versão da .mmdb da frota.
+    await client.request(updateItem('sites', job.siteId, { asn: geo.asn, isp: clip(geo.isp), ip_country: clip(geo.country, 10), business_country: clip(ccTldCountry(job.domain) || geo.country, 10), ip_city: clip(geo.city, 120) }));
     return 'ack';
   }
 

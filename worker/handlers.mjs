@@ -211,7 +211,8 @@ export function makeFineHandlers(ctx, js) {
     let snap = await getSnapshot(job.siteId);
     if (!snap?.html) {
       const home = await tryFetch(`https://${domainToASCII(job.domain) || job.domain}/`);
-      if (!home?.html) return 'ack';
+      // marca "correu" (tech_detected=[]) mesmo sem HTML → não fica null-forever (fetch falhou/bloqueado)
+      if (!home?.html) { await client.request(updateItem('sites', job.siteId, { tech_detected: [] })).catch(() => {}); return 'ack'; }
       snap = { html: home.html, finalUrl: home.finalUrl, headers: home.headers || {}, setCookies: home.setCookies || [], status: home.status };
     }
     const headerBlob = JSON.stringify(snap.headers || {}) + ' ' + (snap.setCookies || []).join(' ');
@@ -235,7 +236,8 @@ export function makeFineHandlers(ctx, js) {
   }
 
   async function handleSocial(job) {
-    const snap = await getSnapshot(job.siteId); if (!snap?.html) return 'ack';
+    // marca "correu" (social={}) mesmo sem snapshot → não fica null-forever (sem HTML p/ extrair)
+    const snap = await getSnapshot(job.siteId); if (!snap?.html) { await client.request(updateItem('sites', job.siteId, { social: {} })).catch(() => {}); return 'ack'; }
     // Social vive muitas vezes na página de contactos, não na homepage → varrer tudo.
     const allHtml = [snap.html, ...(snap.pages || []).map((p) => p.html)].filter(Boolean).join('\n');
     const social = extractSocial(allHtml); const f = socialFlags(social);
@@ -278,7 +280,7 @@ export function makeFineHandlers(ctx, js) {
 
   async function handleTraffic(job) {
     const tr = ctx.audit?.tranco ? ctx.audit.tranco.trafficOf(job.domain) : { rank: null, bucket: 'unranked' };
-    await client.request(updateItem('sites', job.siteId, { traffic_rank: tr.rank, traffic_bucket: tr.bucket }));
+    await client.request(updateItem('sites', job.siteId, { traffic_rank: tr.rank, traffic_bucket: tr.bucket || 'unranked' }));
     await pub(SUBJECTS.score, { domain: job.domain, siteId: job.siteId }, `score:${job.domain}`);
     return 'ack';
   }
@@ -420,13 +422,19 @@ export function makeFineHandlers(ctx, js) {
   }
   async function handleDnsprovider(job) {
     const domain = getDomain(job.domain) || job.domain;
-    try { const ns = (await dns.resolveNs(domain)).map((n) => n.toLowerCase()); const provider = ns[0]?.split('.').slice(-2).join('.') || null; await client.request(updateItem('sites', job.siteId, { dns_provider: clip(provider, 120) })).catch(() => {}); } catch { /* sem NS */ }
+    let provider = null; try { const ns = (await dns.resolveNs(domain)).map((n) => n.toLowerCase()); provider = ns[0]?.split('.').slice(-2).join('.') || null; } catch { /* sem NS (SERVFAIL/nxdomain) */ }
+    // grava SEMPRE (sentinela 'unknown' quando não há NS/provider) → marca "correu", não fica null-forever
+    await client.request(updateItem('sites', job.siteId, { dns_provider: clip(provider || 'unknown', 120) })).catch(() => {});
     return 'ack';
   }
   async function handleWhois(job) {
     const domain = getDomain(job.domain) || job.domain;
     const { lookupWhois } = await import('../lib/whois.js');
-    const w = await lookupWhois(domain); // router tiered; LANÇA em rate-limit → nak (não marca checked)
+    // Apanha falha/HANG do lookup (RDAP .nl PENDURA; rate-limit): timeout INTERNO 25s (< dispatch 38s, senão
+    // o dispatch preempta antes de marcarmos) e grava whois_checked_at na mesma → não orfaniza; o resume de
+    // 90d re-tenta. Antes lançava/pendurava → nak → órfão (os 47 .nl presos + slots desperdiçados).
+    let w = null;
+    try { w = await Promise.race([lookupWhois(domain), new Promise((_, r) => setTimeout(() => r(new Error('whois timeout 25s')), 25000))]); } catch { /* sem dados; marca checked abaixo */ }
     // whois_checked_at SEMPRE (mesmo sem dados, ex.: .pt) → o resume salta-o 90d, não reprocessa eternamente.
     const patch = { whois_checked_at: new Date().toISOString() };
     if (w) Object.assign(patch, { whois_registrar: w.registrar, domain_created: w.created, domain_expiry: w.expiry, domain_age_days: w.ageDays, expiring_soon: w.expiringSoon });

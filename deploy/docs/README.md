@@ -74,9 +74,16 @@ API (5055), Surreal (8000, localhost).
 1. **Vault = clone dedicado** `/root/np-vault` (`git clone` do repo), **NÃO** o checkout dos serviços
    `/root/netprospect-v1` — senão editar o vault colidiria com o `git merge --ff-only` do auto-deploy.
 2. **Subir**: `docker compose --env-file deploy/docs/.env -p npdocs -f deploy/docs/docker-compose.yml up -d obsidian-web`.
-3. **Proxy** (NPMplus): subdomínio `obsidian.netmaster.pt → 100.114.17.74:8091` (Authentik). *(Suporta também
+3. **Registar o vault** (senão o Obsidian arranca sem vault nenhum): criar o registo de vaults —
+   ```bash
+   docker exec npdocs-obsidian-web-1 sh -c 'mkdir -p /config/.config/obsidian && \
+     printf %s "{\"vaults\":{\"npvault0000000001\":{\"path\":\"/vaults\",\"ts\":1700000000000,\"open\":true}}}" \
+     > /config/.config/obsidian/obsidian.json' && docker restart npdocs-obsidian-web-1
+   ```
+   (persiste no volume `obsidian-config`; o `/vaults` já é um vault válido — tem `.obsidian/app.json` do repo).
+4. **Proxy** (NPMplus): subdomínio `obsidian.netmaster.pt → 100.114.17.74:8091` (Authentik). *(Suporta também
    `SUBFOLDER` para path, mas subdomínio é mais simples.)* **Nunca aberto** — atrás de Authentik.
-4. **Sync git** (o container tem git via `DOCKER_MODS`): editas no Obsidian → na terminal do Obsidian,
+5. **Sync git** (o container tem git via `DOCKER_MODS`): editas no Obsidian → na terminal do Obsidian,
    `git -C /vaults commit -am "..." && git push` → origin → o checkout dos serviços faz auto-pull → o site
    reconstrói (timer). O **push precisa de auth github** no clone (token/deploy-key) — passo do user.
 

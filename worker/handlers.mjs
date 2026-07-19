@@ -433,12 +433,14 @@ export function makeFineHandlers(ctx, js) {
 
   // ---- SUBDOMÍNIOS (crt.sh) — sharded entre workers (Fase C: exit nodes) ------
   async function handleSubdomains(job) {
-    const { fetchNames } = await import('../lib/crtsh.js');
+    const { discoverSubdomains } = await import('../lib/subdomains.js');
     const site = await siteRow(job.siteId || 0, ['id', 'domain', 'hostnames'])
       || (job.domain ? (await client.request(readItems('sites', { filter: { domain: { _eq: job.domain } }, fields: ['id', 'domain', 'hostnames'], limit: 1 })))[0] : null);
     if (!site) return 'ack';
     if (site.hostnames && !job.force) return 'ack'; // resume
-    const { names } = await fetchNames(site.domain, { activeOnly: true }); // erro transitório → nak/retry
+    // Multi-fonte (certspotter + crt.sh + securitytrails/censys/subfinder). Todas as fontes falharem
+    // (unavailable) → lança → nak/retry. Substitui o crt.sh-PG único, que era um SPOF instável.
+    const { names } = await discoverSubdomains(site.domain);
     const subs = names.filter((h) => h !== site.domain && !h.startsWith('www.'));
     await client.request(updateItem('sites', site.id, { hostnames: subs }));
     return 'ack';

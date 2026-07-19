@@ -20,6 +20,7 @@ import {
   STREAM, SUBJECTS, CONSUMERS, consumersForRoles,
 } from '../lib/jobs.js';
 import { createEnrichContext, enrichOne, upsertSite } from '../enrich-sites.js';
+import { loadKnownDomains } from '../lib/known-domains.js';
 import { processSite } from '../extract-contacts.js';
 import { makeFineHandlers } from './handlers.mjs';
 import { getSnapshot, ensureBucket, ensureReportsBucket, putReport } from '../lib/artifacts.js';
@@ -572,9 +573,15 @@ async function main() {
   // ativo o exige (enrich/contacts/fetch/fingerprint/…). Um worker SÓ-verify (VM free
   // pequena de 1 GB) arranca com contexto MÍNIMO — poupa RAM e tempo de arranque.
   const HEAVY_CTX = new Set(['enrich', 'contacts', 'fetch', 'fetch_residential', 'fingerprint', 'geoip', 'dns', 'discover', 'social', 'locality', 'industry']);
-  const ctx = active.some((n) => HEAVY_CTX.has(n))
-    ? await createEnrichContext({ wappalyzer: true, loadKnownDomains: true })
+  const needsDomains = active.some((n) => HEAVY_CTX.has(n));
+  // loadKnownDomains: false → o set é carregado ABAIXO pelo loader endurecido (lib/known-domains.js,
+  // volume-mounted → chega à frota sem rebuild; createEnrichContext está baked em enrich-sites.js).
+  const ctx = needsDomains
+    ? await createEnrichContext({ wappalyzer: true, loadKnownDomains: false })
     : { client: makeClient(), geoip: { mode: 'off', lookup: async () => ({}) }, platformIdBySlug: {}, knownDomains: new Set() };
+  // Carga endurecida: PG direto (não pressiona o Directus de 4c) + retry/guard (nunca 0 em silêncio)
+  // + jitter (dessincroniza reloads simultâneos da frota). Corrige o incidente do reload-storm.
+  if (needsDomains) ctx.knownDomains = await loadKnownDomains(ctx.client, { jitter: true });
   log(`contexto pronto: geoip=${ctx.geoip.mode}, plataformas=${Object.keys(ctx.platformIdBySlug).length}, domínios conhecidos=${ctx.knownDomains.size}`);
   const needAudit = active.some((n) => HEAVY.has(n));
   const audit = needAudit ? await createAuditContext() : null;

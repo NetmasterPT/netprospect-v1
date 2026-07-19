@@ -1326,7 +1326,7 @@ app.get('/api/config', async (req, res) => {
     const verifyFleet = { workers: 0, verifiedTotal: null };
     try {
       if (r && _redisUp) { const ids = await r.zRangeByScore('np:wk:index', Date.now() - 90000, '+inf').catch(() => []);
-        for (const id of ids) { const hh = await r.hGetAll(`np:wk:${id}`).catch(() => ({})); if ((hh.role || '') === 'verify') verifyFleet.workers++; } }
+        for (const id of ids) { const hh = await r.hGetAll(`np:wk:${id}`).catch(() => ({})); const rls = String(hh.role || '').split(',').map((x) => x.trim()); if (rls.includes('verify') || rls.includes('all')) verifyFleet.workers++; } }
     } catch { /* */ }
     verifyFleet.verifiedTotal = await count('contacts', '&filter[email_verified][_eq]=true').catch(() => null);
     res.json({

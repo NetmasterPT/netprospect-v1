@@ -369,14 +369,17 @@ const NAV_GROUPS = [
   ['Contabilidade', [
     ['moloni-faturas', 'briefcase', 'Faturas'],
     ['moloni-fr', 'briefcase', 'Faturas-Recibo'],
+    ['moloni-vd', 'briefcase', 'Vendas a Dinheiro'],
     ['moloni-recibos', 'briefcase', 'Recibos'],
     ['moloni-nc', 'briefcase', 'Notas de Crédito'],
     ['moloni-nd', 'briefcase', 'Notas de Débito'],
+    ['moloni-avencas', 'clock', 'Avenças'],
+    ['moloni-produtos', 'directory', 'Produtos'],
+  ]],
+  ['Compras', [
     ['moloni-ff', 'briefcase', 'Fat. Fornecedores'],
     ['moloni-frf', 'briefcase', 'FR Fornecedores'],
     ['moloni-ncf', 'briefcase', 'NC Fornecedores'],
-    ['moloni-avencas', 'clock', 'Avenças'],
-    ['moloni-produtos', 'directory', 'Produtos'],
   ]],
   ['Prospecção', [['subscriptions', 'briefcase', 'Subscrições'], ['icps', 'contacts', 'ICPs'], ['segments', 'segments', 'Segmentos']]],
   ['Canal Email', [['campaigns', 'send', 'Campanhas'], ['templates', 'mail', 'Templates']]],
@@ -2780,6 +2783,7 @@ async function route() {
     else if (h === 'moloni-faturas') await viewMoloniDocs('moloni-faturas', 'fatura', 'Faturas');
     else if (h === 'moloni-fr') await viewMoloniDocs('moloni-fr', 'fatura_recibo', 'Faturas-Recibo');
     else if (h === 'moloni-recibos') await viewMoloniDocs('moloni-recibos', 'recibo', 'Recibos');
+    else if (h === 'moloni-vd') await viewMoloniDocs('moloni-vd', 'venda_dinheiro', 'Vendas a Dinheiro');
     else if (h === 'moloni-nc') await viewMoloniDocs('moloni-nc', 'nota_credito', 'Notas de Crédito');
     else if (h === 'moloni-nd') await viewMoloniDocs('moloni-nd', 'nota_debito', 'Notas de Débito');
     else if (h === 'moloni-ff') await viewMoloniDocs('moloni-ff', 'fatura_fornecedor', 'Faturas de Fornecedores');

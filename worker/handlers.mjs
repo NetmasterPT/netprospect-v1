@@ -335,7 +335,7 @@ export function makeFineHandlers(ctx, js) {
     }
     const patch = { company: companyId, contacts_checked_at: new Date().toISOString() };
     // Inteligência competitiva: quem faz o site (atribuição do rodapé "Desenvolvido por X").
-    const dev = detectWebDeveloper(snap.html || '', site.domain); if (dev) { patch.web_developer = clip(dev.domain, 120); patch.web_developer_name = clip(dev.name, 140); }
+    const dev = detectWebDeveloper(allHtml, site.domain); if (dev) { patch.web_developer = clip(dev.domain, 120); patch.web_developer_name = clip(dev.name, 140); }
     patch.has_email = !!generalEmail || found.some((p) => p.email);
     patch.has_phone = phones.length > 0;
     if (found.some((p) => p.role_category === 'decision_maker')) patch.has_decision_maker = true;

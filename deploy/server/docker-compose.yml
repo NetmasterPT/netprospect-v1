@@ -231,3 +231,28 @@ services:
           fi
           sleep 600
         done
+
+  # Cron do sync Moloni — mantém a Contabilidade (companies/products/moloni_documents) fresca.
+  # 1x/dia às 05:00 UTC. O sync é throttled (lib/moloni-sync.js) → não afoga o Directus. $$=escape.
+  moloni-sync-cron:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      - dashboard
+    command:
+      - sh
+      - -c
+      - |
+        apk add --no-cache curl >/dev/null 2>&1
+        echo "moloni-sync-cron iniciado ($$(date -u))"
+        LAST=""
+        while true; do
+          H=$$(date -u +%H); D=$$(date -u +%Y-%m-%d)
+          if [ "$$H" = "05" ] && [ "$$D" != "$$LAST" ]; then
+            LAST=$$D
+            echo "$$(date -u) -> moloni sync (all)"
+            curl -fsS --max-time 900 -X POST "http://dashboard:3000/api/moloni/sync?entity=all" || echo "curl falhou"
+            echo
+          fi
+          sleep 600
+        done

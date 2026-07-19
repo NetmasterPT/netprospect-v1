@@ -270,11 +270,13 @@ async function main() {
 
   console.log('Campos: campaigns / emails (Fase F)');
   const ANGLES = ['general', 'speed', 'seo', 'security', 'hosting', 'maintenance'];
+  const PHASES = ['cold', 'semi_warm', 'warm']; // escada de temperatura do outreach (Cold → Semi-Warm → Warm)
   const CAMPAIGN_STATUS = ['draft', 'generating', 'ready', 'sending', 'sent', 'paused'];
   const EMAIL_STATUS = ['pending', 'generating', 'ready', 'sending', 'sent', 'failed', 'opened', 'clicked', 'replied', 'bounced', 'unsubscribed', 'skipped'];
   await ensureField('campaigns', 'name', str());
   await ensureField('campaigns', 'status', enumS(CAMPAIGN_STATUS));
   await ensureField('campaigns', 'angle', enumS(ANGLES));
+  await ensureField('campaigns', 'phase', enumS(PHASES)); // escada de temperatura (Cold → Semi-Warm → Warm)
   await ensureField('campaigns', 'audience_filters', json());   // snapshot do filtro do segmento
   await ensureField('campaigns', 'from_name', str());
   await ensureField('campaigns', 'from_email', str());

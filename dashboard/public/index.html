@@ -1407,6 +1407,10 @@ async function viewTriggers() {
 
 // ========== CAMPANHAS (Fase F) ==========
 const ANGLE_LABEL = { general: 'Geral', speed: 'Velocidade', seo: 'SEO / visibilidade', security: 'Segurança', hosting: 'Alojamento', maintenance: 'Manutenção' };
+// Escada de temperatura do outreach — do primeiro toque (cold) ao lead engajado (warm).
+const PHASE_ORDER = ['cold', 'semi_warm', 'warm'];
+const PHASE_LABEL = { cold: 'Cold', semi_warm: 'Semi-Warm', warm: 'Warm' };
+const phaseBadge = (p) => { const cls = { cold: 'neutral', semi_warm: 'warn', warm: 'ok' }[p] || 'neutral'; return `<span class="np-badge ${cls}" style="height:18px" title="Fase da escada de temperatura">${PHASE_LABEL[p] || 'Cold'}</span>`; };
 const CAMP_STATUS = { draft: ['Rascunho', 'neutral'], generating: ['A gerar…', 'info'], ready: ['Pronta', 'brand'], sending: ['A enviar…', 'info'], sent: ['Enviada', 'ok'], paused: ['Pausada', 'warn'] };
 const EMAIL_STATUS = { pending: ['pendente', 'neutral'], generating: ['a gerar', 'info'], ready: ['pronto', 'brand'], sending: ['a enviar', 'info'], sent: ['enviado', 'ok'], failed: ['falhou', 'warn'], opened: ['aberto', 'ok'], clicked: ['clicou', 'ok'], replied: ['respondeu', 'ok'], bounced: ['devolvido', 'warn'], unsubscribed: ['opt-out', 'warn'], skipped: ['ignorado', 'neutral'] };
 const campBadge = (st) => { const [l, c] = CAMP_STATUS[st] || [st, 'neutral']; return `<span class="np-badge ${c}" style="height:20px">${l}</span>`; };
@@ -1425,6 +1429,7 @@ async function viewCampaigns() {
     <div class="np-grid" style="grid-template-columns:1fr 1fr;gap:10px">
       <label class="np-fld"><span>Nome</span><input id="c_name" class="np-input" placeholder="Ex.: WooCommerce PT — velocidade"></label>
       <label class="np-fld"><span>Ângulo</span><select id="c_angle" class="np-input">${angleOpts}</select></label>
+      <label class="np-fld"><span>Fase (temperatura)</span><select id="c_phase" class="np-input">${PHASE_ORDER.map((p) => `<option value="${p}">${PHASE_LABEL[p]}</option>`).join('')}</select></label>
       <label class="np-fld"><span>Audiência (segmento)</span><select id="c_seg" class="np-input">${segOpts}</select></label>
       <label class="np-fld"><span>Assunto (pista p/ IA, opcional)</span><input id="c_hint" class="np-input" placeholder="opcional"></label>
       <label class="np-fld"><span>De (nome)</span><input id="c_fromname" class="np-input" placeholder="Gonçalo Pedro" value="Gonçalo Pedro"></label>
@@ -1434,7 +1439,7 @@ async function viewCampaigns() {
     <div style="display:flex;gap:8px;margin-top:12px"><button class="np-btn np-btn--primary" onclick="createCampaign()">Criar campanha</button><button class="np-btn" onclick="CAMP_NEW=false;viewCampaigns()">Cancelar</button></div>
   </div></section>` : '';
   const card = (c) => { const k = c.counts || {}; return `<section class="np-card" style="overflow:hidden;cursor:pointer" onclick="location.hash='#/campaigns?id=${c.id}'"><div class="np-card-b">
-    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="font-weight:800;font-size:15px">${esc(c.name)}</div>${campBadge(c.status)}</div>
+    <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div style="font-weight:800;font-size:15px">${esc(c.name)}</div><div style="display:flex;gap:4px;flex-wrap:wrap">${phaseBadge(c.phase || 'cold')}${campBadge(c.status)}</div></div>
     <div class="muted" style="font-size:12.5px;margin:4px 0 10px">Ângulo: ${ANGLE_LABEL[c.angle] || c.angle}${c.from_email ? ` · de ${esc(c.from_email)}` : ''}</div>
     <div style="display:flex;gap:14px;flex-wrap:wrap">
       <div><div class="tnum" style="font-size:20px;font-weight:800">${fmt(k.total || 0)}</div><div class="muted" style="font-size:11px">destinatários</div></div>
@@ -1451,7 +1456,7 @@ window.createCampaign = async () => {
   const segId = $('#c_seg').value;
   const segs = (await api('/api/segments')).segments || [];
   const seg = segs.find((s) => String(s.id) === String(segId));
-  const body = { name: $('#c_name').value.trim(), angle: $('#c_angle').value, subject_hint: $('#c_hint').value.trim(),
+  const body = { name: $('#c_name').value.trim(), angle: $('#c_angle').value, phase: $('#c_phase')?.value || 'cold', subject_hint: $('#c_hint').value.trim(),
     from_name: $('#c_fromname').value.trim(), from_email: $('#c_fromemail').value.trim(), reply_to: $('#c_replyto').value.trim(),
     segmentId: segId || null, filters: seg?.filters || {} };
   if (!body.name) return alert('Dá um nome à campanha.');
@@ -1473,7 +1478,7 @@ async function viewCampaign(id) {
     <td><span class="np-badge ${cl}" style="height:18px">${l}</span></td></tr>`; };
   const dry = mailerMode !== 'smtp';
   $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow"><a href="#/campaigns" style="color:var(--np-brand-ink)">← Campanhas</a></div><h1 class="np-h1">${esc(c.name)}</h1>
-    <div class="np-sub" style="display:flex;gap:8px;align-items:center">${campBadge(c.status)} Ângulo: ${ANGLE_LABEL[c.angle] || c.angle}${dry ? ' · <span class="np-badge warn" style="height:20px">dry-run</span>' : ''}</div></div>
+    <div class="np-sub" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">${campBadge(c.status)} Ângulo: ${ANGLE_LABEL[c.angle] || c.angle}${dry ? ' · <span class="np-badge warn" style="height:20px">dry-run</span>' : ''} · <span style="display:inline-flex;gap:6px;align-items:center">Fase: <select class="np-input" style="height:26px;padding:0 6px;font-size:12px;width:auto" onchange="setCampaignPhase(${c.id}, this.value)">${PHASE_ORDER.map((p) => `<option value="${p}" ${(c.phase || 'cold') === p ? 'selected' : ''}>${PHASE_LABEL[p]}</option>`).join('')}</select></span></div></div>
     <div style="display:flex;gap:8px"><button class="np-btn np-btn--primary" onclick="campGenerate(${c.id})" id="genbtn">${ic('activity', 14)} Gerar e-mails</button>
       <button class="np-btn" onclick="campSend(${c.id})" id="sendbtn" ${generated ? '' : 'disabled'}>${ic('send', 14)} Enviar${dry ? ' (teste)' : ''}</button>
       <button class="np-btn" onclick="campDelete(${c.id})">Apagar</button></div></div>
@@ -1485,6 +1490,7 @@ async function viewCampaign(id) {
 window.campGenerate = async (id) => { const b = $('#genbtn'); if (b) { b.disabled = true; b.textContent = 'A gerar…'; } const r = await api('/api/campaigns/' + id + '/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); captureEvent('campaign_generate_requested', { campaign_id: id, queued_count: r.queued, route: currentRouteName() }); alert(`${r.queued} e-mails em fila para geração. Atualiza daqui a uns segundos.`); viewCampaign(id); };
 window.campSend = async (id) => { if (!confirm('Enviar/enfileirar os e-mails prontos?')) return; const r = await api('/api/campaigns/' + id + '/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' }); captureEvent('campaign_send_requested', { campaign_id: id, queued_count: r.queued, route: currentRouteName() }); alert(`${r.queued} e-mails em fila de envio.`); viewCampaign(id); };
 window.campDelete = async (id) => { if (!confirm('Apagar a campanha e todos os e-mails?')) return; await fetch('/api/campaigns/' + id, { method: 'DELETE' }); location.hash = '#/campaigns'; };
+window.setCampaignPhase = async (id, phase) => { try { await api('/api/campaigns/' + id, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phase }) }); captureEvent('campaign_phase_changed', { campaign_id: id, phase, route: currentRouteName() }); } catch (e) { alert('Erro ao mudar a fase: ' + e.message); } };
 window.previewEmail = async (emailId) => {
   const { emails } = await api('/api/campaigns/' + (parseHashQuery().id) + '?_=' + emailId).catch(() => ({ emails: [] }));
   const e = (emails || []).find((x) => x.id === emailId); if (!e) return;
@@ -2471,10 +2477,16 @@ window.runImport = async (dry) => {
 
 // ========== AGENTES IA (B4) ==========
 let AGENT_RESULT = null;
+let PLAN_BATCHES = {};        // batchId -> ideas[] (encadeamento Planner → Audience/Campaign)
+let CAMPAIGN_RESULTS = {};    // bid -> resultado do Campaign Creator (para "guardar como campanha")
+const CAMP_ANGLES = ['general', 'speed', 'seo', 'security', 'hosting', 'maintenance'];
+const CHAT_GREETING = 'Olá! Sou o <b>Orquestrador</b>. Posso criar <b>públicos-alvo</b>, sugerir <b>campanhas</b>, ou escrever o <b>copy</b> dos emails. O que precisas?';
+let CHAT_HISTORY = [];
+try { CHAT_HISTORY = JSON.parse(sessionStorage.getItem('np_chat') || '[]'); } catch (e) { CHAT_HISTORY = []; }
 async function viewAgents() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
   renderNav('agents');
-  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Assistente</div><h1 class="np-h1">Agentes IA</h1><div class="np-sub">On-prem (Ollama/Gemma). Fala com o Orquestrador (encaminha para os sub-agentes) ou usa-os diretamente.</div></div></div>
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Assistente</div><h1 class="np-h1">Agentes IA</h1><div class="np-sub">On-prem (Ollama/Gemma). Fala com o Orquestrador (encaminha para os sub-agentes) ou usa-os diretamente.</div></div><div style="display:flex;gap:8px;align-items:center"><span id="ai_health" class="np-badge neutral">Ollama…</span></div></div>
     <section class="np-card" style="margin-bottom:16px"><div class="np-card-h"><h2>${ic('sparkles', 16)} Orquestrador</h2><span class="muted" style="font-size:12px">chat · encaminha para o Audience Creator / Planner</span></div><div class="np-card-b">
       <div id="ag_chat" style="max-height:360px;overflow:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:10px"></div>
       <form id="ag_chatform" style="display:flex;gap:8px" onsubmit="return chatSend(event)"><input id="ag_chatin" class="np-input" style="flex:1" placeholder="Ex.: “cria um público de lojas WooCommerce lentas” · ou “que campanhas devia fazer?”" autocomplete="off"><button class="np-btn np-btn--primary" type="submit">${ic('send', 15)}</button></form>
@@ -2499,11 +2511,17 @@ async function viewAgents() {
           <button class="np-btn np-btn--primary" style="margin-top:10px" onclick="runCampaignCopy()">${ic('sparkles', 15)} Gerar copy</button>
           <div id="ag_camp_out"></div></div></section>
     </div>`;
+  chatReplay(); aiHealthPoll();
 }
-function chatAppend(who, html) { const box = $('#ag_chat'); if (!box) return; const align = who === 'user' ? 'flex-end' : 'flex-start'; const bg = who === 'user' ? 'var(--np-brand-soft)' : 'var(--np-surface-2)'; box.insertAdjacentHTML('beforeend', `<div style="align-self:${align};max-width:88%;background:${bg};border-radius:12px;padding:10px 12px;font-size:13px">${html}</div>`); box.scrollTop = box.scrollHeight; }
+function chatAppend(who, html, persist = true) { const box = $('#ag_chat'); if (!box) return; const align = who === 'user' ? 'flex-end' : 'flex-start'; const bg = who === 'user' ? 'var(--np-brand-soft)' : 'var(--np-surface-2)'; box.insertAdjacentHTML('beforeend', `<div style="align-self:${align};max-width:88%;background:${bg};border-radius:12px;padding:10px 12px;font-size:13px">${html}</div>`); box.scrollTop = box.scrollHeight; if (persist) { CHAT_HISTORY.push({ who, html }); try { sessionStorage.setItem('np_chat', JSON.stringify(CHAT_HISTORY.slice(-100))); } catch (e) {} } }
+// Repõe o histórico do chat (persiste entre navegações via sessionStorage). Mostra a saudação se vazio.
+function chatReplay() { const box = $('#ag_chat'); if (!box) return; box.innerHTML = ''; if (!CHAT_HISTORY.length) { chatAppend('bot', CHAT_GREETING, false); return; } for (const m of CHAT_HISTORY) chatAppend(m.who, m.html, false); }
+window.chatClear = () => { CHAT_HISTORY = []; try { sessionStorage.removeItem('np_chat'); } catch (e) {} chatReplay(); };
+// Chip de saúde do Ollama (páginas AI). Estado: online (quente/pronto) · sem-modelo · offline.
+async function aiHealthPoll() { const el = $('#ai_health'); if (!el) return; try { const h = await api('/api/agents/health'); const map = { online: ['ok', h.warm ? 'Ollama · quente' : 'Ollama · pronto'], 'no-model': ['warn', 'Ollama · sem modelo'], off: ['warn', 'Ollama · offline'] }; const [cls, txt] = map[h.state] || ['neutral', 'Ollama']; el.className = 'np-badge ' + cls; el.textContent = txt; el.title = (h.model || '') + (h.reason ? ' — ' + h.reason : ''); } catch (e) { el.className = 'np-badge warn'; el.textContent = 'Ollama · ?'; } }
 window.chatSend = async (ev) => {
   ev.preventDefault(); const inp = $('#ag_chatin'); const msg = (inp.value || '').trim(); if (!msg) return false; inp.value = '';
-  chatAppend('user', esc(msg)); chatAppend('bot', '<span class="muted">a pensar… (Ollama on-prem)</span>');
+  chatAppend('user', esc(msg)); chatAppend('bot', '<span class="muted">a pensar… (Ollama on-prem)</span>', false);
   let r; try { r = await api('/api/agents/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ message: msg }) }); }
   catch (e) { const box = $('#ag_chat'); if (box?.lastChild) box.lastChild.innerHTML = `<span class="np-badge warn" style="height:auto;padding:6px">${esc(e.message)}</span>`; return false; }
   const box = $('#ag_chat'); if (box?.lastChild) box.removeChild(box.lastChild);
@@ -2512,7 +2530,7 @@ window.chatSend = async (ev) => {
     const chips = Object.entries(r.filters || {}).map(([k, v]) => `<span class="np-chip">${esc(k)}: ${esc(v)}</span>`).join(' ') || 'sem filtros';
     chatAppend('bot', `<b>${esc(r.name)}</b> — <b>${fmt(r.count)}</b> sites<div class="muted" style="font-size:12px;margin:4px 0">${esc(r.explanation || '')}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">${chips}</div><button class="np-btn np-btn--sm np-btn--primary" onclick="saveAudience()">Guardar segmento</button> <button class="np-btn np-btn--sm" onclick="location.hash='#/directory?'+new URLSearchParams(AGENT_RESULT.filters).toString()">Ver no diretório</button>`);
   } else if (r.kind === 'plan') {
-    chatAppend('bot', (r.ideas || []).map((i) => `<div style="margin-bottom:8px"><b>${esc(i.title)}</b><div style="font-size:12px"><b>Público:</b> ${esc(i.audience)} · <b>Ângulo:</b> ${esc(i.angle)}</div>${i.why ? `<div class="muted" style="font-size:11.5px">${esc(i.why)}</div>` : ''}</div>`).join('') || 'Sem sugestões.');
+    chatAppend('bot', renderPlanIdeas(r.ideas));
   } else if (r.kind === 'campaign') { chatAppend('bot', renderCampaignCopy(r)); } else { chatAppend('bot', esc(r.reply || '(sem resposta)')); }
   return false;
 };
@@ -2539,12 +2557,44 @@ window.runPlanner = async () => {
   const out = $('#ag_plan_out'); out.innerHTML = `<div class="np-sub" style="margin-top:12px">A analisar a base…</div>`;
   let r; try { r = await api('/api/agents/plan', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: ($('#ag_plan').value || '').trim() }) }); }
   catch (e) { out.innerHTML = `<div class="np-badge warn" style="height:auto;padding:8px;margin-top:12px">${esc(e.message)}</div>`; return; }
-  const card = (i) => `<div style="padding:12px;background:var(--np-surface-2);border-radius:10px;margin-top:10px">
+  out.innerHTML = renderPlanIdeas(r.ideas);
+};
+// Planner → encadeamento: cada ideia vira público (Audience Creator) ou copy (Campaign Creator) no mesmo sítio.
+function renderPlanIdeas(ideas) {
+  if (!(ideas || []).length) return '<div class="muted" style="margin-top:12px">Sem sugestões (ou Ollama em baixo).</div>';
+  const bid = 'pl_' + Math.random().toString(36).slice(2, 8);
+  PLAN_BATCHES[bid] = ideas;
+  return ideas.map((i, idx) => `<div style="padding:12px;background:var(--np-surface-2);border-radius:10px;margin-top:10px">
     <div style="font-weight:800">${esc(i.title)}</div>
     <div style="font-size:12.5px;margin-top:4px"><b>Público:</b> ${esc(i.audience)}</div>
     <div style="font-size:12.5px"><b>Ângulo:</b> ${esc(i.angle)}</div>
-    ${i.why ? `<div class="muted" style="font-size:12px;margin-top:4px">${esc(i.why)}</div>` : ''}</div>`;
-  out.innerHTML = (r.ideas || []).length ? r.ideas.map(card).join('') : '<div class="muted" style="margin-top:12px">Sem sugestões (ou Ollama em baixo).</div>';
+    ${i.why ? `<div class="muted" style="font-size:12px;margin-top:4px">${esc(i.why)}</div>` : ''}
+    <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+      <button class="np-btn np-btn--sm" onclick="planAudience('${bid}',${idx})">${ic('segments', 13)} Criar público</button>
+      <button class="np-btn np-btn--sm" onclick="planCopy('${bid}',${idx})">${ic('send', 13)} Escrever copy</button>
+    </div><div id="${bid}_${idx}"></div></div>`).join('');
+}
+window.planAudience = async (bid, idx) => {
+  const idea = (PLAN_BATCHES[bid] || [])[idx]; if (!idea) return;
+  const out = document.getElementById(`${bid}_${idx}`); if (!out) return;
+  out.innerHTML = `<div class="np-sub" style="margin-top:10px">A criar público…</div>`;
+  let r; try { r = await api('/api/agents/audience', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prompt: idea.audience }) }); }
+  catch (e) { out.innerHTML = `<div class="np-badge warn" style="height:auto;padding:6px;margin-top:8px">${esc(e.message)}</div>`; return; }
+  AGENT_RESULT = r;
+  const chips = Object.entries(r.filters || {}).map(([k, v]) => `<span class="np-chip">${esc(k)}: ${esc(v)}</span>`).join(' ') || '<span class="muted">sem filtros</span>';
+  out.innerHTML = `<div style="margin-top:10px;padding:10px;background:var(--np-surface);border:1px solid var(--np-border);border-radius:8px">
+    <div style="font-weight:700">${esc(r.name)}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin:6px 0">${chips}</div>
+    <div><span class="tnum" style="font-weight:800">${fmt(r.count)}</span> <span class="muted">sites</span>
+    <button class="np-btn np-btn--sm np-btn--primary" style="margin-left:8px" onclick="saveAudience()">${ic('plus', 13)} Guardar segmento</button>
+    <button class="np-btn np-btn--sm" onclick="location.hash='#/directory?'+new URLSearchParams(AGENT_RESULT.filters).toString()">Ver no diretório</button></div></div>`;
+};
+window.planCopy = async (bid, idx) => {
+  const idea = (PLAN_BATCHES[bid] || [])[idx]; if (!idea) return;
+  const out = document.getElementById(`${bid}_${idx}`); if (!out) return;
+  out.innerHTML = `<div class="np-sub" style="margin-top:10px">A escrever copy… (pode demorar)</div>`;
+  let r; try { r = await api('/api/agents/campaign-copy', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ angle: idea.angle, audience: idea.audience }) }); }
+  catch (e) { out.innerHTML = `<div class="np-badge warn" style="height:auto;padding:6px;margin-top:8px">${esc(e.message)}</div>`; return; }
+  out.innerHTML = renderCampaignCopy(r);
 };
 
 // Campaign Creator — render partilhado (card + chat).
@@ -2553,13 +2603,26 @@ function renderCampaignCopy(r) {
   const subs = (r.subjects || []).map((x) => `<li>${esc(x)}</li>`).join('');
   const vars = (r.variables || []).map((v) => `<span class="np-chip">${esc(v)}</span>`).join(' ');
   const bid = 'cc_' + Math.random().toString(36).slice(2, 8);
+  CAMPAIGN_RESULTS[bid] = r;
   return `<div style="margin-top:12px;padding:14px;background:var(--np-surface-2);border-radius:10px">
     <div class="np-eyebrow">Assuntos</div><ul style="margin:4px 0 10px;padding-left:20px">${subs || '<li class="muted">—</li>'}</ul>
     ${r.preview_text ? `<div class="muted" style="font-size:12px;margin-bottom:8px">Preview: ${esc(r.preview_text)}</div>` : ''}
     <div class="np-eyebrow">Corpo</div><pre id="${bid}" style="white-space:pre-wrap;font-family:inherit;font-size:13px;background:var(--np-surface);border:1px solid var(--np-border);border-radius:8px;padding:10px;margin:4px 0 10px">${esc(r.body || '')}</pre>
     ${vars ? `<div class="np-eyebrow">Variáveis</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:4px">${vars}</div>` : ''}
-    <button class="np-btn np-btn--sm" style="margin-top:10px" onclick="navigator.clipboard.writeText(document.getElementById('${bid}').innerText).then(()=>this.textContent='Copiado ✓')">Copiar corpo</button></div>`;
+    <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+      <button class="np-btn np-btn--sm np-btn--primary" onclick="saveCampaignFromCopy('${bid}',this)">${ic('plus', 13)} Guardar como campanha</button>
+      <button class="np-btn np-btn--sm" onclick="navigator.clipboard.writeText(document.getElementById('${bid}').innerText).then(()=>this.textContent='Copiado ✓')">Copiar corpo</button></div></div>`;
 }
+// Guarda o copy gerado como uma campanha draft (angle + 1º assunto como pista + corpo em notas). O user liga a audiência e gera na página da campanha.
+window.saveCampaignFromCopy = async (bid, btn) => {
+  const r = CAMPAIGN_RESULTS[bid]; if (!r) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'A guardar…'; }
+  const angle = CAMP_ANGLES.includes(r.angle) ? r.angle : 'general';
+  const nameBase = (r.audience || '').trim().slice(0, 40) || angle;
+  let c; try { c = await api('/api/campaigns', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Campanha · ' + nameBase, angle, subject_hint: (r.subjects || [])[0] || '', notes: r.body || '' }) }); }
+  catch (e) { if (btn) { btn.disabled = false; btn.textContent = 'Erro: ' + String(e.message).slice(0, 40); } return; }
+  location.hash = '#/campaigns?id=' + (c.campaign?.id || '');
+};
 window.runCampaignCopy = async () => {
   const angle = $('#ag_camp_angle')?.value || 'general';
   const audience = ($('#ag_camp_aud')?.value || '').trim();
@@ -2574,13 +2637,13 @@ window.runCampaignCopy = async () => {
 async function viewChat() {
   if (!STATS) { try { STATS = await api('/api/stats'); } catch (e) {} }
   renderNav('chat');
-  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Assistente</div><h1 class="np-h1">Chat com o Orquestrador</h1><div class="np-sub">Linguagem natural (PT). Encaminha para os sub-agentes: Audience Creator · Planner · Campaign Creator. Ollama on-prem.</div></div></div>
+  $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Assistente</div><h1 class="np-h1">Chat com o Orquestrador</h1><div class="np-sub">Linguagem natural (PT). Encaminha para os sub-agentes: Audience Creator · Planner · Campaign Creator. Ollama on-prem.</div></div><div style="display:flex;gap:8px;align-items:center"><span id="ai_health" class="np-badge neutral">Ollama…</span><button class="np-btn np-btn--sm" onclick="chatClear()">Limpar</button></div></div>
     <section class="np-card"><div class="np-card-b" style="display:flex;flex-direction:column;height:calc(100vh - 250px);min-height:400px">
       <div id="ag_chat" style="flex:1;overflow:auto;display:flex;flex-direction:column;gap:10px;margin-bottom:12px"></div>
       <form id="ag_chatform" style="display:flex;gap:8px" onsubmit="return chatSend(event)"><input id="ag_chatin" class="np-input" style="flex:1" placeholder="Ex.: “cria um público de lojas WooCommerce lentas”, “que campanhas devia fazer?”, “escreve um email sobre segurança”" autocomplete="off"><button class="np-btn np-btn--primary" type="submit">${ic('send', 15)}</button></form>
     </div></section>
     <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:12px">${['Que campanhas devia fazer?', 'Cria um público de lojas WooCommerce lentas em PT', 'Escreve um email de outreach sobre a velocidade do site'].map((q) => `<button class="np-btn np-btn--sm" onclick="document.getElementById('ag_chatin').value=this.textContent;chatSend({preventDefault(){}})">${esc(q)}</button>`).join('')}</div>`;
-  chatAppend('bot', 'Olá! Sou o <b>Orquestrador</b>. Posso criar <b>públicos-alvo</b>, sugerir <b>campanhas</b>, ou escrever o <b>copy</b> dos emails. O que precisas?');
+  chatReplay(); aiHealthPoll();
 }
 
 // ========== OUTREACH (campanhas: funil + estatísticas + logs) ==========
@@ -2600,8 +2663,13 @@ async function viewOutreach() {
   const campRow = (c) => `<tr><td style="font-weight:600">${esc(c.name || '—')}</td><td><span class="np-chip">${esc(c.angle || '—')}</span></td><td>${sBadge(c.status)}</td><td class="tnum" style="text-align:right">${fmt(c.generated || 0)}/${fmt(c.total || 0)}</td><td class="tnum" style="text-align:right">${fmt(c.sent || 0)}</td><td class="tnum" style="text-align:right">${fmt(c.opened || 0)}</td><td class="tnum" style="text-align:right">${fmt(c.clicked || 0)}</td></tr>`;
   const logRow = (e) => `<tr><td class="muted">${e.created_at ? esc(String(e.created_at).slice(0, 16).replace('T', ' ')) : '—'}</td><td>${esc(e.to_email || '—')}</td><td style="max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(e.subject || '—')}</td><td>${esc(e.campaign?.name || '—')}</td><td>${sBadge(e.status)}</td></tr>`;
   const angleChips = Object.entries(o.byAngle || {}).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<span class="np-chip">${esc(k)} · ${fmt(v)}</span>`).join(' ');
+  const phaseChips = PHASE_ORDER.map((p) => `<span class="np-chip">${PHASE_LABEL[p]} · ${fmt((o.byPhase || {})[p] || 0)}</span>`).join(' ');
+  const byPhase = { cold: [], semi_warm: [], warm: [] };
+  for (const c of camps) byPhase[PHASE_ORDER.includes(c.phase) ? c.phase : 'cold'].push(c);
+  const campTable = (rows) => `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Nome</th><th>Ângulo</th><th>Estado</th><th style="text-align:right">Gerados</th><th style="text-align:right">Enviados</th><th style="text-align:right">Abertos</th><th style="text-align:right">Cliques</th></tr></thead><tbody>${rows.map(campRow).join('')}</tbody></table></div>`;
+  const phaseSections = PHASE_ORDER.filter((p) => byPhase[p].length).map((p) => `<div style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">${phaseBadge(p)}<span class="muted" style="font-size:12px">${byPhase[p].length} campanha(s)</span></div>${campTable(byPhase[p])}</div>`).join('');
   $('#view').innerHTML = `<div class="np-head"><div><div class="np-eyebrow">Outreach</div><h1 class="np-h1">Outreach</h1><div class="np-sub">Funil de campanhas de email + estatísticas + registo de envios.</div></div></div>
-    <div style="background:var(--np-surface-2);border:1px solid var(--np-border);border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:16px">ℹ️ As campanhas organizam-se por <b>ângulo</b> (${['general', 'speed', 'seo', 'security', 'hosting', 'maintenance'].join(', ')}). A escada de temperatura <b>Cold → Semi-Warm → Warm</b> ainda não é um campo do esquema — quando adicionarmos <code>campaigns.phase</code>, esta página separa por fase automaticamente.</div>
+    <div style="background:var(--np-surface-2);border:1px solid var(--np-border);border-radius:10px;padding:10px 12px;font-size:12.5px;margin-bottom:16px">ℹ️ Cada campanha tem um <b>ângulo</b> (${['general', 'speed', 'seo', 'security', 'hosting', 'maintenance'].join(', ')}) e uma <b>fase</b> na escada de temperatura: <b>Cold</b> (primeiro toque) → <b>Semi-Warm</b> (já interagiu) → <b>Warm</b> (engajado). A fase define-se ao criar a campanha; abaixo, as campanhas estão <b>separadas por fase</b>.</div>
     <div class="np-kpis">
       ${kpi('Campanhas', fmt(camps.length))}
       ${kpi('Emails gerados', fmt(f.generated || 0))}
@@ -2612,9 +2680,10 @@ async function viewOutreach() {
     <div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr));margin-top:16px">
       <section class="np-card"><div class="np-card-h"><h2>Funil</h2></div><div class="np-card-b">${base ? funnel : '<div class="muted">Sem dados de outreach ainda — o funil enche quando as campanhas arrancarem.</div>'}</div></section>
       <section class="np-card"><div class="np-card-h"><h2>Por ângulo</h2></div><div class="np-card-b">${angleChips || '<div class="muted">Sem campanhas.</div>'}</div></section>
+      <section class="np-card"><div class="np-card-h"><h2>Por fase</h2></div><div class="np-card-b">${camps.length ? phaseChips : '<div class="muted">Sem campanhas.</div>'}</div></section>
     </div>
-    <section class="np-card" style="margin-top:16px"><div class="np-card-h"><h2>Campanhas</h2><span class="muted" style="font-size:12px">${fmt(camps.length)}</span></div><div class="np-card-b">
-      ${camps.length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Nome</th><th>Ângulo</th><th>Estado</th><th style="text-align:right">Gerados</th><th style="text-align:right">Enviados</th><th style="text-align:right">Abertos</th><th style="text-align:right">Cliques</th></tr></thead><tbody>${camps.map(campRow).join('')}</tbody></table></div>` : '<div class="muted">Ainda não há campanhas. Cria uma em <a href="#/campaigns">Campanhas</a> ou pede ao <a href="#/chat">Orquestrador</a>.</div>'}</div></section>
+    <section class="np-card" style="margin-top:16px"><div class="np-card-h"><h2>Campanhas por fase</h2><span class="muted" style="font-size:12px">${fmt(camps.length)}</span></div><div class="np-card-b">
+      ${camps.length ? phaseSections : '<div class="muted">Ainda não há campanhas. Cria uma em <a href="#/campaigns">Campanhas</a> ou pede ao <a href="#/chat">Orquestrador</a>.</div>'}</div></section>
     <section class="np-card" style="margin-top:16px"><div class="np-card-h"><h2>Registo de envios (logs)</h2><span class="muted" style="font-size:12px">${fmt(recent.length)} recentes</span></div><div class="np-card-b">
       ${recent.length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Quando</th><th>Para</th><th>Assunto</th><th>Campanha</th><th>Estado</th></tr></thead><tbody>${recent.map(logRow).join('')}</tbody></table></div>` : '<div class="muted">Sem emails registados. Aparecem aqui à medida que as campanhas geram/enviam.</div>'}</div></section>`;
 }
@@ -2702,9 +2771,11 @@ async function viewConfig() {
       ${svc('Ollama (IA)', st.ollama.enabled, esc(st.ollama.url))}
     </div>
     <div class="np-grid" style="grid-template-columns:repeat(auto-fit,minmax(360px,1fr))">
-      <section class="np-card"><div class="np-card-h"><h2>Verificação de email</h2><span class="np-chip">${cfg.mailer === 'smtp' ? 'SMTP' : 'dry-run'}</span></div><div class="np-card-b">
-        ${cfg.providers.length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Provider</th><th style="text-align:right">Chaves</th><th style="text-align:right">Limite</th></tr></thead><tbody>${cfg.providers.map(provRow).join('')}</tbody></table></div>` : `<div class="muted">${cfg.providerFileExists ? 'Sem providers configurados.' : 'config/verify-providers.json ausente (copia o .example).'}</div>`}
-        <div class="muted" style="font-size:12px;margin-top:8px">Proxies de verificação: <b>${cfg.proxyCount}</b>${cfg.proxyFileExists ? '' : ' (ficheiro ausente)'}</div></div></section>
+      <section class="np-card"><div class="np-card-h"><h2>Verificação de email</h2>${(cfg.verifyFleet?.workers > 0) ? `<span class="np-badge ok" style="height:22px">ativo · ${cfg.verifyFleet.workers} worker${cfg.verifyFleet.workers === 1 ? '' : 's'}</span>` : `<span class="np-badge neutral" style="height:22px">inativo</span>`}</div><div class="np-card-b">
+        <div style="font-size:13px;margin-bottom:10px">${(cfg.verifyFleet?.workers > 0) ? `<b>${cfg.verifyFleet.workers}</b> worker(s) <code>verify</code> vivos na frota` : 'Nenhum worker <code>verify</code> vivo'}${cfg.verifyFleet?.verifiedTotal != null ? ` · <b>${fmt(cfg.verifyFleet.verifiedTotal)}</b> emails verificados` : ''}</div>
+        ${cfg.providers.length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Provider (API)</th><th style="text-align:right">Chaves</th><th style="text-align:right">Limite</th></tr></thead><tbody>${cfg.providers.map(provRow).join('')}</tbody></table></div>` : ''}
+        ${cfg.proxyCount ? `<div class="muted" style="font-size:12px;margin-top:8px">Proxies de verificação (Reacher/SMTP): <b>${cfg.proxyCount}</b></div>` : ''}
+        ${(!cfg.providers.length && !cfg.proxyCount) ? `<div class="muted" style="font-size:11px;margin-top:8px">As chaves das APIs e os proxies vivem nos <b>hosts dos workers</b> (ex.: hel1-docker), não neste servidor — ver <code>docs/</code>.</div>` : ''}</div></section>
       <section class="np-card"><div class="np-card-h"><h2>Contas de envio (outreach)</h2></div><div class="np-card-b">
         ${(cfg.sending || []).length ? `<div class="np-tablewrap"><table class="np-table"><thead><tr><th>Conta</th><th>De</th><th>Warm-up</th><th style="text-align:right">Hoje</th><th></th></tr></thead><tbody>${cfg.sending.map(sendRow).join('')}</tbody></table></div>` : '<div class="muted">Sem contas de envio (outreach pausado — aguarda as VMs de IP limpo).</div>'}</div></section>
     </div>
@@ -2793,7 +2864,14 @@ async function route(_retry) {
     else if (h === 'moloni-produtos') await viewMoloniProducts();
     else if (h === 'agendamentos') await viewAgendamentos();
     else await viewOverview();
-  } catch (e) { $('#view').innerHTML = `<div class="np-empty">Erro a carregar: ${esc(e.message)}</div>`; }
+  } catch (e) {
+    if (seq !== ROUTE_SEQ) return; // navegámos entretanto — não pintar o erro de uma rota já abandonada
+    // Erros de rede transitórios (fetch abortado por navegação, blip de rede) → uma tentativa automática antes de desistir.
+    const transient = /Failed to fetch|fetch failed|NetworkError|load failed|aborted|ERR_NETWORK/i.test((e && e.message) || '');
+    if (transient && _retry !== true) { await new Promise((r) => setTimeout(r, 600)); if (seq === ROUTE_SEQ) return route(true); return; }
+    captureFrontendError(e, { action: 'route_load', route: h });
+    $('#view').innerHTML = `<div class="np-empty">Não foi possível carregar esta página.<div class="muted" style="font-size:12px;margin:6px 0">${esc((e && e.message) || 'erro desconhecido')}</div><button class="np-btn np-btn--sm np-btn--primary" style="margin-top:8px" onclick="route()">Tentar de novo</button></div>`;
+  }
   if (parseHashQuery().notif) openNotifications(); // deep-link p/ notificações
 }
 // Auto-refresh global (10s) das páginas de dados. NÃO refresca ferramentas (import/agents/

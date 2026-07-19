@@ -863,6 +863,17 @@ app.delete('/api/campaigns/:id', async (req, res) => {
   try { await dwrite('DELETE', `/items/campaigns/${encodeURIComponent(req.params.id)}`); res.json({ ok: true }); }
   catch (e) { res.status(502).json({ error: e.message }); }
 });
+// PATCH — mudar a fase (escada de temperatura) de uma campanha. Aceita só campos seguros.
+app.patch('/api/campaigns/:id', async (req, res) => {
+  try {
+    const b = req.body || {};
+    const patch = {};
+    if (b.phase !== undefined) { if (!['cold', 'semi_warm', 'warm'].includes(b.phase)) return res.status(400).json({ error: 'fase inválida' }); patch.phase = b.phase; }
+    if (!Object.keys(patch).length) return res.status(400).json({ error: 'nada a atualizar' });
+    const updated = await dwrite('PATCH', `/items/campaigns/${encodeURIComponent(req.params.id)}`, patch);
+    res.json({ ok: true, campaign: updated });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
 
 // --- Tracking de e-mail (open pixel + click redirect) ------------------------
 const PIXEL = Buffer.from('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7', 'base64'); // 1x1 gif

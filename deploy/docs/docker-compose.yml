@@ -60,6 +60,38 @@ services:
     restart: "no"
     profiles: ["ingest"]                        # não sobe com o `up` normal; corre on-demand
 
+  # --- F6: Open Notebook (NotebookLM self-hosted) em /notebook/ ---
+  open-notebook-surreal:
+    image: surrealdb/surrealdb:v2
+    restart: unless-stopped
+    command: start --log info --user ${SURREAL_USER:-root} --pass ${SURREAL_PASSWORD:-root} rocksdb:/mydata/onb.db
+    environment:
+      SURREAL_EXPERIMENTAL_GRAPHQL: "true"
+    volumes:
+      - onb-surreal:/mydata
+    ports:
+      - "127.0.0.1:8000:8000"                   # interno (localhost), nunca exposto
+
+  open-notebook:
+    image: lfnovo/open_notebook:v1-latest
+    restart: unless-stopped
+    depends_on: [open-notebook-surreal]
+    environment:
+      OPEN_NOTEBOOK_ENCRYPTION_KEY: ${OPEN_NOTEBOOK_ENCRYPTION_KEY:?define em deploy/docs/.env}
+      SURREAL_URL: ws://open-notebook-surreal:8000/rpc
+      SURREAL_USER: ${SURREAL_USER:-root}
+      SURREAL_PASSWORD: ${SURREAL_PASSWORD:-root}
+      SURREAL_NAMESPACE: open_notebook
+      SURREAL_DATABASE: open_notebook
+    volumes:
+      - onb-data:/app/data
+    ports:
+      - "${TAILNET_IP:-127.0.0.1}:8502:8502"    # UI (Streamlit) — via NPMplus, atrás de Authentik
+      - "127.0.0.1:8502:8502"
+      - "127.0.0.1:5055:5055"                   # REST API (interno)
+
 volumes:
   qdrant-data:
   hf-cache:
+  onb-surreal:
+  onb-data:

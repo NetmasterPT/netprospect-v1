@@ -106,8 +106,8 @@ services:
       - ${OBSIDIAN_VAULT:-/root/np-vault}:/vaults    # clone dedicado (git clone do repo)
       - obsidian-config:/config
     ports:
-      - "${TAILNET_IP:-127.0.0.1}:8080:8080"         # via NPMplus (subdomínio), atrás de Authentik
-      - "127.0.0.1:8080:8080"
+      - "${TAILNET_IP:-127.0.0.1}:8091:8080"         # 8080 já ocupado no np-server → host 8091; via NPMplus (subdomínio)
+      - "127.0.0.1:8091:8080"
 
 volumes:
   qdrant-data:

@@ -28,6 +28,7 @@ deploy/agent/*.log
 
 # Reacher (verificação SMTP) — .env do host (HELO/FROM/segredos do proxy)
 deploy/reacher/.env
+deploy/reacher/.proxy-pass
 
 # Chaves de service-account / credenciais (nunca committar)
 google.service-account.json

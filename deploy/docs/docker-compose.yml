@@ -91,8 +91,27 @@ services:
       - "127.0.0.1:8502:8502"
       - "127.0.0.1:5055:5055"                   # REST API (interno)
 
+  # --- F8: Obsidian (web) — navegar/editar o vault online ---
+  # Monta um CLONE dedicado do repo (não o checkout dos serviços) para não colidir com o auto-deploy.
+  # DOCKER_MODS=…git dá git no container (commit+push do vault pela terminal do Obsidian).
+  obsidian-web:
+    image: ghcr.io/sytone/obsidian-remote:latest
+    restart: unless-stopped
+    environment:
+      PUID: "0"
+      PGID: "0"
+      TZ: ${TZ:-Europe/Lisbon}
+      DOCKER_MODS: linuxserver/mods:universal-git
+    volumes:
+      - ${OBSIDIAN_VAULT:-/root/np-vault}:/vaults    # clone dedicado (git clone do repo)
+      - obsidian-config:/config
+    ports:
+      - "${TAILNET_IP:-127.0.0.1}:8080:8080"         # via NPMplus (subdomínio), atrás de Authentik
+      - "127.0.0.1:8080:8080"
+
 volumes:
   qdrant-data:
   hf-cache:
   onb-surreal:
   onb-data:
+  obsidian-config:

@@ -1,5 +1,5 @@
 # Plataforma de docs & conhecimento — servida sob netprospect.netmaster.pt/docs/ (NPMplus faz proxy).
-# F2: docs-web (site estático). F5/F6 acrescentam aqui: qdrant, kb-ingest, kb-mcp, open-notebook.
+# F2: docs-web. F5: qdrant + kb-http (RAG/busca). F6 acrescenta: open-notebook.
 # Padrão de portas (LAN/TAILNET/127.0.0.1) copiado de deploy/server/docker-compose.yml (Documenso).
 services:
   docs-web:
@@ -12,3 +12,49 @@ services:
       - "${LAN_IP:-127.0.0.1}:8088:80"
       - "${TAILNET_IP:-127.0.0.1}:8088:80"
       - "127.0.0.1:8088:80"
+
+  # --- F5: Context-Mode (RAG) ---
+  qdrant:
+    image: qdrant/qdrant:v1.12.4
+    restart: unless-stopped
+    volumes:
+      - qdrant-data:/qdrant/storage
+    ports:
+      - "${TAILNET_IP:-127.0.0.1}:6333:6333"   # tailnet (agentes/ingest), nunca público
+      - "127.0.0.1:6333:6333"
+
+  kb-http:
+    image: node:20-slim
+    restart: unless-stopped
+    working_dir: /app/docs-site
+    command: ["node", "mcp/server.mjs"]
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL:-http://100.126.196.112:11434}
+      QDRANT_URL: http://qdrant:6333
+      KB_EMBED_MODEL: ${KB_EMBED_MODEL:-all-minilm}
+      KB_HTTP_HOST: 0.0.0.0
+      KB_HTTP_PORT: "8099"
+    volumes:
+      - ../..:/app:ro                          # repo (docs-site/node_modules construído no host + lib/kb + content.json)
+    depends_on: [qdrant]
+    ports:
+      - "${TAILNET_IP:-127.0.0.1}:8099:8099"   # /search p/ o site + agentes por HTTP; tailnet-only
+      - "127.0.0.1:8099:8099"
+
+  # Ingestor one-shot (correr após rebuild do conteúdo; via timer ou `docker compose run kb-ingest`).
+  kb-ingest:
+    image: node:20-slim
+    working_dir: /app/docs-site
+    command: ["node", "scripts/kb-ingest.mjs"]
+    environment:
+      OLLAMA_URL: ${OLLAMA_URL:-http://100.126.196.112:11434}
+      QDRANT_URL: http://qdrant:6333
+      KB_EMBED_MODEL: ${KB_EMBED_MODEL:-all-minilm}
+    volumes:
+      - ../..:/app:ro
+    depends_on: [qdrant]
+    restart: "no"
+    profiles: ["ingest"]                        # não sobe com o `up` normal; corre on-demand
+
+volumes:
+  qdrant-data:

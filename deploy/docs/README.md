@@ -5,8 +5,18 @@ Serve `netprospect.netmaster.pt/docs/` (e, nas fases seguintes, `/notebook/` + o
 
 ## Serviços (compose)
 - **`docs-web`** (F2) — `nginx:alpine` que serve o build estático `docs-site/dist` na porta `8088`.
-- *(F5)* `qdrant`, `kb-ingest`, `kb-mcp` — RAG + servidor MCP (tailnet-only).
+- **`qdrant`** (F5) — vector store (porta `6333`, tailnet-only).
+- **`kb-http`** (F5) — API de busca semântica: `POST/GET /search`, `/doc`, `/related` (porta `8099`, tailnet-only).
+- **`kb-ingest`** (F5, profile `ingest`) — one-shot que embebe o corpus no Qdrant.
 - *(F6)* `open-notebook` — NotebookLM self-hosted em `/notebook/`.
+
+## Context-Mode (RAG + MCP) — F5
+1. **Modelo de embedding** (uma vez): `curl http://100.126.196.112:11434/api/pull -d '{"name":"nomic-embed-text"}'`.
+2. **Subir** o Qdrant + a API: `docker compose -p npdocs -f deploy/docs/docker-compose.yml up -d qdrant kb-http`.
+3. **Ingerir** (após cada rebuild do conteúdo): `docker compose -p npdocs -f deploy/docs/docker-compose.yml run --rm kb-ingest`.
+4. **Agentes** (Claude Code): o `.mcp.json` na raiz liga o servidor MCP `netprospect-kb` (tools `search_docs`,
+   `get_doc`, `list_related`). Corre via `node docs-site/mcp/stdio.mjs` e usa o mesmo Qdrant/Ollama.
+5. **Site**: a busca semântica chama `kb-http` `/search` (o NPMplus mapeia `/api/kb/` → `kb-http:8099`).
 
 ## Como correr (np-server)
 ```bash

@@ -309,6 +309,11 @@ export function makeFineHandlers(ctx, js) {
       if (!pg?.html) continue;
       for (const p of extractPeople(pg.html, pg.url, { defaultCountry })) { const k = p.email || `${p.name}|${p.role}`; if (!k || seen.has(k)) continue; seen.add(k); found.push(p); }
     }
+    // A1: guarda anti-UGC (backstop ao stripUGC) — se o site despeja MUITOS contactos 'general' de freemail,
+    // é fórum/comentários, não decisores → descarta esses (fica só com pessoas/cargos + emails próprios).
+    const _FREEMAIL = /@(gmail|googlemail|hotmail|outlook|live|yahoo|sapo|icloud|aol)\./i;
+    const _genFree = found.filter((p) => p.role === 'general' && p.email && _FREEMAIL.test(p.email));
+    if (_genFree.length > 12 && _genFree.length > found.length * 0.6) { const _drop = new Set(_genFree.map((p) => p.email)); for (let i = found.length - 1; i >= 0; i--) if (_drop.has(found[i].email)) found.splice(i, 1); }
     // Telefones da empresa: TODOS os únicos (fixos+móveis) de TODAS as páginas — não só
     // da homepage e não colados a uma pessoa. `general_phone` = 1.º; `phones` = lista.
     const allHtml = [snap.html, ...(snap.pages || []).map((p) => p.html)].filter(Boolean).join('\n');
@@ -316,7 +321,9 @@ export function makeFineHandlers(ctx, js) {
     const generalEmail = gen.email || found.find((p) => p.email)?.email || null;
     // preenche emails/telefones gerais da empresa (só se vazios)
     if (generalEmail || phones.length) { try { const c = (await client.request(readItems('companies', { filter: { id: { _eq: companyId } }, fields: ['general_email', 'general_phone'], limit: 1 })))[0]; const cp = {}; const _od = getDomain(site.domain); const _curOff = c?.general_email && getDomain((c.general_email.split('@')[1]) || '') !== _od; const _newOwn = generalEmail && getDomain((generalEmail.split('@')[1]) || '') === _od; if ((!c?.general_email || (_curOff && _newOwn)) && generalEmail) cp.general_email = generalEmail; if (!c?.general_phone && phones.length) cp.general_phone = clip(phones[0], 40); if (phones.length) cp.phones = phones; if (Object.keys(cp).length) await client.request(updateItem('companies', companyId, cp)); } catch { /* ignora */ } }
-    const mkContact = (p) => ({ name: p.name, role: p.role, role_category: p.role_category || 'unknown', email: p.email, phone: p.phone, phone_country: p.phone_country || null, social_profiles: p.social_profiles || null, source: 'site', source_detail: p.source_detail, company: companyId, site: site.id, gdpr_basis: 'legitimate_interest' });
+    const _org = getDomain(site.domain);
+    // A5: telefone sem país → default do site. A3: flag email_off_domain (freemail/parceiro/agência ≠ site).
+    const mkContact = (p) => ({ name: p.name, role: p.role, role_category: p.role_category || 'unknown', email: p.email, phone: p.phone, phone_country: p.phone_country || (p.phone ? defaultCountry : null), email_off_domain: p.email ? getDomain((p.email.split('@')[1]) || '') !== _org : false, social_profiles: p.social_profiles || null, source: 'site', source_detail: p.source_detail, company: companyId, site: site.id, gdpr_basis: 'legitimate_interest' });
     if (found.length) {
       if (pgEnabled()) {
         // A4 — 1 leitura de dedup + 1 INSERT multi-linha (vs N leituras + N inserts)

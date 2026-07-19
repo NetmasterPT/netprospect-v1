@@ -369,7 +369,6 @@ const NAV_GROUPS = [
   ['Contabilidade', [
     ['moloni-faturas', 'briefcase', 'Faturas'],
     ['moloni-fr', 'briefcase', 'Faturas-Recibo'],
-    ['moloni-vd', 'briefcase', 'Vendas a Dinheiro'],
     ['moloni-recibos', 'briefcase', 'Recibos'],
     ['moloni-nc', 'briefcase', 'Notas de Crédito'],
     ['moloni-nd', 'briefcase', 'Notas de Débito'],
@@ -2750,7 +2749,9 @@ async function viewAutoscale() {
     + `<h3 style="margin:16px 0 8px">Por host — capacidade e sugestões</h3><div class="np-grid" style="grid-template-columns:repeat(auto-fill,minmax(340px,1fr))">${(d.hosts || []).map(hostCard).join('')}</div>`
     + `<div class="np-card" style="margin-top:12px"><h3 style="margin:0 0 6px">Tetos externos (não escalam por concorrência)</h3><div class="np-sub">${capped}</div></div>`;
 }
-async function route() {
+let ROUTE_SEQ = 0;
+async function route(_retry) {
+  const seq = ++ROUTE_SEQ; // token da rota atual: evita que um fetch lento de uma rota abandonada pinte por cima
   closeDrawer();
   try { shellEl.classList.remove('nav-mobile-open'); } catch (e) {}
   const h = (location.hash || '#/overview').slice(2).split('?')[0] || 'overview';
@@ -2783,7 +2784,6 @@ async function route() {
     else if (h === 'moloni-faturas') await viewMoloniDocs('moloni-faturas', 'fatura', 'Faturas');
     else if (h === 'moloni-fr') await viewMoloniDocs('moloni-fr', 'fatura_recibo', 'Faturas-Recibo');
     else if (h === 'moloni-recibos') await viewMoloniDocs('moloni-recibos', 'recibo', 'Recibos');
-    else if (h === 'moloni-vd') await viewMoloniDocs('moloni-vd', 'venda_dinheiro', 'Vendas a Dinheiro');
     else if (h === 'moloni-nc') await viewMoloniDocs('moloni-nc', 'nota_credito', 'Notas de Crédito');
     else if (h === 'moloni-nd') await viewMoloniDocs('moloni-nd', 'nota_debito', 'Notas de Débito');
     else if (h === 'moloni-ff') await viewMoloniDocs('moloni-ff', 'fatura_fornecedor', 'Faturas de Fornecedores');

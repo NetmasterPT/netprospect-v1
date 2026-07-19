@@ -5,6 +5,6 @@
 # site TEM de ser reconstruído quando o conteúdo (docs/) muda. O docs-web (nginx) serve o dist novo.
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/../../docs-site"
-npm ci --silent
-npm run build                     # gen:api → content → vite build
+npm install --silent --no-audit --no-fund   # ci não serve: package-lock.json é gitignored no repo
+npm run build                               # gen:api → content → vite build
 echo "docs rebuild OK: $(date -Is)  ($(ls -1 dist/assets | wc -l) assets)"

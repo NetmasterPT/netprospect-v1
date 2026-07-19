@@ -88,7 +88,8 @@ e as **integrações** Moloni/pagamentos/agenda). O código mexeu ~2× mais que 
 
 ### P1 — subsistemas inteiros sem doc de uso
 
-- [ ] **Referência da API do dashboard.** `dashboard/server.mjs` expõe **~88 endpoints** e **não há nenhum
+- [x] **API HTTP documentada (F1)** — gerado `docs/reference/http-api.md` (88 endpoints por família) +
+  `docs/reference/modules.md` (65 módulos). Falta só o detalhe por-endpoint (request/response) via `@openapi` incremental. Contexto original: `dashboard/server.mjs` expõe **~88 endpoints** e **não há nenhum
   ficheiro de API**. Só ~7 aparecem em prosa. Famílias não-documentadas: frota/filas (`/api/queues*`,
   `/api/workers`, `/api/fleet/*`, `/api/autoscale`), cobertura/telemetria (`/api/coverage`,
   `/api/data-coverage`, `/api/config`, `/metrics`), Moloni (11), Agendamentos, tracking público

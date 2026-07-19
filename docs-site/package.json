@@ -1,0 +1,11 @@
+{
+  "name": "netprospect-docs",
+  "private": true,
+  "type": "module",
+  "description": "Plataforma de documentação NetProspect — geradores + site (Vite+React).",
+  "scripts": {
+    "gen:http": "node scripts/gen-http-api.mjs",
+    "gen:modules": "node scripts/gen-module-api.mjs",
+    "gen:api": "npm run gen:http && npm run gen:modules"
+  }
+}

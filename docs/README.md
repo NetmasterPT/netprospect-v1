@@ -56,7 +56,8 @@ Ponto de entrada de **todo** o conhecimento da plataforma. Organizado por [Diát
 
 ## 📖 Reference — factos, modelos, catálogos
 - **Comercial (modelo de dados + páginas):** [[comercial/README|Comercial (índice)]] · [[empresas]] · [[contactos]] · [[segmentos]] · [[icps]] · [[campanhas]] · [[templates]] · [[subscricoes]].
-- **API (gerada — F1):** `reference/api/` (JSDoc de `lib/`,`worker/`,`dashboard/`) + `openapi.json` (rotas HTTP). *(a criar)*
+- **API HTTP (gerada):** [[http-api]] — 88 endpoints de `dashboard/server.mjs`, por família.
+- **Mapa de módulos (gerado):** [[modules]] — 65 módulos de `lib/`+`worker/` (sumário + exports).
 - **Inventário da frota:** [[LOAD-DISTRIBUTION]] — tabela viva de hosts/IPs/VMIDs.
 - **Benchmarks:** [[BENCHMARK]] (concorrência) · [[DATA-BENCHMARK]] (ground-truth de dados).
 

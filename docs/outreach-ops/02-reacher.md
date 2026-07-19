@@ -5,6 +5,16 @@ check (syntax → MX → SMTP `RCPT` → catch-all/role/disposable heuristics). 
 over HTTP from the worker, passing **our clean SOCKS5 proxy + PTR-aligned HELO per request**, so the
 SMTP handshake egresses from a validation IP — never this box.
 
+> **Deploy concreto (piloto) → [`deploy/reacher/`](../../deploy/reacher/)** — compose (dante + reacher) +
+> `danted.conf` + README passo-a-passo, para o `de-minio` (DE, egress `49.12.120.250`).
+>
+> **Validado (2026-07-19):** a imagem OSS **`reacherhq/backend:v0.11.6`** (AGPL) serve **`/v1/check_email`**
+> (e `/v0`) — o `lib/reacher.js` já usa `/v1`, sem alterações. Um probe real a partir de um IP Hetzner
+> (porto 25 aberto) deu `is_deliverable=true` num endereço válido e `is_reachable=invalid` num inexistente
+> em `netmaster.pt`. A imagem inclui ChromeDriver (:9515) para o método `headless` (Yahoo/Hotmail) → mais RAM.
+> **Licença:** AGPL, uso interno (não é serviço a terceiros) é conforme sem publicação; **não** usar a imagem
+> `commercial-license-trial` (proíbe produção). **Env v0.11 usa prefixo `RCH__` (duplo underscore).**
+
 > **License check (do once):** confirm the current Reacher backend license permits your self-hosted,
 > internal, commercial use. If it doesn't, we keep `lib/email-verify.js`'s own `smtpProbe` as the
 > fallback engine (the code path is designed so `lib/reacher.js` is swappable). Don't skip this.

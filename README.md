@@ -681,9 +681,13 @@ provisioned via the [runbooks](./docs/outreach-ops/README.md) in **`docs/outreac
 hygiene → 01 validation fleet → 02 Reacher). *Isolate validation IPs/domains from
 sending ones — probing taints reputation.*
 
-> Engine + routing built and unit-tested (dry-run verified against live data); the live
-> SMTP path awaits the clean-IP VMs (Phase 0). Big-provider answers improve as the
-> validation IPs warm up; the API pool covers them meanwhile.
+> Engine + routing built and unit-tested (dry-run verified against live data). **Pilot ready
+> (2026-07-19):** the Hetzner fleet already has **outbound port 25 open + Spamhaus-clean IPs**, so
+> no Oracle/VPS provisioning is needed; the Reacher SMTP path was **validated live** (v0.11.6,
+> `/v1/check_email`, correct valid/invalid on `netmaster.pt`). Deploy artifacts in
+> [`deploy/reacher/`](deploy/reacher/); it only awaits the user's **Phase 0** (disposable domain +
+> PTR on `49.12.120.250`), then it's a deploy. Big-provider answers improve as the validation IPs
+> warm up; the API pool covers them meanwhile.
 
 ### Distributed free-tier fleet & the math
 
@@ -911,7 +915,7 @@ Running list of deferred/backfill items across phases. **Completed items are str
   | `jobs.whois` | ✗ deferred | ~0 rows; ccTLDs restrictive over port 43 — **revisit with RDAP** (works for any TLD, free, rate-limited) |
   | `jobs.industry` (Ollama) | ✗ deferred | role `ai`; nice-to-have score signal |
   | `jobs.lighthouse.* / nuclei / wpscan / gmb` | ✗ deferred | heavy audits — `AUDIT_ENABLED=false` |
-  | `jobs.verify` | ✗ deferred | needs the clean-IP fleet VMs (§10) |
+  | `jobs.verify` | 🟡 pilot ready | Reacher SMTP path validated on Hetzner (port 25 open); deploy in [`deploy/reacher/`](deploy/reacher/); awaits Phase 0 (domain + PTR). APIs cover ~100/day meanwhile (§10) |
   | `jobs.campaign.*` | ✗ deferred | outreach paused |
 
   *Ran but incomplete — the watcher backfills these to 100 %:*

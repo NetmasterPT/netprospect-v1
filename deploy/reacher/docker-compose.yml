@@ -1,0 +1,40 @@
+# Reacher (verificação de email SMTP self-hosted, OSS AGPL) + Dante SOCKS5.
+# Piloto do `verify` — corre no de-minio (DE1). Ver deploy/reacher/README.md e docs/outreach-ops/02-reacher.md.
+#
+# PORQUÊ ESTA TOPOLOGIA:
+#  - O worker `verify` (hoje no hel1-docker, FI) faz POST HTTP ao Reacher aqui, via tailnet.
+#  - O Reacher tuneliza cada probe SMTP pelo Dante local (127.0.0.1:1080), que egressa por eth0 → NAT do
+#    de1-pve → IP público **49.12.120.250** (Spamhaus-limpo, porto 25 aberto). É esse o IP que os MX veem.
+#  - `reacher.enabled()` (lib/reacher.js) só é true se config/verify-proxies.json tiver ≥1 proxy → o Dante
+#    é obrigatório mesmo estando co-locado (é também o ponto de alinhamento HELO/PTR e de escala multi-IP).
+#
+# Ambos em network_mode: host — o Dante precisa de egressar pelo IP real do host, e o Reacher precisa de
+# alcançar o Dante em 127.0.0.1. O Reacher escuta SÓ na tailnet (${TAILNET_IP}) — nunca no IP público.
+#
+# Deploy: copiar .env.example → .env e preencher; criar o user proxyuser no host (ver README §2);
+#   `docker compose -f deploy/reacher/docker-compose.yml up -d`.
+
+services:
+  dante:
+    image: wernight/dante
+    restart: unless-stopped
+    network_mode: host          # egressa pelo IP público do nó (eth0 → NAT → 49.12.120.250)
+    volumes:
+      - ./danted.conf:/etc/danted.conf:ro
+    # NB: o Dante autentica por PAM contra /etc/passwd → o user `proxyuser` TEM de existir no HOST
+    # (README §2). A password do proxyuser = campo `pass` em config/verify-proxies.json.
+
+  reacher:
+    image: reacherhq/backend:v0.11.6   # OSS AGPL. Serve /v1/check_email (e /v0). NÃO usar :latest.
+    restart: unless-stopped
+    network_mode: host
+    depends_on: [dante]
+    environment:
+      RCH__HTTP_HOST: ${TAILNET_IP}      # escuta SÓ na tailnet — o worker verify chega por aqui
+      RCH__HTTP_PORT: '8080'
+      RUST_LOG: info
+      # HELLO/FROM globais são fallback — o worker envia hello_name (=helo do proxy) e from_email por-request.
+      RCH__HELLO_NAME: ${REACHER_HELLO}
+      RCH__FROM_EMAIL: ${REACHER_FROM}
+      # Opcional (hardening): exigir o header x-reacher-secret. Se definido, pôr o mesmo no worker.
+      # RCH__HEADER_SECRET: ${REACHER_SECRET}

@@ -4,6 +4,14 @@ Outbound **port 25** is required for both validation (Reacher `RCPT` probes) and
 (delivering to the recipient MX). This is the single biggest risk in the whole plan — settle it
 before anything else.
 
+> ✅ **JÁ RESOLVIDO PARA O VALIDATION FLEET (2026-07-19).** Os nossos hosts **Hetzner já têm o porto 25 de
+> saída ABERTO** e os IPs **Spamhaus-limpos** — não é preciso provisionar VMs Oracle/VPS novas nem lutar com
+> o gate. Testado: `de-minio`/`np-wk-de1` (DE, egress `49.12.120.250`) e `hel1-docker` (FI, `65.108.120.25`)
+> devolvem `220 mx.google.com ESMTP`; ambos os IPs **ZEN-limpos**. **Os Oracle free bloqueiam o 25** (não usar
+> para probing). Falta só o **PTR** (nenhum IP o tem — definir no Hetzner Robot, ver `01`/`02`). O piloto do
+> Reacher usa o IP DE. Deploy concreto: [`deploy/reacher/README.md`](../../deploy/reacher/README.md). Os passos
+> abaixo (Oracle/VPS + unblock ticket) só são precisos para **escalar a mais IPs** ou para o **sending fleet** (`03`).
+
 ## Step 1 — Provision a throwaway test VM
 
 Create **one** small instance to test with (you'll keep or delete it based on the result):

@@ -25,3 +25,10 @@ fleet-env/
 deploy/agent/agent.env
 deploy/agent/agent.env.ps1
 deploy/agent/*.log
+
+# Reacher (verificação SMTP) — .env do host (HELO/FROM/segredos do proxy)
+deploy/reacher/.env
+
+# Chaves de service-account / credenciais (nunca committar)
+google.service-account.json
+*.service-account.json

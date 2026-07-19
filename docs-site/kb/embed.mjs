@@ -11,7 +11,10 @@ const LOCAL_MODEL = () => process.env.KB_EMBED_MODEL_LOCAL || 'Xenova/paraphrase
 let _pipe = null;
 async function localPipe() {
   if (!_pipe) {
-    const { pipeline } = await import('@huggingface/transformers');
+    const { pipeline, env } = await import('@huggingface/transformers');
+    // cache do modelo num dir escrivível (o repo é mountado read-only nos containers).
+    const cacheDir = process.env.KB_CACHE_DIR || process.env.HF_HOME;
+    if (cacheDir) env.cacheDir = cacheDir;
     _pipe = await pipeline('feature-extraction', LOCAL_MODEL());
   }
   return _pipe;

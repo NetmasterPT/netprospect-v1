@@ -32,7 +32,8 @@ Ponto de entrada de **todo** o conhecimento da plataforma. Organizado por [Diát
 ## 🛠️ How-to — runbooks & operações
 
 ### Infra / frota (por host)
-- [[runbook-server-hel1]] — np-server (Directus, dashboard, NATS, Redis, crons, Documenso).
+- [[runbook-server-hel1]] — np-server (Directus, dashboard, NATS, Redis, crons, Documenso, plataforma-docs).
+- [[runbook-npm-hel1]] — NPMplus (reverse-proxy + Authentik) em hel1-npm; custom locations `/docs/`.
 - [[runbook-db-host]] — np-db (Postgres 16 + PgBouncer + PostGIS).
 - [[runbook-minio-de1]] — de-minio (MinIO; também corre o piloto Reacher+Dante).
 - [[runbook-ollama-hel1]] — hel1-ollama (Ollama CPU).

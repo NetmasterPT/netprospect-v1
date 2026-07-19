@@ -1,5 +1,5 @@
 ---
-title: Runbook — PostHog Cloud (product analytics, sem self-host)
+title: "Runbook — PostHog Cloud (product analytics, sem self-host)"
 type: how-to
 tags: [infra, runbook]
 related: []

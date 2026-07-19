@@ -1,5 +1,5 @@
 ---
-title: Como escrever docs no NetProspect
+title: "Como escrever docs no NetProspect"
 type: explanation
 tags: [docs, meta, diataxis, obsidian]
 related: [[README]]

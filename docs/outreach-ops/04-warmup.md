@@ -1,5 +1,5 @@
 ---
-title: 04 — Domain & IP warm-up
+title: "04 — Domain & IP warm-up"
 type: how-to
 tags: [outreach, email]
 related: []

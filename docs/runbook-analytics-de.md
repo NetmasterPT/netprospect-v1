@@ -1,5 +1,5 @@
 ---
-title: Runbook — ClickHouse numa VM dedicada de analytics
+title: "Runbook — ClickHouse numa VM dedicada de analytics"
 type: how-to
 tags: [infra, clickhouse, runbook]
 related: []

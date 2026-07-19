@@ -1,5 +1,5 @@
 ---
-title: Runbook — np-server: Directus + Dashboard + NATS + Redis numa VM dedicada (HEL1)
+title: "Runbook — np-server: Directus + Dashboard + NATS + Redis numa VM dedicada (HEL1)"
 type: how-to
 tags: [infra, runbook]
 related: []

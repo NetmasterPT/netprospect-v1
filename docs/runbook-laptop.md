@@ -1,5 +1,5 @@
 ---
-title: Runbook — gpedro-laptop: worker residencial (Windows + Docker Desktop)
+title: "Runbook — gpedro-laptop: worker residencial (Windows + Docker Desktop)"
 type: how-to
 tags: [infra, runbook]
 related: []

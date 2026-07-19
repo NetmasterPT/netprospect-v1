@@ -1,5 +1,5 @@
 ---
-title: Lighthouse aborta cedo em >50% dos sites (Chrome instável) — auditorias perdidas e silenciadas
+title: "Lighthouse aborta cedo em >50% dos sites (Chrome instável) — auditorias perdidas e silenciadas"
 type: incident
 tags: [incident, postmortem]
 related: []

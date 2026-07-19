@@ -1,5 +1,5 @@
 ---
-title: 05 — ESP ladder (Brevo / MailerLite)
+title: "05 — ESP ladder (Brevo / MailerLite)"
 type: how-to
 tags: [outreach, email]
 related: []

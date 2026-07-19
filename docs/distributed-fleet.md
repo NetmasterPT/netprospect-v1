@@ -1,5 +1,5 @@
 ---
-title: Frota distribuída de workers (VMs cloud, free-tier)
+title: "Frota distribuída de workers (VMs cloud, free-tier)"
 type: explanation
 tags: [infra, architecture]
 related: []

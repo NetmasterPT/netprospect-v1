@@ -1,5 +1,5 @@
 ---
-title: Templates de email
+title: "Templates de email"
 type: reference
 tags: [comercial, data-model]
 related: []

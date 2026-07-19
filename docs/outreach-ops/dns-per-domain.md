@@ -1,5 +1,5 @@
 ---
-title: Runbook — DNS (OpenProvider) + PTR (Hetzner Robot) por domínio/IP de validação
+title: "Runbook — DNS (OpenProvider) + PTR (Hetzner Robot) por domínio/IP de validação"
 type: how-to
 tags: [outreach, email]
 related: []

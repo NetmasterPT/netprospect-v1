@@ -1,5 +1,5 @@
 ---
-title: Índice da Documentação NetProspect
+title: "Índice da Documentação NetProspect"
 type: reference
 tags: [docs, index, meta]
 related: [[CONTRIBUTING]]

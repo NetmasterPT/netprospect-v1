@@ -1,5 +1,5 @@
 ---
-title: 06 — Warm tier: Mautic + AWS SES
+title: "06 — Warm tier: Mautic + AWS SES"
 type: how-to
 tags: [outreach, email]
 related: []

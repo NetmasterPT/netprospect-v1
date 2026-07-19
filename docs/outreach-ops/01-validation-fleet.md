@@ -1,5 +1,5 @@
 ---
-title: 01 — Validation fleet: Dante SOCKS5 proxies + DNS/PTR
+title: "01 — Validation fleet: Dante SOCKS5 proxies + DNS/PTR"
 type: how-to
 tags: [outreach, email]
 related: []

@@ -1,5 +1,5 @@
 ---
-title: 00 — Port-25 gate + IP hygiene (do this FIRST)
+title: "00 — Port-25 gate + IP hygiene (do this FIRST)"
 type: how-to
 tags: [outreach, email]
 related: []

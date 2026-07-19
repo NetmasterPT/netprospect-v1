@@ -1,0 +1,14 @@
+# Plataforma de docs & conhecimento — servida sob netprospect.netmaster.pt/docs/ (NPMplus faz proxy).
+# F2: docs-web (site estático). F5/F6 acrescentam aqui: qdrant, kb-ingest, kb-mcp, open-notebook.
+# Padrão de portas (LAN/TAILNET/127.0.0.1) copiado de deploy/server/docker-compose.yml (Documenso).
+services:
+  docs-web:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ../../docs-site/dist:/usr/share/nginx/html:ro   # build estático (gerado por deploy/docs/build.sh)
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "${LAN_IP:-127.0.0.1}:8088:80"
+      - "${TAILNET_IP:-127.0.0.1}:8088:80"
+      - "127.0.0.1:8088:80"

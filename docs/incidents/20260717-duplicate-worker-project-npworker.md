@@ -1,5 +1,5 @@
 ---
-title: Incidente: containers worker DUPLICADOS — projeto compose worker → npworker sem teardown do antigo
+title: "Incidente: containers worker DUPLICADOS — projeto compose worker → npworker sem teardown do antigo"
 type: incident
 tags: [incident, postmortem]
 related: []

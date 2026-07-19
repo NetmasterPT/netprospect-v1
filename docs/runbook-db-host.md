@@ -1,5 +1,5 @@
 ---
-title: Runbook — Host de DB dedicado (Postgres + PgBouncer + Tailscale) num CT Proxmox
+title: "Runbook — Host de DB dedicado (Postgres + PgBouncer + Tailscale) num CT Proxmox"
 type: how-to
 tags: [infra, runbook]
 related: []

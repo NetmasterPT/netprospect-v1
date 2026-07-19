@@ -1,5 +1,5 @@
 ---
-title: Subscrições
+title: "Subscrições"
 type: reference
 tags: [comercial, data-model]
 related: []

@@ -6,6 +6,23 @@
   "scripts": {
     "gen:http": "node scripts/gen-http-api.mjs",
     "gen:modules": "node scripts/gen-module-api.mjs",
-    "gen:api": "npm run gen:http && npm run gen:modules"
+    "gen:api": "npm run gen:http && npm run gen:modules",
+    "content": "node scripts/build-content.mjs",
+    "dev": "npm run content && vite",
+    "build": "npm run gen:api && npm run content && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "gray-matter": "^4.0.3",
+    "highlight.js": "^11.10.0",
+    "markdown-it": "^14.1.0",
+    "markdown-it-anchor": "^9.2.0",
+    "vite": "^5.4.6"
   }
 }

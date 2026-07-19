@@ -1,5 +1,5 @@
 ---
-title: 02 — Reacher (the validation engine)
+title: "02 — Reacher (the validation engine)"
 type: how-to
 tags: [outreach, email]
 related: []

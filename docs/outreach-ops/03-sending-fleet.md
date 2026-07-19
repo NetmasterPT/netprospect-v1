@@ -1,5 +1,5 @@
 ---
-title: 03 — Sending fleet: docker-mailserver + secondary domains + auth
+title: "03 — Sending fleet: docker-mailserver + secondary domains + auth"
 type: how-to
 tags: [outreach, email]
 related: []

@@ -1,5 +1,5 @@
 ---
-title: Runbook — hel1-ollama: Ollama numa máquina dedicada (CPU, sem GPU) — ✅ FEITO
+title: "Runbook — hel1-ollama: Ollama numa máquina dedicada (CPU, sem GPU) — ✅ FEITO"
 type: how-to
 tags: [infra, runbook]
 related: []

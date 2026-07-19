@@ -1,5 +1,5 @@
 ---
-title: Runbook — MinIO numa VM dedicada no DE1 (object storage em disco barato)
+title: "Runbook — MinIO numa VM dedicada no DE1 (object storage em disco barato)"
 type: how-to
 tags: [infra, runbook]
 related: []

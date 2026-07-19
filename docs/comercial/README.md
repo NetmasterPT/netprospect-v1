@@ -1,5 +1,5 @@
 ---
-title: Modelo comercial / outreach — visão geral
+title: "Modelo comercial / outreach — visão geral"
 type: reference
 tags: [comercial, data-model]
 related: []

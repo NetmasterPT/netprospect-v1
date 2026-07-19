@@ -1,5 +1,5 @@
 ---
-title: Observabilidade & Telemetria da Frota
+title: "Observabilidade & Telemetria da Frota"
 type: explanation
 tags: [observability, infra]
 related: []

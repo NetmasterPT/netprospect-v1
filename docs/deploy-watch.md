@@ -1,5 +1,5 @@
 ---
-title: Deploy-watch — deteção de rebuilds + observação pós-deploy por VM
+title: "Deploy-watch — deteção de rebuilds + observação pós-deploy por VM"
 type: how-to
 tags: [deploy, infra]
 related: []

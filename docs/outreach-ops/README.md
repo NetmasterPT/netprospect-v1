@@ -1,5 +1,5 @@
 ---
-title: NetProspect — Outreach & Validation Ops Runbooks
+title: "NetProspect — Outreach & Validation Ops Runbooks"
 type: how-to
 tags: [outreach, email]
 related: []

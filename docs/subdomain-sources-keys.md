@@ -1,3 +1,14 @@
+---
+title: Runbook — API keys das fontes de subdomínios
+type: how-to
+tags: [data-sources, keys]
+related: []
+owner: infra
+status: stable
+updated: 2026-07-19
+visibility: internal
+---
+
 # Runbook — API keys das fontes de subdomínios
 
 O `handleSubdomains` usa `lib/subdomains.js`, que combina várias fontes de Certificate Transparency
@@ -57,10 +68,13 @@ Cada key é **opcional** e **independente** (ativa a sua fonte). Quantas mais, m
 ## 4. subfinder (opcional, o mais poderoso) — CLI
 
 - **O que é:** ferramenta da ProjectDiscovery que **agrega dezenas de fontes passivas** (incl. as de cima +
-  hackertarget, virustotal, etc.). Se estiver instalado no worker, `lib/subdomains.js` usa-o automaticamente.
-- **Requer:** o binário `subfinder` na imagem do worker (falta adicionar ao Dockerfile) + opcionalmente as
-  mesmas keys no config dele (`~/.config/subfinder/provider-config.yaml`).
-- **Nota:** ainda **não** está na imagem — é um passo à parte (Dockerfile + rebuild). Digo quando estiver.
+  hackertarget, virustotal, etc.). O `lib/subdomains.js` usa-o **automaticamente** se o binário existir.
+- **Estado:** ✅ **já instalado na imagem** (subfinder v2.14.0) — em `worker/Dockerfile` **e**
+  `worker/Dockerfile.base` (os `subdomains` correm no role `base`, imagem leve). Sem key funciona (fontes
+  anónimas); opcionalmente mete as mesmas keys de cima no config dele (`~/.config/subfinder/provider-config.yaml`)
+  para subir a cobertura.
+- **Nota de timeout:** o subfinder pode demorar ~60s por domínio; o `discoverSubdomains` tem um timeout
+  por-fonte (afinar quando se reativar o backfill de subdomains, hoje pausado).
 
 ---
 

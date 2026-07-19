@@ -515,7 +515,9 @@ export function makeFineHandlers(ctx, js) {
       fields: ['id', 'name', 'email'], limit: 500,
     }));
     if (!contacts.length) return 'ack';
-    const counts = await verifyDomain(client, { domain, contacts }, { providers, reacher, mxCache, maxCand: VERIFY_MAX_CAND });
+    // Deadline abaixo do hang-timeout do dispatch (0.85×ackWait=102s) → domínios com centenas de
+    // contactos (B2C) não estouram o timeout: processa o que der em ~85s, o resto fica null p/ re-verify.
+    const counts = await verifyDomain(client, { domain, contacts }, { providers, reacher, mxCache, maxCand: VERIFY_MAX_CAND, deadlineMs: Date.now() + 85000 });
     const done = Object.values(counts).reduce((a, b) => a + b, 0);
     if (done) console.log(`${new Date().toISOString().slice(11, 19)} verify ${domain}: ${JSON.stringify(counts)}`);
     return 'ack';

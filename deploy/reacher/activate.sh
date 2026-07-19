@@ -27,11 +27,15 @@ SSH="ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10"
 say(){ printf '\n\033[1m== %s ==\033[0m\n' "$*"; }
 
 # 1) GATE FCrDNS -------------------------------------------------------------
+# Via DNS-over-HTTPS (porta 443) — o `dig` (porta 53) está bloqueado no hel1-docker.
 say "1) FCrDNS gate  ($HELO <-> $IP_DE)"
-fwd=$(dig +short "$HELO" 2>/dev/null | tail -1)
-rev=$(dig +short -x "$IP_DE" 2>/dev/null | tail -1)
-echo "   dig $HELO = ${fwd:-<vazio>}"
-echo "   dig -x $IP_DE = ${rev:-<vazio>}"
+doh_a(){ curl -s "https://dns.google/resolve?name=$1&type=A" 2>/dev/null \
+  | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next((a["data"] for a in d.get("Answer",[]) if a.get("type")==1),""))' 2>/dev/null; }
+doh_ptr(){ local r; r=$(echo "$1"|awk -F. '{print $4"."$3"."$2"."$1}'); curl -s "https://dns.google/resolve?name=$r.in-addr.arpa&type=PTR" 2>/dev/null \
+  | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next((a["data"] for a in d.get("Answer",[]) if a.get("type")==12),""))' 2>/dev/null; }
+fwd=$(doh_a "$HELO"); rev=$(doh_ptr "$IP_DE")
+echo "   $HELO A = ${fwd:-<vazio>}"
+echo "   PTR $IP_DE = ${rev:-<vazio>}"
 if [ "$fwd" != "$IP_DE" ] || [ "$rev" != "$HELO." ]; then
   echo "   ✗ FCrDNS NÃO bate. Configura o DNS/PTR (docs/outreach-ops/dns-per-domain.md) e re-corre. Abortado."
   exit 1

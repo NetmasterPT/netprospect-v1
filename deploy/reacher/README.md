@@ -26,9 +26,12 @@ O SMTP sai sempre do IP **DE 49.12.120.250** (limpo, porto 25 aberto), independe
 
 ## Fase 0 — pré-requisitos (utilizador, fora do código)
 
-1. **Registar** um domínio descartável barato `<D>` (não o netmaster.pt).
-2. **DNS** no `<D>`: `p1.<D>.  A  49.12.120.250`.
-3. **PTR/rDNS** no **Hetzner Robot**: `49.12.120.250 → p1.<D>`. Verificar (têm de bater):
+Passo-a-passo detalhado (OpenProvider + Hetzner Robot, por-domínio) em
+[`docs/outreach-ops/dns-per-domain.md`](../../docs/outreach-ops/dns-per-domain.md). Resumo:
+
+1. Escolher um domínio descartável `<D>` (não o netmaster.pt).
+2. **OpenProvider**: `p1.<D>  A  49.12.120.250` (obrigatório) + SPF/A no `<D>` (recomendado).
+3. **Hetzner Robot** (de1-pve): reverse DNS `49.12.120.250 → p1.<D>`. Verificar FCrDNS (têm de bater):
    `dig +short p1.<D>` = `49.12.120.250` **e** `dig +short -x 49.12.120.250` = `p1.<D>.`
 4. **Blocklist-clean** (re-confirmar): `for bl in zen.spamhaus.org b.barracudacentral.org bl.spamcop.net; do dig +short 250.120.12.49.$bl; done` → tudo vazio.
 

@@ -34,6 +34,27 @@ script à mão). Sem a key, o wpscan keyless continua a enumerar plugins/versõe
 
 ---
 
+## 3. Plataforma de docs — rotas no NPMplus (hel1-npm) ⚠️ A FAZER
+
+A plataforma de docs está **live no np-server** (`100.114.17.74`), mas ainda **não passa pelo NPMplus** —
+falta adicionar as *custom locations*/subdomínios no proxy host (na box `hel1-npm`, `/opt/npmplus`, via UI).
+Snippets completos em [`docs/runbook-npm-hel1.md`](docs/runbook-npm-hel1.md).
+
+| Superfície | Rota a criar | Backend | Nota |
+|---|---|---|---|
+| **Docs** | `netprospect.netmaster.pt` → Advanced → `location /docs/ { proxy_pass http://100.114.17.74:8088; }` | docs-web :8088 | **sem barra final** no proxy_pass! |
+| **Open Notebook** | subdomínio `notebook.netmaster.pt` | :8502 | Streamlit não faz subpath → subdomínio |
+| **Obsidian web** | subdomínio `obsidian.netmaster.pt` | :8091 | — |
+| **(opc.) busca** | `location /api/kb/ { proxy_pass http://100.114.17.74:8099; }` | kb-http :8099 | só se o site usar busca semântica |
+
+Todas herdam **Authentik** do proxy host. `/notebook/` e `/obsidian/` (com dados) **nunca abertos**.
+
+> **Acesso no telefone entretanto:** o IP-cru por HTTP falha no telemóvel (modo HTTPS-only promove a https
+> sem TLS). Ou aplicar o NPMplus acima (dá HTTPS real), ou o Tailscale Serve (HTTPS na tailnet — ver §4 se ativado).
+
+---
+
 ## Onde é usado (referência)
 - Subdomains: [`docs/subdomain-sources-keys.md`](docs/subdomain-sources-keys.md) · `lib/subdomains.js`
 - Wordfence: `lib/wordfence.js` · `update-wordfence.js` · `deploy/observability/wordfence-update.{service,timer}`
+- Plataforma de docs: [`docs/runbook-npm-hel1.md`](docs/runbook-npm-hel1.md) · `deploy/docs/` · `.claude/plans/current/docs-plan.md`

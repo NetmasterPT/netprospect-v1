@@ -79,6 +79,9 @@ services:
     depends_on: [open-notebook-surreal]
     environment:
       OPEN_NOTEBOOK_ENCRYPTION_KEY: ${OPEN_NOTEBOOK_ENCRYPTION_KEY:?define em deploy/docs/.env}
+      # a UI (Streamlit) chama a API pelo BROWSER → API_URL tem de ser alcançável pelo browser (tailnet).
+      # Via NPMplus, mudar para a URL proxied (ex.: https://notebook.netmaster.pt/api).
+      API_URL: ${OPEN_NOTEBOOK_API_URL:-http://100.114.17.74:5055}
       SURREAL_URL: ws://open-notebook-surreal:8000/rpc
       SURREAL_USER: ${SURREAL_USER:-root}
       SURREAL_PASSWORD: ${SURREAL_PASSWORD:-root}
@@ -89,7 +92,8 @@ services:
     ports:
       - "${TAILNET_IP:-127.0.0.1}:8502:8502"    # UI (Streamlit) — via NPMplus, atrás de Authentik
       - "127.0.0.1:8502:8502"
-      - "127.0.0.1:5055:5055"                   # REST API (interno)
+      - "${TAILNET_IP:-127.0.0.1}:5055:5055"    # REST API — o browser chama-a (API_URL); tailnet-only
+      - "127.0.0.1:5055:5055"
 
   # --- F8: Obsidian (web) — navegar/editar o vault online ---
   # Monta um CLONE dedicado do repo (não o checkout dos serviços) para não colidir com o auto-deploy.

@@ -770,7 +770,7 @@ async function campaignCounts(id) {
 
 app.get('/api/campaigns', async (req, res) => {
   try {
-    const rows = await d('/items/campaigns?sort[]=-id&limit=-1&fields=id,name,status,angle,from_name,from_email,total,created_at,sent_at');
+    const rows = await d('/items/campaigns?sort[]=-id&limit=-1&fields=id,name,status,angle,phase,from_name,from_email,total,created_at,sent_at');
     await Promise.all(rows.map(async (c) => { try { c.counts = await campaignCounts(c.id); } catch { c.counts = null; } }));
     res.json({ campaigns: rows, mailer: { mode: process.env.SMTP_HOST ? 'smtp' : 'dry' } });
   } catch (e) { res.status(502).json({ error: e.message }); }
@@ -780,11 +780,11 @@ app.post('/api/campaigns', async (req, res) => {
     const b = req.body || {};
     if (!b.name) return res.status(400).json({ error: 'nome em falta' });
     const row = {
-      name: String(b.name).slice(0, 255), angle: b.angle || 'general', status: 'draft',
+      name: String(b.name).slice(0, 255), angle: b.angle || 'general', phase: ['cold', 'semi_warm', 'warm'].includes(b.phase) ? b.phase : 'cold', status: 'draft',
       audience_filters: b.filters || {}, segment: b.segmentId || null,
       from_name: (b.from_name || '').slice(0, 255), from_email: (b.from_email || '').slice(0, 255),
       reply_to: (b.reply_to || '').slice(0, 255), subject_hint: (b.subject_hint || '').slice(0, 255),
-      total: 0, generated: 0, sent: 0, opened: 0, clicked: 0,
+      notes: (b.notes || '').slice(0, 8000), total: 0, generated: 0, sent: 0, opened: 0, clicked: 0,
     };
     const created = await dwrite('POST', '/items/campaigns', row);
     void captureServerEvent(req, 'campaign_created', posthogDistinctId(req, `campaign:${created.id}`), {
@@ -1216,12 +1216,18 @@ app.post('/api/queues/:consumer/orphans', async (req, res) => {
 
 // --- Workers A CORRER (telemetria via Redis) — B2 revisão -------------------
 async function workerCounts(r, id) {
-  const h = Math.floor(Date.now() / 3600000);
+  const now = Date.now();
+  const h = Math.floor(now / 3600000);
+  const frac = (now % 3600000) / 3600000; // fração da hora epoch atual já decorrida
   const dk = [], fk = [];
   for (let i = 0; i < 24; i++) { dk.push(`np:wk:${id}:done:${h - i}`); fk.push(`np:wk:${id}:fail:${h - i}`); }
   const [dv, fv] = await Promise.all([r.mGet(dk), r.mGet(fk)]);
   const d = dv.map((x) => +x || 0), f = fv.map((x) => +x || 0);
-  return { done1h: d[0], fail1h: f[0], done24h: d.reduce((a, b) => a + b, 0), fail24h: f.reduce((a, b) => a + b, 0) };
+  // done1h = 60min TRAILING (hora atual + cauda da anterior), NÃO só o bucket epoch parcial: com d[0]
+  // sozinho, no início de cada hora epoch subcontava (ex.: 84 vs ~1500 reais) → o autoscaler via hosts
+  // "parados" que estão a full. Mesma fórmula do cap por-host (usedH).
+  const trail = (arr) => Math.round(arr[0] + arr[1] * (1 - frac));
+  return { done1h: trail(d), fail1h: trail(f), done24h: d.reduce((a, b) => a + b, 0), fail24h: f.reduce((a, b) => a + b, 0) };
 }
 app.get('/api/workers', async (req, res) => {
   try {
@@ -1303,10 +1309,19 @@ app.get('/api/config', async (req, res) => {
     // sending_accounts é uma COLEÇÃO (metadados, sem passwords — essas ficam no ficheiro gitignored).
     let sending = [];
     try { sending = await d('/items/sending_accounts?fields=id,label,from_email,warmup_stage,daily_cap,sent_today,active&limit=50').catch(() => []); } catch { /* coleção pode não existir */ }
+    // Estado REAL do verify na frota: os ficheiros verify-*.json vivem nos hosts dos workers (ex.: hel1-docker),
+    // não aqui no np-server → em vez do ficheiro local (que aparece "ausente"), deriva de sinais que o
+    // control-plane conhece: nº de workers 'verify' vivos + total de emails já verificados (aceites).
+    const verifyFleet = { workers: 0, verifiedTotal: null };
+    try {
+      if (r && _redisUp) { const ids = await r.zRangeByScore('np:wk:index', Date.now() - 90000, '+inf').catch(() => []);
+        for (const id of ids) { const hh = await r.hGetAll(`np:wk:${id}`).catch(() => ({})); if ((hh.role || '') === 'verify') verifyFleet.workers++; } }
+    } catch { /* */ }
+    verifyFleet.verifiedTotal = await count('contacts', '&filter[email_verified][_eq]=true').catch(() => null);
     res.json({
       status,
       config: {
-        providers, providerFileExists: !!vp,
+        providers, providerFileExists: !!vp, verifyFleet,
         proxyCount: Array.isArray(proxies) ? proxies.length : 0, proxyFileExists: !!proxies,
         angles: angles?.angles ? Object.keys(angles.angles) : [], sender_org: angles?.sender_org || null,
         sending, mailer: process.env.SMTP_HOST ? 'smtp' : 'dry-run',
@@ -1629,7 +1644,7 @@ Responde só em JSON: { "subjects":["<2-3 assuntos curtos, menos de 60 chars>"],
   const r = await ollamaJson(prompt, format, { timeoutMs: 90000, options: { temperature: 0.6 }, label: 'campaign' });
   if (!r.ok) return { error: r.error };
   if (!r.json) return { error: 'A IA devolveu uma resposta inválida.' };
-  return { subjects: (r.json.subjects || []).slice(0, 3), preview_text: r.json.preview_text || '', body: r.json.body || '', variables: (r.json.variables || []).slice(0, 12), angle: angle || 'geral' };
+  return { subjects: (r.json.subjects || []).slice(0, 3), preview_text: r.json.preview_text || '', body: r.json.body || '', variables: (r.json.variables || []).slice(0, 12), angle: angle || 'general', audience: audience || '' };
 }
 app.post('/api/agents/campaign-copy', async (req, res) => {
   try { const out = await agentCampaign(req.body || {}); if (out.error) return res.status(502).json(out); res.json(out); } catch (e) { res.status(502).json({ error: e.message }); }
@@ -1652,8 +1667,22 @@ Responde só em JSON {intent, reply}.`;
     const intent = r.json?.intent || 'general';
     if (intent === 'audience') { const a = await agentAudience(msg); if (a.error) return res.status(502).json(a); return res.json({ kind: 'audience', intent, ...a }); }
     if (intent === 'plan') { const p = await agentPlan(msg); if (p.error) return res.status(502).json(p); return res.json({ kind: 'plan', intent, ...p }); }
+    if (intent === 'campaign') { const c = await agentCampaign({ message: msg }); if (c.error) return res.status(502).json(c); return res.json({ kind: 'campaign', intent, ...c }); }
     return res.json({ kind: 'text', intent: 'general', reply: r.json?.reply || 'Posso criar públicos-alvo, sugerir campanhas ou escrever o copy dos emails — o que precisas?' });
   } catch (e) { res.status(502).json({ error: e.message }); }
+});
+// Estado do Ollama on-prem (chip de saúde nas páginas AI). Verifica reachability + se o modelo existe/está quente.
+app.get('/api/agents/health', async (req, res) => {
+  if (!OLLAMA_URL) return res.json({ ok: false, state: 'off', reason: 'OLLAMA_URL não definido', model: OLLAMA_MODEL });
+  const base = OLLAMA_MODEL.split(':')[0];
+  const grab = async (path) => { const ctrl = new AbortController(); const to = setTimeout(() => ctrl.abort(), 4000); try { const r = await fetch(`${OLLAMA_URL}${path}`, { signal: ctrl.signal }); return r.ok ? await r.json() : null; } catch { return null; } finally { clearTimeout(to); } };
+  const tags = await grab('/api/tags');
+  if (!tags) return res.json({ ok: false, state: 'off', reason: 'sem resposta (Ollama em baixo?)', model: OLLAMA_MODEL });
+  const models = (tags.models || []).map((m) => m.name || m.model).filter(Boolean);
+  const available = models.some((m) => m === OLLAMA_MODEL || m.startsWith(base));
+  const ps = await grab('/api/ps');
+  const warm = !!(ps?.models || []).some((m) => (m.name || m.model || '').startsWith(base));
+  res.json({ ok: true, state: available ? 'online' : 'no-model', model: OLLAMA_MODEL, available, warm, models });
 });
 
 // --- Exportação CSV (mesmos filtros da diretório/contactos) ------------------
@@ -1867,13 +1896,13 @@ app.get('/api/logs', async (req, res) => {
 // --- Outreach: funil de campanhas + emails recentes (antes do catch-all) ---
 app.get('/api/outreach', async (req, res) => {
   try {
-    const camps = await d('/items/campaigns?fields=id,name,status,angle,total,generated,sent,opened,clicked,created_at&sort=-created_at&limit=200').catch(() => []);
+    const camps = await d('/items/campaigns?fields=id,name,status,angle,phase,total,generated,sent,opened,clicked,created_at&sort=-created_at&limit=200').catch(() => []);
     const f = { total: 0, generated: 0, sent: 0, opened: 0, clicked: 0 };
-    const byAngle = {}, byStatus = {};
-    for (const c of camps) { for (const k of Object.keys(f)) f[k] += (c[k] || 0); byAngle[c.angle || '—'] = (byAngle[c.angle || '—'] || 0) + 1; byStatus[c.status || '—'] = (byStatus[c.status || '—'] || 0) + 1; }
+    const byAngle = {}, byStatus = {}, byPhase = { cold: 0, semi_warm: 0, warm: 0 };
+    for (const c of camps) { for (const k of Object.keys(f)) f[k] += (c[k] || 0); byAngle[c.angle || '—'] = (byAngle[c.angle || '—'] || 0) + 1; byStatus[c.status || '—'] = (byStatus[c.status || '—'] || 0) + 1; const ph = ['cold', 'semi_warm', 'warm'].includes(c.phase) ? c.phase : 'cold'; byPhase[ph]++; }
     let recent = [];
     try { recent = await d('/items/emails?fields=id,to_email,subject,status,created_at,sent_at,opened_at,clicked_at,bounce_type,campaign.name&sort=-created_at&limit=60'); } catch { /* vazio */ }
-    res.json({ ok: true, campaigns: camps, funnel: f, byAngle, byStatus, recent });
+    res.json({ ok: true, campaigns: camps, funnel: f, byAngle, byStatus, byPhase, recent });
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
 

@@ -19,7 +19,7 @@ import { getDomain } from 'tldts';
 import { readItems, createItem } from '@directus/sdk';
 // updateItem shadow: p/ sites/companies com DIRECT_PG_WRITE on, escreve direto no PG
 // (via PgBouncer), contornando o Directus REST. Off → comando Directus normal. (A2)
-import { updateItemMaybePg as updateItem, wrapClientPg, pgEnabled, pgCompanyContactKeys, pgInsertContacts, contactKey } from '../lib/pgwrite.js';
+import { updateItemMaybePg as updateItem, wrapClientPg, pgEnabled, getPool, pgCompanyContactKeys, pgInsertContacts, contactKey } from '../lib/pgwrite.js';
 import { publishJob, SUBJECTS } from '../lib/jobs.js';
 import { putSnapshot, getSnapshot } from '../lib/artifacts.js';
 import { analyzeSslLabs } from '../lib/audit/ssllabs.js';
@@ -460,7 +460,14 @@ export function makeFineHandlers(ctx, js) {
   // ---- SUBDOMÍNIOS (crt.sh) — sharded entre workers (Fase C: exit nodes) ------
   async function handleSubdomains(job) {
     const { discoverSubdomains } = await import('../lib/subdomains.js');
-    const site = await siteRow(job.siteId || 0, ['id', 'domain', 'hostnames'])
+    // Lookup do site por PG DIRETO (não Directus): o subfinder abre dezenas de conexões e esgota os
+    // sockets do undici → um read Directus (client.request) daria "fetch failed" ANTES da descoberta e
+    // orfanava. O `pg` usa um pool TCP próprio, imune a essa exaustão. Fallback Directus se PG off.
+    let site = null;
+    if (pgEnabled() && job.siteId) {
+      try { const { rows } = await getPool().query('SELECT id, domain, hostnames FROM sites WHERE id = $1', [job.siteId]); site = rows[0] || null; } catch { /* cai p/ Directus abaixo */ }
+    }
+    if (!site) site = await siteRow(job.siteId || 0, ['id', 'domain', 'hostnames'])
       || (job.domain ? (await client.request(readItems('sites', { filter: { domain: { _eq: job.domain } }, fields: ['id', 'domain', 'hostnames'], limit: 1 })))[0] : null);
     if (!site) return 'ack';
     if (site.hostnames && !job.force) return 'ack'; // resume

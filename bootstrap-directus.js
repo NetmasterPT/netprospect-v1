@@ -386,6 +386,7 @@ async function main() {
     schema: {},
   });
   await ensureField('contacts', 'verified_at', ts());
+  await ensureField('contacts', 'email_verify_detail', json());  // detalhe rico do Reacher (reachable/deliverable/catch_all/role/disabled/smtp_reason) — a API só dá o label
   await ensureField('contacts', 'created_at', dateCreated());
   // Outreach Fase 2/3 — supressão + funil de resposta.
   await ensureField('contacts', 'do_not_contact', bool(false)); // DNC (unsub/bounce/complaint) + exclusão manual de audiência

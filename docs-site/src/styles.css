@@ -64,7 +64,7 @@ a:hover { text-decoration: underline; }
 }
 
 /* --- grafo + topnav --- */
-.topnav { margin-bottom: 12px; }
+.topnav { margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
 .topnav a { font-size: 13.5px; }
 .muted { color: var(--muted); font-size: 13px; }
 .graphview { max-width: none; }

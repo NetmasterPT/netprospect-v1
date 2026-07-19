@@ -42,7 +42,10 @@ function Sidebar() {
   return (
     <aside className="sidebar">
       <Link to="/" className="brand">NetProspect · <b>Docs</b></Link>
-      <div className="topnav"><Link to="/graph">🕸️ Grafo do conhecimento</Link></div>
+      <div className="topnav">
+        <Link to="/graph">🕸️ Grafo do conhecimento</Link>
+        <a href="/docs/storybook/" target="_blank" rel="noreferrer">🎨 Storybook (componentes)</a>
+      </div>
       <input className="search" placeholder="Procurar…" value={q} onChange={(e) => setQ(e.target.value)} />
       {results ? (
         <nav className="nav">

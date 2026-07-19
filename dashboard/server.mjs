@@ -1738,7 +1738,7 @@ SELECT
   count(*) FILTER (WHERE s.checked_at IS NOT NULL)::int AS enrich,
   count(*) FILTER (WHERE s.http_status IS NOT NULL)::int AS fetch,
   count(*) FILTER (WHERE s.hosting_ip IS NOT NULL)::int AS dns,
-  count(*) FILTER (WHERE s.ip_country IS NOT NULL)::int AS geoip,
+  count(*) FILTER (WHERE s.ip_country IS NOT NULL OR s.asn IS NOT NULL)::int AS geoip,
   count(*) FILTER (WHERE s.tech_detected IS NOT NULL)::int AS fingerprint,
   count(*) FILTER (WHERE s.social IS NOT NULL)::int AS social,
   count(*) FILTER (WHERE s.locality_checked_at IS NOT NULL)::int AS locality,

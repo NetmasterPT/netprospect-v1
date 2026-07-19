@@ -25,7 +25,7 @@ import { putSnapshot, getSnapshot } from '../lib/artifacts.js';
 import { analyzeSslLabs } from '../lib/audit/ssllabs.js';
 import { detectPlatforms, detectCDN, extractLang, extractContacts } from '../lib/fingerprints.js';
 import { orgDomain } from '../lib/company.js';
-import { tldToCountry, extractPhones } from '../lib/phone.js';
+import { tldToCountry, ccTldCountry, extractPhones } from '../lib/phone.js';
 import { qualify } from '../lib/qualify.js';
 import { scoreSite } from '../lib/lead-score.js';
 import { recordRun, metricsEnabled, capture } from '../lib/metrics.js';
@@ -197,7 +197,9 @@ export function makeFineHandlers(ctx, js) {
 
   async function handleGeoip(job) {
     const geo = await ctx.geoip.lookup(job.ip);
-    await client.request(updateItem('sites', job.siteId, { asn: geo.asn, isp: clip(geo.isp), ip_country: clip(geo.country, 10), ip_city: clip(geo.city, 120) }));
+    // Fallback: IPs anycast/CDN (Cloudflare/One.com) resolvem ASN/ISP mas SEM país no MaxMind →
+    // usa o ccTLD (.se→SE etc.; gTLD fica null). Ver ccTldCountry() e o marcador do geoip em COVERAGE_SQL.
+    await client.request(updateItem('sites', job.siteId, { asn: geo.asn, isp: clip(geo.isp), ip_country: clip(geo.country || ccTldCountry(job.domain), 10), ip_city: clip(geo.city, 120) }));
     return 'ack';
   }
 

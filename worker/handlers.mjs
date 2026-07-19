@@ -464,10 +464,18 @@ export function makeFineHandlers(ctx, js) {
       || (job.domain ? (await client.request(readItems('sites', { filter: { domain: { _eq: job.domain } }, fields: ['id', 'domain', 'hostnames'], limit: 1 })))[0] : null);
     if (!site) return 'ack';
     if (site.hostnames && !job.force) return 'ack'; // resume
-    // Multi-fonte (certspotter + crt.sh + securitytrails/censys/subfinder). Todas as fontes falharem
-    // (unavailable) → lança → nak/retry. Substitui o crt.sh-PG único, que era um SPOF instável.
-    const { names } = await discoverSubdomains(site.domain);
-    const subs = names.filter((h) => h !== site.domain && !h.startsWith('www.'));
+    // Multi-fonte (certspotter + crt.sh + securitytrails/censys/subfinder). No keyless, domínios difíceis
+    // fazem TODAS as fontes falhar (subfinder timeout + certspotter 429 + crt.sh down) → discoverSubdomains
+    // lança. ANTES isso orfanava e, como o site ficava sem `hostnames`, RE-FALHAVA a cada re-enqueue.
+    // Agora, como o whois marca whois_checked_at mesmo sem dados: marcamos hostnames=[] ('checked, 0 subs
+    // via keyless') + ack → o resume salta-o e resolve-se temporariamente. Force-rescan (--force) apanha os
+    // vazios quando houver fonte melhor (CERTSPOTTER_API_KEY). Falha da ESCRITA (Directus) continua a lançar
+    // → nak/retry (correto). Isto elimina os órfãos e o desperdício de 3× tentativas por domínio difícil.
+    let subs = [];
+    try {
+      const { names } = await discoverSubdomains(site.domain);
+      subs = names.filter((h) => h !== site.domain && !h.startsWith('www.'));
+    } catch { /* todas as fontes falharam → marca vazio (resolve temporariamente, não re-falha eternamente) */ }
     await client.request(updateItem('sites', site.id, { hostnames: subs }));
     return 'ack';
   }

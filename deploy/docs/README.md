@@ -69,6 +69,17 @@ API (5055), Surreal (8000, localhost).
    `notebook.netmaster.pt → 100.114.17.74:8502` (Authentik). `/notebook/` só se o Streamlit tiver `baseUrlPath`.
    **`/notebook/` com dados NUNCA aberto** — sempre atrás de Authentik.
 
+## Obsidian web (F8) — vault online
+`ghcr.io/sytone/obsidian-remote` (Obsidian real num browser, via KasmVNC). Porta 8080.
+1. **Vault = clone dedicado** `/root/np-vault` (`git clone` do repo), **NÃO** o checkout dos serviços
+   `/root/netprospect-v1` — senão editar o vault colidiria com o `git merge --ff-only` do auto-deploy.
+2. **Subir**: `docker compose --env-file deploy/docs/.env -p npdocs -f deploy/docs/docker-compose.yml up -d obsidian-web`.
+3. **Proxy** (NPMplus): subdomínio `obsidian.netmaster.pt → 100.114.17.74:8080` (Authentik). *(Suporta também
+   `SUBFOLDER` para path, mas subdomínio é mais simples.)* **Nunca aberto** — atrás de Authentik.
+4. **Sync git** (o container tem git via `DOCKER_MODS`): editas no Obsidian → na terminal do Obsidian,
+   `git -C /vaults commit -am "..." && git push` → origin → o checkout dos serviços faz auto-pull → o site
+   reconstrói (timer). O **push precisa de auth github** no clone (token/deploy-key) — passo do user.
+
 ## Ver localmente (dev)
 ```bash
 cd docs-site && npm install && npm run dev      # http://localhost:5173/docs/

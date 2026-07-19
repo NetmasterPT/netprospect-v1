@@ -374,6 +374,7 @@ const NAV_GROUPS = [
     ['moloni-nd', 'briefcase', 'Notas de Débito'],
     ['moloni-ff', 'briefcase', 'Fat. Fornecedores'],
     ['moloni-frf', 'briefcase', 'FR Fornecedores'],
+    ['moloni-ncf', 'briefcase', 'NC Fornecedores'],
     ['moloni-avencas', 'clock', 'Avenças'],
     ['moloni-produtos', 'directory', 'Produtos'],
   ]],
@@ -2783,6 +2784,7 @@ async function route() {
     else if (h === 'moloni-nd') await viewMoloniDocs('moloni-nd', 'nota_debito', 'Notas de Débito');
     else if (h === 'moloni-ff') await viewMoloniDocs('moloni-ff', 'fatura_fornecedor', 'Faturas de Fornecedores');
     else if (h === 'moloni-frf') await viewMoloniDocs('moloni-frf', 'fatura_recibo_fornecedor', 'FR de Fornecedores');
+    else if (h === 'moloni-ncf') await viewMoloniDocs('moloni-ncf', 'nota_credito_fornecedor', 'Notas de Crédito de Fornecedor');
     else if (h === 'moloni-avencas') await viewMoloniAvencas();
     else if (h === 'moloni-produtos') await viewMoloniProducts();
     else if (h === 'agendamentos') await viewAgendamentos();

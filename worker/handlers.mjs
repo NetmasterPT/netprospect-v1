@@ -301,7 +301,7 @@ export function makeFineHandlers(ctx, js) {
       snap = { finalUrl: home.finalUrl, html: home.html, pages };
     }
     // Empresa + email geral (do snapshot da homepage)
-    const gen = extractContacts(snap.html || '', { defaultCountry });
+    const gen = extractContacts(snap.html || '', { defaultCountry, siteDomain: site.domain });
     const companyId = site.company || await ensureCompany(site.domain, gen.email);
     const found = [];
     const seen = new Set();

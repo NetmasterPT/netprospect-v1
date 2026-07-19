@@ -56,6 +56,9 @@ const AUDIT_ENABLED = /^(1|true|yes)$/i.test(process.env.AUDIT_ENABLED || '');
 const SKIP_DH_SCORE = /^(1|true|yes)$/i.test(process.env.DOMAIN_HEALTH_SKIP_SCORE || '');
 const GMB_ENABLED = /^(1|true|yes)$/i.test(process.env.GMB_ENABLED || '');
 const VERIFY_MAX_CAND = Math.max(1, parseInt(process.env.VERIFY_MAX_CANDIDATES || '4', 10));
+// Cap de contactos processados por-domínio por job — trava os mega-domínios B2C (jouwweb=500 contactos) de
+// monopolizarem um lote; o resto fica null/TTL e volta numa ronda futura. Ver reacher-coordinated-plan.
+const VERIFY_MAX_PER_DOMAIN = Math.max(1, parseInt(process.env.VERIFY_MAX_PER_DOMAIN || '50', 10));
 
 // Pool de verificação partilhado por worker. Lazy: só constrói quando o 1.º job `verify` chega. As chaves
 // free vêm de config/verify-providers.json. A QUOTA DIÁRIA é contabilizada + lockada no REDIS (partilhada por
@@ -353,10 +356,10 @@ export function makeFineHandlers(ctx, js) {
   }
 
   // ---- SCORE (convergência: qualify + lead score; dispara auditorias) -------
-  const SCORE_FIELDS = ['id', 'domain', 'primary_platform.slug', 'is_cpanel', 'spf_status', 'dmarc_status', 'security_findings', 'security_severity', 'gmb', 'seo_score', 'has_email', 'has_phone', 'has_decision_maker', 'load_bucket', 'traffic_bucket', 'ssl_days_left', 'expiring_soon', 'cms_outdated', 'qualified', 'audit_checked_at'];
+  const SCORE_FIELDS = ['id', 'domain', 'primary_platform.slug', 'is_cpanel', 'spf_status', 'dmarc_status', 'security_findings', 'security_severity', 'gmb', 'seo_score', 'has_email', 'has_valid_email', 'has_phone', 'has_decision_maker', 'load_bucket', 'traffic_bucket', 'ssl_days_left', 'expiring_soon', 'cms_outdated', 'qualified', 'audit_checked_at'];
   async function handleScore(job) {
     const s = await siteRow(job.siteId, SCORE_FIELDS); if (!s) return 'ack';
-    const sig = { slug: s.primary_platform?.slug, is_cpanel: s.is_cpanel, spf_status: s.spf_status, dmarc_status: s.dmarc_status, security_findings: s.security_findings, security_severity: s.security_severity, gmb: s.gmb, seo_score: s.seo_score, has_email: s.has_email, has_phone: s.has_phone, has_decision_maker: s.has_decision_maker, load_bucket: s.load_bucket, traffic_bucket: s.traffic_bucket, ssl_days_left: s.ssl_days_left, expiring_soon: s.expiring_soon, cms_outdated: s.cms_outdated };
+    const sig = { slug: s.primary_platform?.slug, is_cpanel: s.is_cpanel, spf_status: s.spf_status, dmarc_status: s.dmarc_status, security_findings: s.security_findings, security_severity: s.security_severity, gmb: s.gmb, seo_score: s.seo_score, has_email: s.has_email, has_valid_email: s.has_valid_email, has_phone: s.has_phone, has_decision_maker: s.has_decision_maker, load_bucket: s.load_bucket, traffic_bucket: s.traffic_bucket, ssl_days_left: s.ssl_days_left, expiring_soon: s.expiring_soon, cms_outdated: s.cms_outdated };
     const q = qualify(sig); const ls = scoreSite(sig);
     const wasQualified = s.qualified;
     await client.request(updateItem('sites', job.siteId, { qualified: q.qualified, qualified_reasons: q.reasons, lead_score: ls.score, lead_score_breakdown: ls.breakdown, lead_score_at: new Date().toISOString() }));
@@ -520,15 +523,22 @@ export function makeFineHandlers(ctx, js) {
     const { providers, reacher, mxCache } = await verifyPool();
     if (!providers.count && !reacher.enabled()) return 'ack'; // sem verificador configurado → no-op
     const contacts = await client.request(readItems('contacts', {
-      filter: { email_status: { _null: true }, company: { org_domain: { _eq: domain } } },
-      fields: ['id', 'name', 'email'], limit: 500,
+      // Por verificar OU com TTL expirado (reverify_after<$NOW) — re-verificação inteligente.
+      filter: { _and: [{ _or: [{ email_status: { _null: true } }, { reverify_after: { _lt: '$NOW' } }] }, { company: { org_domain: { _eq: domain } } }] },
+      fields: ['id', 'name', 'email', 'company', 'site'], limit: VERIFY_MAX_PER_DOMAIN, // cap por-domínio (B2C); company/site → flags + rollup
     }));
     if (!contacts.length) return 'ack';
     // Deadline abaixo do hang-timeout do dispatch (0.85×ackWait=102s) → domínios com centenas de
     // contactos (B2C) não estouram o timeout: processa o que der em ~85s, o resto fica null p/ re-verify.
-    const counts = await verifyDomain(client, { domain, contacts }, { providers, reacher, mxCache, maxCand: VERIFY_MAX_CAND, deadlineMs: Date.now() + 85000 });
+    const counts = await verifyDomain(client, { domain, contacts, companyId: contacts[0]?.company }, { providers, reacher, mxCache, maxCand: VERIFY_MAX_CAND, deadlineMs: Date.now() + 85000 });
     const done = Object.values(counts).reduce((a, b) => a + b, 0);
     if (done) console.log(`${new Date().toISOString().slice(11, 19)} verify ${domain}: ${JSON.stringify(counts)}`);
+    // Rollup p/ o lead score: ≥1 email entregável neste domínio → has_valid_email no site + re-score (sinal forte).
+    const siteId = contacts[0]?.site;
+    if (counts.valid > 0 && siteId) {
+      try { await client.request(updateItem('sites', siteId, { has_valid_email: true })); await pub(SUBJECTS.score, { domain, siteId }, `score:${domain}`); }
+      catch { /* fail-soft: o rollup é bónus, não bloqueia o ack do verify */ }
+    }
     return 'ack';
   }
 

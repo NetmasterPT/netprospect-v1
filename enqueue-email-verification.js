@@ -38,9 +38,18 @@ async function main() {
   const client = makeClient();
   // lead_score nnull → o sort -site.lead_score fica correto (Postgres põe NULLs primeiro
   // em DESC; os 571 sites sem score, ~0.1%, ficam p/ uma passagem final sem prioridade).
-  const filter = { email_status: { _null: true }, company: { org_domain: { _nnull: true } }, site: { lead_score: { _nnull: true } } };
-  if (MIN_SCORE != null) filter.site.lead_score = { _gte: MIN_SCORE };
-  if (TLD) filter.site.domain = { _ends_with: '.' + TLD.replace(/^\.+/, '').toLowerCase() };
+  // Re-verificação inteligente (reacher-coordinated-plan): por verificar OU com TTL expirado
+  // (reverify_after<$NOW; permanentes têm NULL → excluídos); exclui domínios que bloqueiam o probing.
+  const siteF = { lead_score: { _nnull: true } };
+  if (MIN_SCORE != null) siteF.lead_score = { _gte: MIN_SCORE };
+  if (TLD) siteF.domain = { _ends_with: '.' + TLD.replace(/^\.+/, '').toLowerCase() };
+  // NB: manter `_or`/`company`/`site` como chaves de TOPO (AND implícito). Envolver o
+  // filtro relacional `site` num `_and` faz o SDK tratá-lo como `contacts.site = <obj>` → NaN.
+  const filter = {
+    _or: [{ email_status: { _null: true } }, { reverify_after: { _lt: '$NOW' } }],
+    company: { org_domain: { _nnull: true }, blocks_probing: { _neq: true } },
+    site: siteF,
+  };
 
   let js = null, nc = null;
   if (!DRY) { nc = await connectJobs(); await ensureStream(nc); js = nc.jetstream(); }

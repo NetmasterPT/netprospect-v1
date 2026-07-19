@@ -189,6 +189,7 @@ async function main() {
   console.log('Campos: sites (auditoria/filtros)');
   // Contactos (rollup)
   await ensureField('sites', 'has_email', bool(false));
+  await ensureField('sites', 'has_valid_email', bool(false)); // rollup do verify: ≥1 contacto email_status='valid' (entregável) — sinal forte no lead score
   await ensureField('sites', 'has_phone', bool(false));
   // Localidade do negócio (do GMB quando existe, senão on-site)
   await ensureField('sites', 'business_city', str());
@@ -347,6 +348,11 @@ async function main() {
   await ensureField('companies', 'country', str());
   await ensureField('companies', 'source', str());
   await ensureField('companies', 'notes', text());
+  // Flags de domínio do verify (decididas 1x/domínio, ver reacher-coordinated-plan): catch_all = o MX aceita
+  // qualquer endereço (não vale re-verificar contactos); blocks_probing = o MX bloqueia o RCPT (ex. abion.com,
+  // coast.no) → o enqueue exclui-o para não gastar probes nem reputação do IP.
+  await ensureField('companies', 'catch_all', bool(false));
+  await ensureField('companies', 'blocks_probing', bool(false));
   await ensureField('companies', 'created_at', dateCreated());
   // B3 — Clientes (empresas convertidas de prospeto → cliente): flag + metadados.
   await ensureField('companies', 'is_client', bool(false));
@@ -387,6 +393,13 @@ async function main() {
   });
   await ensureField('contacts', 'verified_at', ts());
   await ensureField('contacts', 'email_verify_detail', json());  // detalhe rico do Reacher (reachable/deliverable/catch_all/role/disabled/smtp_reason) — a API só dá o label
+  // Segmentação + re-verificação inteligente (ver .claude/plans/current/reacher-coordinated-plan.md):
+  // mail_provider = classe do MX (gmail/microsoft/yahoo/corp) p/ priorizar/segmentar; reverify_after = quando
+  // vale a pena re-verificar. reverify_after NULL = permanente (invalid/no_mx/role/disposable) OU "não re-sondar"
+  // (unknown de big-provider/hard-block). O enqueue seleciona email_status IS NULL OR reverify_after < now().
+  await ensureField('contacts', 'mail_provider', enumS(['gmail', 'microsoft', 'yahoo', 'corp']));
+  await ensureEnumChoices('contacts', 'mail_provider', ['gmail', 'microsoft', 'yahoo', 'corp']);
+  await ensureField('contacts', 'reverify_after', ts());
   await ensureField('contacts', 'created_at', dateCreated());
   // Outreach Fase 2/3 — supressão + funil de resposta.
   await ensureField('contacts', 'do_not_contact', bool(false)); // DNC (unsub/bounce/complaint) + exclusão manual de audiência

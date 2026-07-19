@@ -46,6 +46,9 @@ CREATE INDEX IF NOT EXISTS ix_contacts_role           ON contacts (role);
 CREATE INDEX IF NOT EXISTS ix_contacts_role_category  ON contacts (role_category);
 CREATE INDEX IF NOT EXISTS ix_contacts_email_nn       ON contacts (site) WHERE email IS NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_contacts_phone_nn       ON contacts (site) WHERE phone IS NOT NULL;
+-- Verify re-enqueue (reacher-coordinated-plan): selecionar contactos por verificar OU com TTL expirado.
+CREATE INDEX IF NOT EXISTS ix_contacts_reverify       ON contacts (reverify_after) WHERE reverify_after IS NOT NULL;
+CREATE INDEX IF NOT EXISTS ix_contacts_unverified     ON contacts (company) WHERE email_status IS NULL;
 
 -- Fase D: SSL / WHOIS / DNS / CMS.
 CREATE INDEX IF NOT EXISTS ix_sites_ssl_days          ON sites (ssl_days_left);

@@ -997,11 +997,17 @@ app.post('/api/verify/enqueue', async (req, res) => {
   try {
     const p = await pgPool();
     if (!p) return res.status(503).json({ ok: false, error: 'PG desligado (falta PG_HOST/creds)' });
+    // Re-verificação inteligente (reacher-coordinated-plan): seleciona por verificar OU com TTL expirado
+    // (reverify_after<now — os permanentes têm NULL → excluídos); exclui domínios que bloqueiam o probing; e
+    // DESPRIORITIZA os mega-domínios B2C (>20 contactos elegíveis: jouwweb/ISPs) para as empresas reais irem 1º.
     const rows = (await p.query(
       `SELECT co.org_domain AS domain
          FROM contacts ct JOIN companies co ON co.id = ct.company JOIN sites s ON s.id = ct.site
-        WHERE ct.email_status IS NULL AND co.org_domain IS NOT NULL AND s.qualified AND s.is_live
-        ORDER BY s.lead_score DESC NULLS LAST
+        WHERE (ct.email_status IS NULL OR ct.reverify_after < now())
+          AND co.org_domain IS NOT NULL AND s.qualified AND s.is_live
+          AND coalesce(co.blocks_probing, false) = false
+        GROUP BY co.org_domain
+        ORDER BY (count(*) > 20) ASC, max(s.lead_score) DESC NULLS LAST
         LIMIT $1`, [maxEmails])).rows;
     const seen = new Set(); let jobs = 0;
     for (const r of rows) { const dom = r.domain; if (!dom || seen.has(dom)) continue; seen.add(dom); await natsPublish('jobs.verify', { domain: dom }, `verify:${dom}`); jobs++; }

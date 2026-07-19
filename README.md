@@ -668,6 +668,14 @@ Results write back `email`, `email_source` (`reacher` / `api:<provider>` /
 `pattern_guess` / `existing`), `email_verified`, `verified_at`, and
 `email_status` ∈ `{valid, invalid, catch_all, role, disposable, no_mx, unknown}`.
 
+**Smart re-verification** — the fleet also **acts** on the result. Each contact gets a
+`reverify_after` TTL (valid → +90 d, catch_all → +180 d, transient-unknown → +5 d;
+permanents = NULL/never) and a typed `mail_provider`; domains get `catch_all` /
+`blocks_probing` flags. The enqueue then re-checks decaying `valid`s, skips permanents +
+hard-block domains, and caps/deprioritises B2C mega-domains. A verified-deliverable email
+sets `sites.has_valid_email` → **+10 lead score** (`has_valid_email` signal). Full policy +
+the one-off `backfill-verify-metadata.js`: [`docs/outreach-ops/07-reverification-policy.md`](./docs/outreach-ops/07-reverification-policy.md).
+
 ```bash
 node verify-emails.js --dry-run --limit=25                 # pre-filter + routing + candidates (standalone)
 REACHER_URL=http://127.0.0.1:8080 node verify-emails.js --limit=500

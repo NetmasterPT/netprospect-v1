@@ -45,6 +45,7 @@ each IP is **blocklist-checked** before use (see `00-port25-and-ips.md`).
 4. `04-warmup.md` — domain/IP warm-up schedule.
 5. `05-esp-ladder.md` — Brevo/MailerLite engagement rung (Phase 3).
 6. `06-aws-ses-mautic.md` — Mautic + AWS SES warm tier (Phase 4).
+7. `07-reverification-policy.md` — smart re-verification (provider + TTL decay) + email-quality lead score.
 
 ## Cost summary (target: near-zero, escalate only if needed)
 

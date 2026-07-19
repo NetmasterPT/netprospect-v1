@@ -101,6 +101,9 @@ services:
   obsidian-web:
     image: ghcr.io/sytone/obsidian-remote:latest
     restart: unless-stopped
+    shm_size: "1gb"                             # Electron/Chromium: 64MB default → renderer crasha (ecrã preto)
+    security_opt:
+      - seccomp:unconfined                      # sandbox do Electron no KasmVNC
     environment:
       PUID: "0"
       PGID: "0"

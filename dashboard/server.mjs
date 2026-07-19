@@ -2399,6 +2399,63 @@ app.post('/api/moloni/documents/:id/finalize', async (req, res) => {
   catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
 
+// ── Agendamentos (G): GCal âncora + Meet → Notion ligado → Directus. ──
+const CAL_USER = process.env.AGENDAMENTOS_CALENDAR || 'geral@netmaster.pt';
+const CAL_TZ = process.env.AGENDAMENTOS_TZ || 'Europe/Lisbon';
+const importGcal = async () => { try { return await import('./lib/google-calendar.js'); } catch { return import('../lib/google-calendar.js'); } };
+const importNotion = async () => { try { return await import('./lib/notion.js'); } catch { return import('../lib/notion.js'); } };
+app.get('/api/agendamentos', async (req, res) => {
+  try {
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(200, parseInt(req.query.limit) || 100);
+    const offset = (page - 1) * limit;
+    const url = `/items/agendamentos?fields=id,title,contact_name,contact_email,start,end,status,meet_link,gcal_event_id,notion_url,notes,company.name&sort[]=-start&limit=${limit}&offset=${offset}&meta=filter_count`;
+    const r = await fetch(`${DIRECTUS_URL}${url}`, { headers: { Authorization: `Bearer ${TOKEN}` } });
+    const json = await r.json();
+    res.json({ rows: json.data || [], total: json.meta?.filter_count ?? (json.data || []).length, page, limit });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+app.post('/api/agendamentos', async (req, res) => {
+  try {
+    const b = req.body || {};
+    if (!b.start || !b.contact_email) return res.status(400).json({ ok: false, error: 'start e contact_email obrigatórios' });
+    const startIso = b.start;
+    const endIso = b.end || new Date(new Date(b.start).getTime() + (Number(b.duration_min) || 30) * 60000).toISOString();
+    const title = b.title || `Reunião — ${b.contact_name || b.contact_email}`;
+    const [gcal, notion] = await Promise.all([importGcal(), importNotion()]);
+    let ev = null; let notionRes = null; const warnings = [];
+    // 1) Google Calendar = âncora (+ Meet)
+    if (gcal.isCalendarConfigured()) {
+      ev = await gcal.createEvent({ userEmail: CAL_USER, summary: title, description: b.notes || '', startIso, endIso, timezone: CAL_TZ, attendees: [{ email: b.contact_email, displayName: b.contact_name || undefined }] }).catch((e) => { warnings.push('gcal: ' + e.message); return null; });
+    } else warnings.push('google desligado / sem domain-wide delegation');
+    // 2) Notion (best-effort) — a propriedade date fá-lo aparecer no calendário Notion
+    if (notion.notionEnabled()) {
+      notionRes = await notion.createAgendamentoPage({ title, email: b.contact_email, company: b.company_name, startIso, meetLink: ev && ev.meetLink, calendarLink: ev && ev.htmlLink, notes: b.notes }).catch((e) => { warnings.push('notion: ' + e.message); return null; });
+    }
+    // 3) Ligar o Notion de volta ao evento (Notion Calendar deteta o URL na descrição)
+    if (ev && notionRes && notionRes.url) await gcal.appendEventDescription({ userEmail: CAL_USER, eventId: ev.id, appendText: `Notion: ${notionRes.url}` }).catch(() => {});
+    // 4) Persistir no Directus
+    const row = await dwrite('POST', '/items/agendamentos', {
+      title, contact_name: b.contact_name || null, contact_email: b.contact_email,
+      start: startIso, end: endIso, status: 'agendado',
+      meet_link: (ev && ev.meetLink) || null, gcal_event_id: (ev && ev.id) || null,
+      notion_page_id: (notionRes && notionRes.pageId) || null, notion_url: (notionRes && notionRes.url) || null,
+      notes: b.notes || null, ...(b.company_id ? { company: b.company_id } : {}),
+    });
+    res.json({ ok: true, result: row, meetLink: (ev && ev.meetLink) || null, warnings });
+  } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
+app.post('/api/agendamentos/:id/cancel', async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const ag = await d(`/items/agendamentos/${id}?fields=id,gcal_event_id`).catch(() => null);
+    const gcal = await importGcal();
+    if (ag && ag.gcal_event_id && gcal.isCalendarConfigured()) await gcal.deleteCalendarEvent({ userEmail: CAL_USER, eventId: ag.gcal_event_id }).catch(() => {});
+    await dwrite('PATCH', `/items/agendamentos/${id}`, { status: 'cancelado' });
+    res.json({ ok: true });
+  } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => { ensureFleetDir(); console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`); });

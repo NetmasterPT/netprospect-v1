@@ -365,7 +365,7 @@ const NAV_GROUPS = [
     ['ext-adminer', 'directory', 'Adminer', null, 'http://100.114.17.74:8080'],
   ]],
   ['Dataset', [['directory', 'directory', 'Negócios', 'sites'], ['isps', 'globe', 'ISPs'], ['triggers', 'activity', 'Gatilhos'], ['data-coverage', 'check', 'Cobertura Dados']]],
-  ['CRM', [['contacts', 'contacts', 'Contactos', 'contacts'], ['clients', 'briefcase', 'Clientes']]],
+  ['CRM', [['contacts', 'contacts', 'Contactos', 'contacts'], ['clients', 'briefcase', 'Clientes'], ['agendamentos', 'clock', 'Agendamentos']]],
   ['Contabilidade', [
     ['moloni-faturas', 'briefcase', 'Faturas'],
     ['moloni-fr', 'briefcase', 'Faturas-Recibo'],
@@ -1292,6 +1292,50 @@ window.molAvPage = (n) => { MState.page = n; paintMoloniAvencas(); };
 function molPager(r, pages, fn) {
   return `<span>A mostrar <b>${fmt(r.total ? (r.page - 1) * r.limit + 1 : 0)}–${fmt(Math.min(r.page * r.limit, r.total))}</b> de <b>${fmt(r.total)}</b></span><span style="flex:1"></span><button ${r.page <= 1 ? 'disabled' : ''} onclick="${fn}(${r.page - 1})">‹</button><span class="tnum">Página ${r.page} / ${fmt(pages)}</span><button ${r.page >= pages ? 'disabled' : ''} onclick="${fn}(${r.page + 1})">›</button>`;
 }
+
+// ========== AGENDAMENTOS (G) ==========
+async function viewAgendamentos() {
+  if (!STATS) STATS = await api('/api/stats'); renderNav('agendamentos');
+  await paintAgendamentos();
+}
+async function paintAgendamentos() {
+  if (!REFRESHING || !$('#agbody')) $('#view').innerHTML = `
+    <div class="np-head"><div><div class="np-eyebrow">CRM</div><h1 class="np-h1">Agendamentos</h1><div class="np-sub">Google Calendar + Meet + Notion ligados</div></div>
+      <button class="np-btn np-btn--primary" onclick="agNew()">${ic('send', 15)}Novo agendamento</button></div>
+    <div id="agform"></div>
+    <section class="np-card"><div class="np-tablewrap"><table class="np-table" style="min-width:820px"><thead><tr>
+      <th>Título</th><th>Contacto</th><th>Início</th><th>Meet</th><th>Notion</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="agbody"><tr><td colspan="7"><div class="np-empty">A carregar…</div></td></tr></tbody></table></div></section>`;
+  const r = await api('/api/agendamentos');
+  $('#agbody').innerHTML = r.rows.map((a) => `<tr>
+    <td><b>${esc(a.title || '—')}</b></td>
+    <td>${esc(a.contact_name || a.contact_email || '—')}${a.contact_email ? `<div class="muted" style="font-size:11px">${esc(a.contact_email)}</div>` : ''}</td>
+    <td class="muted">${esc((a.start || '').replace('T', ' ').slice(0, 16))}</td>
+    <td>${a.meet_link ? `<a href="${esc(a.meet_link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Meet</a>` : '—'}</td>
+    <td>${a.notion_url ? `<a href="${esc(a.notion_url)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Notion</a>` : '—'}</td>
+    <td>${a.status === 'cancelado' ? '<span class="np-badge neutral" style="height:20px">Cancelado</span>' : a.status === 'realizado' ? '<span class="np-badge ok" style="height:20px">Realizado</span>' : '<span class="np-badge info" style="height:20px">Agendado</span>'}</td>
+    <td>${a.status !== 'cancelado' ? `<button class="np-btn np-btn--sm" onclick="agCancel(${a.id})">Cancelar</button>` : ''}</td></tr>`).join('') || `<tr><td colspan="7"><div class="np-empty">Sem agendamentos.</div></td></tr>`;
+}
+window.agNew = () => {
+  $('#agform').innerHTML = `<section class="np-card" style="margin-bottom:14px"><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <label style="font-size:12px">Título<input class="np-input" id="ag_title" placeholder="Reunião de onboarding"/></label>
+    <label style="font-size:12px">Contacto (nome)<input class="np-input" id="ag_name"/></label>
+    <label style="font-size:12px">Email<input class="np-input" id="ag_email" type="email"/></label>
+    <label style="font-size:12px">Início<input class="np-input" id="ag_start" type="datetime-local"/></label>
+    <label style="font-size:12px">Duração (min)<input class="np-input" id="ag_dur" type="number" value="30"/></label>
+    <label style="font-size:12px">Notas<input class="np-input" id="ag_notes"/></label>
+  </div><div style="margin-top:10px;display:flex;gap:8px"><button class="np-btn np-btn--primary" onclick="agSave()">Criar</button><button class="np-btn" onclick="$('#agform').innerHTML=''">Cancelar</button></div></section>`;
+};
+window.agSave = async () => {
+  const start = $('#ag_start').value; const email = ($('#ag_email').value || '').trim();
+  if (!start || !email) { if ($('#ag_email')) $('#ag_email').style.borderColor = '#e5484d'; return; }
+  try {
+    const r = await api('/api/agendamentos', { method: 'POST', body: JSON.stringify({ title: $('#ag_title').value.trim(), contact_name: $('#ag_name').value.trim(), contact_email: email, start: new Date(start).toISOString(), duration_min: +$('#ag_dur').value || 30, notes: $('#ag_notes').value.trim() }) });
+    if (r.warnings && r.warnings.length) console.warn('agendamento:', r.warnings);
+    $('#agform').innerHTML = ''; paintAgendamentos();
+  } catch (e) { $('#agform').insertAdjacentHTML('afterbegin', `<div class="np-empty" style="color:#e5484d">Erro: ${esc(e.message)}</div>`); }
+};
+window.agCancel = async (id) => { try { await api('/api/agendamentos/' + id + '/cancel', { method: 'POST' }); paintAgendamentos(); } catch (e) { console.warn(e); } };
 
 // ========== SEGMENTS / SETTINGS (lightweight) ==========
 function segFilterChips(f) {
@@ -2741,6 +2785,7 @@ async function route() {
     else if (h === 'moloni-frf') await viewMoloniDocs('moloni-frf', 'fatura_recibo_fornecedor', 'FR de Fornecedores');
     else if (h === 'moloni-avencas') await viewMoloniAvencas();
     else if (h === 'moloni-produtos') await viewMoloniProducts();
+    else if (h === 'agendamentos') await viewAgendamentos();
     else await viewOverview();
   } catch (e) { $('#view').innerHTML = `<div class="np-empty">Erro a carregar: ${esc(e.message)}</div>`; }
   if (parseHashQuery().notif) openNotifications(); // deep-link p/ notificações

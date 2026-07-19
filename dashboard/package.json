@@ -17,6 +17,9 @@
     "@opentelemetry/sdk-node": "^0.54.0",
     "@opentelemetry/auto-instrumentations-node": "^0.52.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.54.0",
-    "@directus/sdk": "^23.0.0"
+    "@directus/sdk": "^23.0.0",
+    "googleapis": "^171.4.0",
+    "google-auth-library": "^10.6.2",
+    "@notionhq/client": "^5.20.0"
   }
 }

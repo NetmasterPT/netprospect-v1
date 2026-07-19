@@ -23,7 +23,7 @@ import { updateItemMaybePg as updateItem, wrapClientPg, pgEnabled, pgCompanyCont
 import { publishJob, SUBJECTS } from '../lib/jobs.js';
 import { putSnapshot, getSnapshot } from '../lib/artifacts.js';
 import { analyzeSslLabs } from '../lib/audit/ssllabs.js';
-import { detectPlatforms, detectCDN, extractLang, extractContacts } from '../lib/fingerprints.js';
+import { detectPlatforms, detectCDN, extractLang, extractContacts, detectWebDeveloper } from '../lib/fingerprints.js';
 import { orgDomain } from '../lib/company.js';
 import { tldToCountry, ccTldCountry, extractPhones } from '../lib/phone.js';
 import { qualify } from '../lib/qualify.js';
@@ -334,6 +334,8 @@ export function makeFineHandlers(ctx, js) {
       }
     }
     const patch = { company: companyId, contacts_checked_at: new Date().toISOString() };
+    // Inteligência competitiva: quem faz o site (atribuição do rodapé "Desenvolvido por X").
+    const dev = detectWebDeveloper(snap.html || '', site.domain); if (dev) { patch.web_developer = clip(dev.domain, 120); patch.web_developer_name = clip(dev.name, 140); }
     patch.has_email = !!generalEmail || found.some((p) => p.email);
     patch.has_phone = phones.length > 0;
     if (found.some((p) => p.role_category === 'decision_maker')) patch.has_decision_maker = true;

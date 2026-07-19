@@ -7,9 +7,16 @@ FROM node:22-bookworm-slim
 
 WORKDIR /app
 
-# Só o essencial (sem Chromium/Ruby/Nuclei). curl/ca-certs p/ rede.
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl procps \
+# Só o essencial (sem Chromium/Ruby/Nuclei). curl/unzip/ca-certs p/ rede + download do subfinder.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl unzip procps \
     && rm -rf /var/lib/apt/lists/*
+
+# subfinder (ProjectDiscovery) — agrega dezenas de fontes passivas de subdomínios. O role 'base' corre os
+# `subdomains`, por isso o binário vive nesta imagem leve. lib/subdomains.js usa-o automaticamente se existir.
+RUN SUBF_VER=$(curl -sL https://api.github.com/repos/projectdiscovery/subfinder/releases/latest | grep -Po '"tag_name":\s*"v\K[0-9.]+') \
+    && curl -sL "https://github.com/projectdiscovery/subfinder/releases/download/v${SUBF_VER}/subfinder_${SUBF_VER}_linux_amd64.zip" -o /tmp/subfinder.zip \
+    && unzip -o /tmp/subfinder.zip -d /usr/local/bin subfinder && rm /tmp/subfinder.zip \
+    && subfinder -version
 
 COPY package.json ./
 RUN npm install --omit=dev && npm cache clean --force

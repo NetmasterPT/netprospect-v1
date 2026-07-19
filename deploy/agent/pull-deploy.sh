@@ -78,6 +78,13 @@ if [ "$changed" = 1 ]; then
   # shellcheck disable=SC2086
   if docker compose -p "$COMPOSE_PROJECT" -f "$REPO/$COMPOSE_FILE" up -d $BUILD $NODEPS --force-recreate ${COMPOSE_SERVICES:-} >>"$LOG" 2>&1; then
     log "recreate OK ($COMPOSE_PROJECT / $COMPOSE_FILE)"
+    # RECONCILE: o `--force-recreate` + `depends_on: service_started` por vezes deixa dependentes em
+    # "Created" (o start é deferido/perdido quando a dependência não é marcada "started" a tempo — o
+    # incidente do NATS/postgres-exporter do np-server). Um `up -d` idempotente (sem force) ARRANCA os
+    # que ficaram Created; o `docker start` final é o cinto-e-suspensórios.
+    docker compose -p "$COMPOSE_PROJECT" -f "$REPO/$COMPOSE_FILE" up -d $NODEPS ${COMPOSE_SERVICES:-} >>"$LOG" 2>&1 || true
+    CREATED=$(docker ps -aq -f "status=created" -f "label=com.docker.compose.project=$COMPOSE_PROJECT" 2>/dev/null)
+    [ -n "$CREATED" ] && { log "reconcile: a arrancar $(echo "$CREATED" | wc -l) container(s) preso(s) em Created"; docker start $CREATED >>"$LOG" 2>&1 || true; }
   else log "ERRO recreate falhou — ver acima"; fi
 else log "sem alterações"; fi
 

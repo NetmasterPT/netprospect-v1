@@ -76,8 +76,10 @@ sem pico de `unknown` (sintoma de IP sujo / porto 25 fechado).
 
 ## Fase 3 — escalar (depois de validado)
 
-- **2º IP (FI)**: repetir em hel1-docker (`external eth0` → `65.108.120.25`, PTR `p2.<D>`), 2ª entrada em
-  `verify-proxies.json`. O `lib/reacher.js` já faz round-robin + cooldowns por (IP, provider).
+- **2º IP** — automatizado: **`./add-proxy.sh <domínio> <IP-limpo> <tailnet-IP-host> <ssh-host> [p2]`**. Faz
+  o gate FCrDNS, sobe um Dante **tailnet-bound** nesse host (restrito ao IP do Reacher — proxy fechado), e
+  **acrescenta** (não sobrepõe) a entrada em `verify-proxies.json`. O `lib/reacher.js` já faz round-robin +
+  cooldowns por (IP, provider). *(NB: o Dante do 2.º host escuta na tailnet, ≠ do co-locado que é 127.0.0.1.)*
 - **Gmail/Yahoo fiáveis**: proxies residenciais (pagos) ou o método `headless` (Chrome, já na imagem via
   ChromeDriver :9515). Avaliar custo vs deixar as APIs cobri-los.
 

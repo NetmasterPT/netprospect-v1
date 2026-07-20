@@ -1,3 +1,4 @@
 node_modules/
 dist/
 src/content.json
+public/content.json

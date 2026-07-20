@@ -1,9 +1,10 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useCallback, useRef, createContext, useContext } from 'react';
 import { Routes, Route, Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import ForceGraph2D from 'react-force-graph-2d';
-import content from './content.json';
+import initialContent from './content.json';
 import { Chip } from './ui/primitives.jsx';
 import { Brandmark, SearchBox, ThemeToggleButton } from './ui/shell.jsx';
+import { ProfileMenu } from './ui/overlays.jsx';
 import { Icon } from './ui/icons.jsx';
 
 const TYPE_ORDER = ['explanation', 'how-to', 'tutorial', 'reference', 'incident', 'working'];
@@ -15,7 +16,9 @@ const TYPE_COLOR = {
   explanation: '#a78bfa', 'how-to': '#34d399', tutorial: '#f472b6',
   reference: '#60a5fa', incident: '#f87171', working: '#fbbf24',
 };
-const bySlug = Object.fromEntries(content.pages.map((p) => [p.slug, p]));
+// Conteúdo em contexto → o botão "Atualizar" refaz o fetch sem reload da página.
+const ContentCtx = createContext(initialContent);
+const useContent = () => useContext(ContentCtx);
 const Chev = ({ size = 13 }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
 );
@@ -32,17 +35,24 @@ function useTheme() {
   return [theme, () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))];
 }
 
-function Topbar({ theme, toggleTheme, q, setQ }) {
+function Topbar({ theme, toggleTheme, q, setQ, onRefresh, refreshing, onMic, recording }) {
   return (
     <div className="np-topbar">
       <Link to="/"><Brandmark pill="Docs" /></Link>
-      <SearchBox placeholder="Procurar na documentação…" value={q} onChange={setQ} />
-      <ThemeToggleButton theme={theme} onToggle={toggleTheme} />
+      <SearchBox placeholder="Procurar na documentação…" value={q} onChange={setQ} onMic={onMic} recording={recording} />
+      <div className="np-head-actions">
+        <button className={`np-iconbtn${refreshing ? ' rec' : ''}`} onClick={onRefresh} title="Atualizar" aria-label="Atualizar">
+          <Icon name="refresh" size={16} />
+        </button>
+        <ThemeToggleButton theme={theme} onToggle={toggleTheme} />
+        <ProfileMenu name="NetProspect" role="Documentação" />
+      </div>
     </div>
   );
 }
 
 function Sidebar({ q, groups }) {
+  const content = useContent();
   const [open, setOpen] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem('np-docs-nav') || '[]')); } catch { return new Set(); }
   });
@@ -99,6 +109,8 @@ function Sidebar({ q, groups }) {
 }
 
 function Page() {
+  const content = useContent();
+  const bySlug = useMemo(() => Object.fromEntries(content.pages.map((p) => [p.slug, p])), [content]);
   const slug = useParams()['*'] || content.home;
   const location = useLocation();
   const page = bySlug[slug] || bySlug[content.home];
@@ -121,6 +133,7 @@ function Page() {
 }
 
 function GraphView() {
+  const content = useContent();
   const navigate = useNavigate();
   const [dim, setDim] = useState({ w: 800, h: 600 });
   useEffect(() => {
@@ -154,15 +167,45 @@ function GraphView() {
 export default function App() {
   const [theme, toggleTheme] = useTheme();
   const [q, setQ] = useState('');
+  const [content, setContent] = useState(initialContent);
+  const [refreshing, setRefreshing] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const recognitionRef = useRef(null);
+
   const groups = useMemo(() => {
     const g = {};
     for (const p of content.pages) (g[p.type] ||= []).push(p);
     for (const k in g) g[k].sort((a, b) => a.title.localeCompare(b.title));
     return g;
+  }, [content]);
+
+  // Atualizar: refaz o fetch do content.json (asset estático) sem reload da página.
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    try {
+      const r = await fetch(`content.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (r.ok) setContent(await r.json());
+    } catch {}
+    setTimeout(() => setRefreshing(false), 400);
   }, []);
+
+  // STT: pesquisa por voz via Web Speech API (pt-PT). Sem suporte → no-op.
+  const onMic = useCallback(() => {
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    if (recognitionRef.current) { recognitionRef.current.stop(); return; }
+    const rec = new SR();
+    rec.lang = 'pt-PT'; rec.interimResults = false; rec.maxAlternatives = 1;
+    rec.onresult = (e) => setQ(e.results[0][0].transcript);
+    rec.onend = () => { recognitionRef.current = null; setRecording(false); };
+    rec.onerror = () => { recognitionRef.current = null; setRecording(false); };
+    recognitionRef.current = rec; rec.start(); setRecording(true);
+  }, []);
+
   return (
-    <>
-      <Topbar theme={theme} toggleTheme={toggleTheme} q={q} setQ={setQ} />
+    <ContentCtx.Provider value={content}>
+      <Topbar theme={theme} toggleTheme={toggleTheme} q={q} setQ={setQ}
+        onRefresh={onRefresh} refreshing={refreshing} onMic={onMic} recording={recording} />
       <div className="np-shell">
         <Sidebar q={q} groups={groups} />
         <Routes>
@@ -170,6 +213,6 @@ export default function App() {
           <Route path="/*" element={<Page />} />
         </Routes>
       </div>
-    </>
+    </ContentCtx.Provider>
   );
 }

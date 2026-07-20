@@ -7,7 +7,7 @@ export function Scrim({ open, onClick }) {
 }
 
 /** Painel deslizante à direita. `open` controla o estado; usar com <Scrim>. */
-export function Drawer({ open, onClose, title, actions, children }) {
+export function Drawer({ open, onClose, title, actions, children, bodyStyle }) {
   return (
     <>
       <Scrim open={open} onClick={onClose} />
@@ -20,7 +20,7 @@ export function Drawer({ open, onClose, title, actions, children }) {
               style={{ borderColor: 'var(--np-border)', color: 'var(--np-text-2)' }}><Icon name="x" size={16} /></button>
           </div>
         </div>
-        <div className="np-drawer-b">{children}</div>
+        <div className="np-drawer-b" style={bodyStyle}>{children}</div>
       </aside>
     </>
   );
@@ -30,8 +30,7 @@ const NOTIF_ICON = { ok: 'check', warn: 'bell', info: 'activity', danger: 'x', n
 
 export function NotificationsDrawer({ open, onClose, items = [] }) {
   return (
-    <Drawer open={open} onClose={onClose} title="Notificações">
-      {items.length === 0 && <p className="muted" style={{ padding: '4px 0' }}>Sem notificações.</p>}
+    <Drawer open={open} onClose={onClose} title="Notificações" bodyStyle={{ padding: '6px 18px' }}>
       {items.map((n, i) => {
         const tone = n.tone || 'neutral';
         const iconName = n.icon || NOTIF_ICON[tone];
@@ -47,6 +46,7 @@ export function NotificationsDrawer({ open, onClose, items = [] }) {
           </div>
         );
       })}
+      <div className="muted" style={{ padding: '16px 0', fontSize: 12, textAlign: 'center' }}>Sem mais notificações.</div>
     </Drawer>
   );
 }

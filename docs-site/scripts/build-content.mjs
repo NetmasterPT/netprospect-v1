@@ -108,5 +108,10 @@ const deg = {};
 for (const l of links) { deg[l.source] = (deg[l.source] || 0) + 1; deg[l.target] = (deg[l.target] || 0) + 1; }
 for (const n of nodes) n.deg = deg[n.id] || 0;
 
-fs.writeFileSync(OUT, JSON.stringify({ generated: new Date().toISOString(), home: 'docs/README', pages, graph: { nodes, links } }));
-console.log(`${pages.length} páginas, ${nodes.length} nós, ${links.length} arestas → src/content.json`);
+const payload = JSON.stringify({ generated: new Date().toISOString(), home: 'docs/README', pages, graph: { nodes, links } });
+fs.writeFileSync(OUT, payload);
+// Também como asset estático (public/) → permite refetch em runtime pelo botão "Atualizar" (sem reload da página).
+const PUB = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../public/content.json');
+fs.mkdirSync(path.dirname(PUB), { recursive: true });
+fs.writeFileSync(PUB, payload);
+console.log(`${pages.length} páginas, ${nodes.length} nós, ${links.length} arestas → src/content.json (+ public/)`);

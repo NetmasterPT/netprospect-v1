@@ -16,11 +16,15 @@ export function Brandmark({ label = 'NetProspect', pill }) {
   );
 }
 
-export function SearchBox({ placeholder = 'Procurar…', value, onChange }) {
+export function SearchBox({ placeholder = 'Procurar…', value, onChange, onMic, recording = false }) {
   return (
     <div className="np-tsearch">
       <Icon name="search" size={16} />
       <input placeholder={placeholder} value={value} onChange={(e) => onChange && onChange(e.target.value)} />
+      <button type="button" className={`np-mic${recording ? ' rec' : ''}`} onClick={onMic}
+        title="Falar (voz → texto)" aria-label="Pesquisa por voz">
+        <Icon name="mic" size={16} />
+      </button>
     </div>
   );
 }

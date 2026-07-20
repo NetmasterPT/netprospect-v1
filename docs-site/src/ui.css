@@ -19,7 +19,15 @@
 .np-iconbtn { width: 34px; height: 34px; display: grid; place-items: center; border-radius: var(--np-radius);
   border: 1px solid var(--np-chrome-border); background: transparent; color: var(--np-chrome-text-2); cursor: pointer; }
 .np-iconbtn:hover { background: var(--np-chrome-2); color: var(--np-chrome-text); }
+.np-iconbtn.rec svg { animation: npspin .6s linear infinite; }
+@keyframes npspin { to { transform: rotate(360deg); } }
 .np-themebtn { width: auto; padding: 0 12px; gap: 6px; display: flex; align-items: center; font: inherit; font-size: 12px; font-weight: 600; }
+.np-mic { width: 26px; height: 26px; display: grid; place-items: center; border: none; background: transparent; color: var(--np-chrome-text-2); border-radius: 6px; cursor: pointer; }
+.np-mic:hover { background: rgba(255,255,255,0.10); color: var(--np-chrome-text); }
+.np-mic.rec { color: #fff; background: var(--np-brand-fill); animation: micpulse 1s infinite; }
+@keyframes micpulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+/* Perfil da topbar: no chrome (fundo escuro), o texto usa as cores de chrome. */
+.np-topbar .np-profile .np-menuitem { color: var(--np-text-2); }
 
 /* ---- Shell + sidebar ---- */
 .np-shell { display: flex; align-items: flex-start; }

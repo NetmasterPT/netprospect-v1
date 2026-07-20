@@ -24,6 +24,7 @@ import { publishJob, SUBJECTS } from '../lib/jobs.js';
 import { putSnapshot, getSnapshot } from '../lib/artifacts.js';
 import { analyzeSslLabs } from '../lib/audit/ssllabs.js';
 import { detectPlatforms, detectCDN, extractLang, extractContacts, detectWebDeveloper } from '../lib/fingerprints.js';
+import { decodeHtmlBody } from '../lib/http-charset.js';
 import { orgDomain } from '../lib/company.js';
 import { tldToCountry, ccTldCountry, extractPhones } from '../lib/phone.js';
 import { qualify } from '../lib/qualify.js';
@@ -83,7 +84,7 @@ async function tryFetch(url) {
     const r = await fetch(url, { redirect: 'follow', signal: ctrl.signal, dispatcher: egressDispatcher(), headers: { 'User-Agent': UA, Accept: 'text/html,application/xhtml+xml,*/*' } });
     const ct = r.headers.get('content-type') || '';
     let html = '';
-    if (/text\/html|xml|^$/.test(ct)) html = (await r.text()).slice(0, MAX_HTML);
+    if (/text\/html|xml|^$/.test(ct)) html = (await decodeHtmlBody(r)).slice(0, MAX_HTML); // charset real → evita mojibake (Str�msund)
     else { try { await r.body?.cancel(); } catch { /* ignora */ } }
     const elapsedMs = Math.round(performance.now() - t0);
     const headers = Object.fromEntries(r.headers.entries());
@@ -326,7 +327,15 @@ export function makeFineHandlers(ctx, js) {
     if (generalEmail || phones.length) { try { const c = (await client.request(readItems('companies', { filter: { id: { _eq: companyId } }, fields: ['general_email', 'general_phone'], limit: 1 })))[0]; const cp = {}; const _od = getDomain(site.domain); const _curOff = c?.general_email && getDomain((c.general_email.split('@')[1]) || '') !== _od; const _newOwn = generalEmail && getDomain((generalEmail.split('@')[1]) || '') === _od; if ((!c?.general_email || (_curOff && _newOwn)) && generalEmail) cp.general_email = generalEmail; if (!c?.general_phone && phones.length) cp.general_phone = clip(phones[0], 40); if (phones.length) cp.phones = phones; if (Object.keys(cp).length) await client.request(updateItem('companies', companyId, cp)); } catch { /* ignora */ } }
     const _org = getDomain(site.domain);
     // A5: telefone sem país → default do site. A3: flag email_off_domain (freemail/parceiro/agência ≠ site).
-    const mkContact = (p) => ({ name: p.name, role: p.role, role_category: p.role_category || 'unknown', email: p.email, phone: p.phone, phone_country: p.phone_country || (p.phone ? defaultCountry : null), email_off_domain: p.email ? getDomain((p.email.split('@')[1]) || '') !== _org : false, social_profiles: p.social_profiles || null, source: 'site', source_detail: p.source_detail, company: companyId, site: site.id, gdpr_basis: 'legitimate_interest' });
+    const mkContact = (p) => {
+      const offDomain = p.email ? getDomain((p.email.split('@')[1]) || '') !== _org : false;
+      let rc = p.role_category || 'unknown';
+      // Pessoa com NOME mas SEM cargo adjacente (=unknown) cujo email é do PRÓPRIO domínio → trabalha lá =
+      // 'staff' (identifica o contacto sem inventar cargo). Off-domain (email institucional/freemail) fica
+      // 'unknown' — afiliação externa (académico/membro/parceiro), não staff do negócio.
+      if (rc === 'unknown' && p.name && p.email && !offDomain) rc = 'staff';
+      return { name: p.name, role: p.role, role_category: rc, email: p.email, phone: p.phone, phone_country: p.phone_country || (p.phone ? defaultCountry : null), email_off_domain: offDomain, social_profiles: p.social_profiles || null, source: 'site', source_detail: p.source_detail, company: companyId, site: site.id, gdpr_basis: 'legitimate_interest' };
+    };
     if (found.length) {
       if (pgEnabled()) {
         // A4 — 1 leitura de dedup + 1 INSERT multi-linha (vs N leituras + N inserts)

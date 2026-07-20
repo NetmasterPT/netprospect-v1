@@ -29,6 +29,7 @@ import { makeClient } from '../lib/directus.js';
 import { startTelemetry, taskStart, taskEnd, logLine } from '../lib/worker-telemetry.js';
 import { classifyIndustryHeuristic, industryFromGmbCategory } from '../lib/audit/industry-heuristic.js';
 import { isCountryName, isForeignLocality } from '../lib/audit/locality.js';
+import { decodeHtmlBody } from '../lib/http-charset.js';
 // summarizeForClassify é uma função PURA (parsing de HTML) — importada diretamente para o job
 // `industry` correr no role 'base' SEM precisar do contexto de audit (Ollama/Chromium). O Ollama
 // só é preciso com INDUSTRY_LLM=true (audit.ollama.classifyIndustry).
@@ -94,7 +95,7 @@ async function fetchHomepage(url, timeoutMs = 12000) {
     const r = await fetch(url, { redirect: 'follow', signal: ctrl.signal, dispatcher: egressDispatcher(), headers: { 'User-Agent': UA, Accept: 'text/html,*/*' } });
     const ct = r.headers.get('content-type') || '';
     if (!/text\/html|xml|^$/.test(ct)) { try { await r.body?.cancel(); } catch { /* ignora */ } return null; }
-    return { url: r.url, html: (await r.text()).slice(0, 1_500_000) };
+    return { url: r.url, html: (await decodeHtmlBody(r)).slice(0, 1_500_000) };
   } catch { return null; }
   finally { clearTimeout(to); }
 }

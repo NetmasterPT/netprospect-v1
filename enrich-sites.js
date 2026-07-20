@@ -23,6 +23,7 @@ import { makeClient } from './lib/directus.js';
 import { pgEnabled, pgUpsertSite, pgUpsertCompany, pgEnsurePlatforms } from './lib/pgwrite.js';
 import { makeGeoIP } from './lib/geoip.js';
 import { detectPlatforms, detectCDN, extractLang, extractContacts } from './lib/fingerprints.js';
+import { decodeHtmlBody } from './lib/http-charset.js';
 import { tldToCountry } from './lib/phone.js';
 import { qualify } from './lib/qualify.js';
 import { scoreSite } from './lib/lead-score.js';
@@ -96,7 +97,7 @@ async function tryFetch(url) {
     const ct = r.headers.get('content-type') || '';
     let html = '';
     if (/text\/html|xml|^$/.test(ct)) {
-      html = (await r.text()).slice(0, MAX_HTML);
+      html = (await decodeHtmlBody(r)).slice(0, MAX_HTML); // charset real (header→<meta>→UTF-8) p/ evitar mojibake
     } else {
       try { await r.body?.cancel(); } catch { /* ignora */ }
     }

@@ -33,44 +33,57 @@ echo "   ✓ FCrDNS OK"
 
 # 2) Dante tailnet-bound no host novo (restrito ao IP do Reacher) --------------------------------
 say "2) Dante (tailnet-bound) em $HOST_SSH"
-# Egressa por `external: $IP` (o próprio IP, não a interface) → dispensa detetar a default-route (frágil via
-# SSH) E garante que a saída é EXATAMENTE o IP-limpo. Se o host é ESTA máquina (HOST_TS == tailnet local),
-# corre tudo localmente — sem SSH/scp (o co-locado hel1-docker não tem sshd na tailnet).
+# Se o host é ESTA máquina (HOST_TS == tailnet local), corre tudo LOCALMENTE — sem SSH/scp (o co-locado
+# hel1-docker não tem sshd na tailnet). `external` = a INTERFACE de default-route (NÃO o IP): em hosts com
+# IP público via NAT (ex. hel1-docker 10.10.10.50 → 65.108.120.25) o IP não está numa interface local, por
+# isso o Dante egressa pela interface e o NAT traduz para o IP-limpo.
 SELF_TS=$(tailscale ip -4 2>/dev/null | head -1)
 LOCAL=0; { [ -n "$SELF_TS" ] && [ "$SELF_TS" = "$HOST_TS" ]; } && LOCAL=1
-[ "$LOCAL" = 1 ] && echo "   host = esta máquina → setup LOCAL (sem SSH); egress por $IP" || echo "   host remoto ($HOST_SSH); egress por $IP"
+if [ "$LOCAL" = 1 ]; then IFACE=$(ip route show default | awk '{print $5; exit}')
+else IFACE=$($SSH "$HOST_SSH" "ip route show default | awk '{print \$5; exit}'" 2>/dev/null); fi
+[ -n "$IFACE" ] || { echo "   ✗ sem interface de default-route ($([ "$LOCAL" = 1 ] && echo local || echo "ssh $HOST_SSH")). Abortado."; exit 1; }
+echo "   $([ "$LOCAL" = 1 ] && echo 'setup LOCAL (sem SSH)' || echo "via SSH $HOST_SSH")  ·  egress: iface $IFACE → IP $IP"
 TMP=$(mktemp -d)
 cat > "$TMP/danted.conf" <<EOF
-# Dante SOCKS5 — egress do IP $IP p/ o Reacher remoto ($REACHER_TS). Escuta na tailnet ($HOST_TS:1080),
-# restrito ao IP tailnet do Reacher (proxy FECHADO). Egressa por $IP. Gerado por add-proxy.sh.
+# Dante SOCKS5 (v1.4) — egress p/ o Reacher remoto ($REACHER_TS) pelo IP $IP (via iface $IFACE; NAT-translated
+# se o IP não estiver diretamente na interface). Escuta na tailnet ($HOST_TS:1080), FECHADO ao IP do Reacher.
+# NB: cada directiva numa linha própria — o Dante 1.4 NÃO parseia 'protocol: tcp command: connect' na mesma linha.
 logoutput: stderr
 internal: $HOST_TS port = 1080
-external: $IP
+external: $IFACE
 socksmethod: none
+clientmethod: none
 user.privileged: root
 user.unprivileged: nobody
-client pass { from: $REACHER_TS/32 to: 0.0.0.0/0
-  log: error }
-socks pass { from: $REACHER_TS/32 to: 0.0.0.0/0
-  protocol: tcp command: connect log: error }
+client pass {
+    from: $REACHER_TS/32 to: 0.0.0.0/0
+    log: error
+}
+socks pass {
+    from: $REACHER_TS/32 to: 0.0.0.0/0
+    protocol: tcp
+    command: connect
+    log: error
+}
 EOF
 cat > "$TMP/docker-compose.yml" <<'EOF'
 # Dante-only (egress dum IP limpo p/ o Reacher remoto). Gerado por deploy/reacher/add-proxy.sh.
+# NOTA: a imagem wernight/dante lê /etc/sockd.conf (NÃO /etc/danted.conf).
 services:
   dante:
     image: wernight/dante
     restart: unless-stopped
     network_mode: host
-    volumes: [ "./danted.conf:/etc/danted.conf:ro" ]
+    volumes: [ "./danted.conf:/etc/sockd.conf:ro" ]
 EOF
 if [ "$LOCAL" = 1 ]; then
   mkdir -p /root/reacher-proxy
   cp "$TMP/danted.conf" "$TMP/docker-compose.yml" /root/reacher-proxy/
-  ( cd /root/reacher-proxy && docker compose up -d 2>&1 | tail -2 )
+  ( cd /root/reacher-proxy && docker compose up -d --force-recreate 2>&1 | tail -2 )
 else
   $SSH "$HOST_SSH" "mkdir -p /root/reacher-proxy"
   scp -o StrictHostKeyChecking=no "$TMP/danted.conf" "$TMP/docker-compose.yml" "$HOST_SSH:/root/reacher-proxy/" >/dev/null
-  $SSH "$HOST_SSH" "cd /root/reacher-proxy && docker compose up -d 2>&1 | tail -2"
+  $SSH "$HOST_SSH" "cd /root/reacher-proxy && docker compose up -d --force-recreate 2>&1 | tail -2"
 fi
 rm -rf "$TMP"
 

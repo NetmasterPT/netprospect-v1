@@ -2,10 +2,14 @@
 import React from 'react';
 
 export function Brandmark({ label = 'NetProspect', pill }) {
+  // Espelha o dashboard: "Net" + "Prospect" a vermelho de marca.
+  const word = label === 'NetProspect'
+    ? <>Net<span style={{ color: 'var(--np-brand)' }}>Prospect</span></>
+    : label;
   return (
     <span className="np-brand">
       <span className="np-brandmark"><i /></span>
-      <span className="np-word">{label}</span>
+      <span className="np-word">{word}</span>
       {pill && <span className="np-pilltag">{pill}</span>}
     </span>
   );

@@ -21,9 +21,9 @@ export const CartaoSimples = () => (
 
 export const CartoesDeEstatistica = () => (
   <StatGrid>
-    <StatCard label="Sites .pt" icon="◆" value="78.204" delta="+1,2%" deltaDir="up" />
-    <StatCard label="Qualificados" icon="✓" value="38.412" delta="+3,4%" deltaDir="up" />
-    <StatCard label="Verificados" icon="✉" value="12.901" delta="−0,4%" deltaDir="down" />
+    <StatCard label="Sites .pt" icon="◆" value="78.204" href="#" />
+    <StatCard label="Qualificados" icon="✓" value="38.412" href="#" />
+    <StatCard label="Verificados" icon="✉" value="12.901" sub="e-mails válidos" />
     <StatCard label="Contactos" icon="☎" value="162.330" />
   </StatGrid>
 );

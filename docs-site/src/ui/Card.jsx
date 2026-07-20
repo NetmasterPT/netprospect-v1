@@ -15,18 +15,16 @@ export function Card({ title, actions, children, padded = true }) {
   );
 }
 
-export function StatCard({ label, icon, value, delta, deltaDir, href }) {
+export function StatCard({ label, icon, value, sub, href }) {
   const Tag = href ? 'a' : 'div';
   return (
-    <Tag className="np-kpi" href={href}>
+    <Tag className="np-kpi" href={href} style={href ? { display: 'block' } : undefined}>
       <div className="np-kpi-l">
         {icon && <span className="np-kpi-ic">{icon}</span>}
         <span>{label}</span>
       </div>
-      <div className="np-kpi-v tnum">
-        {value}
-        {delta != null && <span className={`np-kpi-d ${deltaDir || ''}`}>{delta}</span>}
-      </div>
+      <div className="np-kpi-v tnum">{value}</div>
+      {sub && <div className="np-kpi-sub">{sub}</div>}
     </Tag>
   );
 }

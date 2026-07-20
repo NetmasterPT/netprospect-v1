@@ -38,7 +38,7 @@ export const TopbarProfileMenu = () => {
   const [open, setOpen] = useState(true);
   return (
     <div style={{ background: 'var(--np-chrome)', padding: 14, display: 'flex', justifyContent: 'flex-end' }}>
-      <ProfileMenu name="Gonçalo Pedro" email="gpedro.work@gmail.com" open={open} onToggle={() => setOpen((v) => !v)}
+      <ProfileMenu name="Gonçalo Pedro" role="Sales · Admin" email="gpedro.work@gmail.com" open={open} onToggle={() => setOpen((v) => !v)}
         items={[{ icon: '⚙️ ', label: 'Definições' }, { icon: '🌙 ', label: 'Tema' }, { icon: '↩ ', label: 'Sair' }]} />
     </div>
   );

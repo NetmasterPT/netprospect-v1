@@ -15,7 +15,7 @@ export const Completa = () => {
       actions={<>
         <IconButton label="Notificações">🔔</IconButton>
         <ThemeToggleButton theme="dark" onToggle={() => {}} />
-        <ProfileMenu name="Gonçalo Pedro" email="gpedro.work@gmail.com" open={prof} onToggle={() => setProf((v) => !v)}
+        <ProfileMenu name="Gonçalo Pedro" role="Sales · Admin" email="gpedro.work@gmail.com" open={prof} onToggle={() => setProf((v) => !v)}
           items={[{ icon: '⚙️ ', label: 'Definições' }, { icon: '↩ ', label: 'Sair' }]} />
       </>}
     />

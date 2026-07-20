@@ -146,7 +146,7 @@ a.np-kpi:hover { transform: translateY(-2px); border-color: var(--np-brand-soft-
 .np-scrim.open { opacity: 1; pointer-events: auto; }
 .np-drawer { position: fixed; top: var(--np-topbar-h); right: 0; width: var(--np-drawer-w); max-width: 92vw; height: calc(100vh - var(--np-topbar-h)); background: var(--np-surface); box-shadow: var(--np-shadow-drawer); z-index: var(--np-z-drawer); transform: translateX(100%); transition: transform var(--np-dur-slow) var(--np-ease); overflow-y: auto; }
 .np-drawer.open { transform: none; }
-.np-drawer--wide { width: clamp(340px, 70vw, 960px); display: flex; flex-direction: column; }
+.np-drawer--wide { width: clamp(360px, 72vw, 1100px); display: flex; flex-direction: column; }
 /* animações de entrada (drawer + bolhas do chat) */
 .np-drawer.open .np-chatwrap { animation: npfadeup var(--np-dur-slow) var(--np-ease); }
 .np-chatmsg { animation: npfadeup var(--np-dur) var(--np-ease); }

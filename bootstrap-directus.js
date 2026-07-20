@@ -359,6 +359,9 @@ async function main() {
   await ensureField('companies', 'client_since', ts());
   await ensureField('companies', 'client_mrr', float());   // mensalidade (manutenção + alojamento), €
   await ensureField('companies', 'client_notes', text());
+  // Client Portal (Fase 6a) — acesso read-only do cliente à sua conta (subscrições/avenças/faturas).
+  await ensureField('companies', 'portal_token', strUnique());   // token de acesso ao /portal/:token (gerado 1x)
+  await ensureField('companies', 'portal_enabled', bool(false)); // liga/desliga o portal por cliente
   // Integrações — ligação ao cliente Moloni.
   await ensureField('companies', 'moloni_customer_id', str()); // customer_id no Moloni
   await ensureField('companies', 'nif', str());                // NIF/VAT — chave de match c/ Moloni

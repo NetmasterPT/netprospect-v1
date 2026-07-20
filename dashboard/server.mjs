@@ -2766,6 +2766,71 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
   } catch (e) { console.error('[store] fulfillment erro:', e.message); res.json({ received: true, warning: e.message }); }
 });
 
+// --- Client Portal (Fase 6a) — read-only, token-gated (empresa por companies.portal_token) --------
+// ⚠️ excluir /portal/* + /api/portal/* do Authentik no NPMplus (como /r/*, /t/*).
+const _portalLookup = async (token) => {
+  if (!token) return null;
+  const rows = await d(`/items/companies?filter[portal_token][_eq]=${encodeURIComponent(token)}&filter[portal_enabled][_eq]=true&filter[is_client][_eq]=true&fields=id,name,nif,client_since,client_mrr&limit=1`).catch(() => []);
+  return rows?.[0] || null;
+};
+async function portalData(companyId) {
+  const [docs, avencas, subsAll] = await Promise.all([
+    d(`/items/moloni_documents?filter[company][_eq]=${companyId}&filter[status][_eq]=1&sort[]=-date&limit=50&fields=id,number,document_type,date,total,status`).catch(() => []),
+    d(`/items/moloni_avencas?filter[company][_eq]=${companyId}&filter[active][_eq]=true&sort[]=next_date&fields=id,name,amount,period,next_date`).catch(() => []),
+    d(`/items/subscriptions?filter[active][_eq]=true&sort[]=sort&fields=id,name,frequency,category,price_inc_vat,features,client_ids`).catch(() => []),
+  ]);
+  const subs = (subsAll || []).filter((s) => (Array.isArray(s.client_ids) ? s.client_ids.map(Number) : []).includes(companyId));
+  return { docs: docs || [], avencas: avencas || [], subs };
+}
+function portalHtml(co, { docs, avencas, subs }, base, token) {
+  const since = co.client_since ? new Date(co.client_since).toLocaleDateString('pt-PT', { year: 'numeric', month: 'long' }) : null;
+  const subCards = subs.map((s) => `<div class=card><div class=cat>${_sEsc(s.category || 'serviço')}</div><div class=name>${_sEsc(s.name)}</div><div class=price>€${eur2(s.price_inc_vat)}</div><div class=freq>${FREQ_LBL[s.frequency] || ''} · c/ IVA</div>${(s.features || []).length ? `<ul>${(s.features || []).slice(0, 6).map((f) => `<li>${_sEsc(f)}</li>`).join('')}</ul>` : '<div style="flex:1"></div>'}</div>`).join('');
+  const avRows = avencas.map((a) => `<tr><td>${_sEsc(a.name)}</td><td>€${eur2(a.amount)}</td><td>${_sEsc(a.period || '')}</td><td>${a.next_date ? new Date(a.next_date).toLocaleDateString('pt-PT') : '—'}</td></tr>`).join('');
+  const docRows = docs.map((x) => `<tr><td>${_sEsc(x.number || x.id)}</td><td>${x.date ? new Date(x.date).toLocaleDateString('pt-PT') : '—'}</td><td>€${eur2(x.total)}</td><td><a href="${base}/api/portal/${encodeURIComponent(token)}/document/${x.id}/pdf" target=_blank rel=noopener>PDF</a></td></tr>`).join('');
+  const inner = `<style>h2{font-size:16px;margin:26px 0 8px}.tbl{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.06);font-size:13.5px}.tbl th{text-align:left;background:#f1f3f4;color:#5f6368;font-weight:600;padding:9px 12px}.tbl td{padding:9px 12px;border-top:1px solid #eee}.tbl a{color:#1a73e8}</style>
+    <h1>Olá, ${_sEsc(co.name)}</h1><p class=sub>A tua conta Netmaster${since ? ` · cliente desde ${_sEsc(since)}` : ''}.</p>
+    ${subs.length ? `<h2>Subscrições</h2><div class=grid>${subCards}</div>` : ''}
+    ${avencas.length ? `<h2>Avenças</h2><table class=tbl><tr><th>Serviço</th><th>Valor</th><th>Período</th><th>Próxima</th></tr>${avRows}</table>` : ''}
+    <h2>Faturas</h2>${docs.length ? `<table class=tbl><tr><th>Nº</th><th>Data</th><th>Total</th><th></th></tr>${docRows}</table>` : '<div class=box>Ainda sem faturas.</div>'}`;
+  return storeShell(inner, `Portal — ${co.name}`);
+}
+app.get('/portal/:token', async (req, res) => {
+  try {
+    const co = await _portalLookup(req.params.token);
+    if (!co) return res.status(404).type('html').send(storeShell('<h1>Portal</h1><div class="box err">Link inválido ou portal desativado.</div>'));
+    const data = await portalData(co.id);
+    void captureServerEvent(req, 'portal_viewed', posthogDistinctId(req, `portal:${req.params.token}`), { company_id: co.id });
+    res.type('html').send(portalHtml(co, data, storeBase(req), req.params.token));
+  } catch { res.status(500).type('html').send(storeShell('<h1>Portal</h1><div class="box err">Não foi possível carregar. Tenta mais tarde.</div>')); }
+});
+// PDF token-scoped: o documento TEM de ser deste cliente (senão via faturas alheias).
+app.get('/api/portal/:token/document/:docId/pdf', async (req, res) => {
+  try {
+    const co = await _portalLookup(req.params.token);
+    if (!co) return res.status(404).json({ error: 'link inválido' });
+    const docId = parseInt(req.params.docId, 10);
+    const rows = await d(`/items/moloni_documents?filter[id][_eq]=${docId}&filter[company][_eq]=${co.id}&filter[status][_eq]=1&fields=id&limit=1`).catch(() => []);
+    if (!rows?.length) return res.status(403).json({ error: 'sem acesso a este documento' });
+    let mod; try { mod = await import('./lib/moloni.js'); } catch { mod = await import('../lib/moloni.js'); }
+    const buf = await mod.fetchPdfBuffer(docId);
+    res.set('Content-Type', 'application/pdf'); res.set('Content-Disposition', `inline; filename="fatura-${docId}.pdf"`);
+    res.send(buf);
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+// Staff (atrás do Authentik): gera/roda o token do portal + ativa → devolve o URL p/ enviar ao cliente.
+app.post('/api/portal/:companyId/link', async (req, res) => {
+  try {
+    const id = parseInt(req.params.companyId, 10);
+    if (!id) return res.status(400).json({ error: 'companyId inválido' });
+    const co = await d(`/items/companies/${id}?fields=id,name,portal_token,is_client,general_email`).catch(() => null);
+    if (!co) return res.status(404).json({ error: 'empresa não encontrada' });
+    const rotate = req.body?.rotate === true || !co.portal_token;
+    const token = rotate ? newToken() + crypto.randomBytes(8).toString('hex') : co.portal_token; // 48 hex
+    await dwrite('PATCH', `/items/companies/${id}`, { portal_token: token, portal_enabled: true, ...(co.is_client ? {} : { is_client: true }) });
+    res.json({ ok: true, url: `${storeBase(req)}/portal/${token}`, email: co.general_email || null });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => { ensureFleetDir(); console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`); });

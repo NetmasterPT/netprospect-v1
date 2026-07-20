@@ -1040,8 +1040,10 @@ const CRON_REGISTRY = [
   { name: 'gmb-enqueue-cron', host: 'np-server', kind: 'docker', schedule: 'de 3/3h', endpoint: '/api/gmb/enqueue', desc: 'Top-up da fila GMB pelos melhores leads — só repõe se a fila estiver baixa (evita a expiração de 48h do stream).' },
 ];
 
-// Timers de manutenção do SO (ruído) — a página Crons foca nas tarefas NetProspect + monitorização.
-const OS_TIMER_NOISE = /^(apt-daily|apt-daily-upgrade|dpkg-db-backup|e2scrub_all|xfs_scrub_all|fstrim|man-db|logrotate|systemd-tmpfiles-clean|pve-daily-update|zpool-textfile|systemd-tmpfiles|update-notifier|motd-news|plocate|mlocate|snapd|ua-timer|ubuntu-advantage|phpsessionclean|wtmpdb|wtmpdb-rotate|sysstat|anacron)\b/i;
+// A página Crons foca nas tarefas NOSSAS. Em vez de uma denylist de timers de SO por-distro (Debian/RHEL/
+// cPanel = whack-a-mole), uma ALLOWLIST: só timers NetProspect (netprospect-*, np-*) + monitorização
+// (betterstack/crowdsec). Os crons Docker (*-cron) passam sempre (são nossos por definição).
+const NP_TIMER_KEEP = /^(netprospect|np-pve|np-units|np-|heartbeat-betterstack|crowdsec)/i;
 
 // Enumera os hosts da frota (agente ativo <15min) + os seus containers/timers (np:host:<h>:containers).
 async function fleetHosts(rr) {
@@ -1094,8 +1096,8 @@ app.get('/api/crons', async (req, res) => {
           const isTimer = u.kind === 'timer';
           const isDockerCron = (!u.kind || u.kind === 'container') && /(-cron\b|cron-|\bcron\b)/i.test(u.name || '');
           if (!isTimer && !isDockerCron) continue;
-          // Filtra os timers de MANUTENÇÃO do SO (ruído: não são tarefas nossas) — mantém NetProspect + monitorização.
-          if (isTimer && OS_TIMER_NOISE.test(u.name || '')) continue;
+          // Timers: só os NOSSOS (allowlist) — descarta timers de SO/vendor de qualquer distro. Docker crons passam.
+          if (isTimer && !NP_TIMER_KEEP.test(u.name || '')) continue;
           const up = /up|active|running|waiting/i.test(u.state || u.status || '');
           const unit = { host, name: u.name, state: u.state || '', status: u.status || '', up, logb64: u.logb64 || '' };
           // Funde com o cron do registo: o agente reporta o contentor prefixado pelo compose

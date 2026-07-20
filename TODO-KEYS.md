@@ -7,10 +7,14 @@ Servidores → Editar .env**, ou no `docker/.env` do hel1. Depois **avisa o Clau
 
 ---
 
-## 1. Subdomains — melhorar a descoberta (hoje a correr keyless via subfinder)
+## 1. Subdomains — ⚡ `CERTSPOTTER_API_KEY` é o DESBLOQUEIO (grátis, 2 min) — PRIORIDADE
 
-O consumer `subdomains` **já está ativo** em modo keyless (subfinder na imagem + certspotter-anónimo + crt.sh).
-Estas keys **não são precisas**, mas sobem o limite/cobertura:
+O consumer `subdomains` corre keyless (subfinder + certspotter-anónimo + crt.sh), mas o keyless teve
+**"fetch failed" recorrente sob carga** (o subfinder martela sockets → o caminho undici parte; investigado
+a fundo — só recorre sob carga real, não em isolamento). **A `CERTSPOTTER_API_KEY` é o fix definitivo
+confirmado:** dá uma fonte HTTP rápida e fiável que **tira o subfinder do caminho crítico** → jobs curtos,
+sem hammer de sockets. Mete só esta; as outras 2 são residuais. (Reativei-o keyless entretanto para testar
+os fixes deployados — se voltar a orfanar, é à espera desta key.)
 
 | Key | Free tier | O que dá | Como obter |
 |---|---|---|---|

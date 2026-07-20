@@ -19,7 +19,7 @@ import { getDomain } from 'tldts';
 import { readItems, createItem } from '@directus/sdk';
 // updateItem shadow: p/ sites/companies com DIRECT_PG_WRITE on, escreve direto no PG
 // (via PgBouncer), contornando o Directus REST. Off → comando Directus normal. (A2)
-import { updateItemMaybePg as updateItem, wrapClientPg, pgEnabled, getPool, pgCompanyContactKeys, pgInsertContacts, contactKey } from '../lib/pgwrite.js';
+import { updateItemMaybePg as updateItem, wrapClientPg, pgEnabled, getPool, pgCompanyContactKeys, pgInsertContacts, pgDeleteStaleSiteContacts, contactKey } from '../lib/pgwrite.js';
 import { publishJob, SUBJECTS } from '../lib/jobs.js';
 import { putSnapshot, getSnapshot } from '../lib/artifacts.js';
 import { analyzeSslLabs } from '../lib/audit/ssllabs.js';
@@ -149,6 +149,19 @@ export function makeFineHandlers(ctx, js) {
     for (const host of [domain, `www.${domain}`]) { try { const a = await dns.resolve4(host); if (a?.length) { hosting_ip = a[0]; break; } } catch { /* sem A */ } }
     if (hosting_ip) { try { ptr = (await dns.reverse(hosting_ip))[0] || null; } catch { /* sem PTR */ } }
     const siteId = await ensureSite(domain, { hosting_ip: clip(hosting_ip, 45), ptr: clip(ptr), checked_at: new Date().toISOString() });
+    // reextract (poison-DB): re-corre os extractors on-site (contacts/social/locality/fingerprint) já
+    // corrigidos. Se houver um snapshot COMPLETO (com páginas de contacto), reutiliza-o SEM rede e faz
+    // fan-out direto; senão, cai no fetch completo abaixo (re-busca homepage + páginas de contacto). Em
+    // ambos os casos o contacts leva reextract:true → purga as linhas envenenadas antes de reinserir.
+    if (job.reextract) {
+      const snap = await getSnapshot(siteId).catch(() => null);
+      if (snap?.html && (snap.full === true || (snap.pages && snap.pages.length))) {
+        for (const s of [SUBJECTS.fingerprint, SUBJECTS.social, SUBJECTS.locality, SUBJECTS.industry]) await pub(s, { domain, siteId });
+        await pub(SUBJECTS.contacts, { domain, siteId, reextract: true });
+        return 'ack';
+      }
+      // sem snapshot completo → segue p/ o fetch completo (fetch das páginas de contacto acontece porque !snapshotOnly).
+    }
     // snapshotOnly: regenerar o snapshot (que foi podado do MinIO) + reclassificar SÓ a indústria,
     // sem re-correr os extractors partidos (contacts/social/locality) nem o enrich extra.
     if (!job.snapshotOnly) {
@@ -180,10 +193,12 @@ export function makeFineHandlers(ctx, js) {
       is_cpanel: cp.isCpanel, cpanel_signal: clip(cp.signal), cdn: clip(detectCDN(resp.headers), 50),
       blocked_datacenter: false, // fetch bom a partir do datacenter → limpa flag de bloqueio
     }));
-    await putSnapshot(siteId, { finalUrl: resp.finalUrl, status: resp.status, headers: resp.headers, setCookies: resp.setCookies, html: resp.html, pages, fetchedAt: new Date().toISOString() });
-    // Fan-out de análise (leem o snapshot). snapshotOnly → só reclassifica a indústria.
+    // `full`: este snapshot tem páginas de contacto (fetch completo), ≠ do snapshotOnly (pages:[]). Marca p/ o
+    // reextract poder reutilizar só os completos (social/locality precisam das páginas de contacto).
+    await putSnapshot(siteId, { finalUrl: resp.finalUrl, status: resp.status, headers: resp.headers, setCookies: resp.setCookies, html: resp.html, pages, full: !job.snapshotOnly, fetchedAt: new Date().toISOString() });
+    // Fan-out de análise (leem o snapshot). snapshotOnly → só reclassifica a indústria. reextract → o contacts purga.
     const fanout = job.snapshotOnly ? [SUBJECTS.industry] : [SUBJECTS.fingerprint, SUBJECTS.social, SUBJECTS.locality, SUBJECTS.contacts, SUBJECTS.industry];
-    for (const s of fanout) await pub(s, { domain, siteId });
+    for (const s of fanout) await pub(s, { domain, siteId, ...(job.reextract && s === SUBJECTS.contacts ? { reextract: true } : {}) });
     return 'ack';
   }
 
@@ -307,6 +322,13 @@ export function makeFineHandlers(ctx, js) {
     // Empresa + email geral (do snapshot da homepage)
     const gen = extractContacts(snap.html || '', { defaultCountry, siteDomain: site.domain });
     const companyId = site.company || await ensureCompany(site.domain, gen.email);
+    // reextract (poison-DB): apaga os contactos-máquina obsoletos deste site ANTES de reinserir os corrigidos
+    // (o dedup é insert-only; sem isto, as pessoas inválidas do extractor antigo ficavam para sempre). Correr
+    // ANTES do pgCompanyContactKeys p/ os frescos não baterem nas linhas apagadas. Só PG (op de limpeza da frota).
+    if (job.reextract && pgEnabled()) {
+      try { const n = await pgDeleteStaleSiteContacts(site.id); if (n) console.log(`${new Date().toISOString().slice(11, 19)} reextract ${site.domain}: -${n} contactos obsoletos`); }
+      catch { /* fail-soft: se a purga falhar, o reinsert só acrescenta (não fica pior que antes) */ }
+    }
     const found = [];
     const seen = new Set();
     for (const pg of [{ url: snap.finalUrl, html: snap.html }, ...(snap.pages || [])]) {
@@ -357,7 +379,9 @@ export function makeFineHandlers(ctx, js) {
     const dev = detectWebDeveloper(allHtml, site.domain); if (dev) { patch.web_developer = clip(dev.domain, 120); patch.web_developer_name = clip(dev.name, 140); }
     patch.has_email = !!generalEmail || found.some((p) => p.email);
     patch.has_phone = phones.length > 0;
-    if (found.some((p) => p.role_category === 'decision_maker')) patch.has_decision_maker = true;
+    // Calcula sempre (antes era sticky-true → um decisor falso do extractor antigo nunca era limpo, mesmo
+    // após um re-extract limpo). Agora um re-extract que não encontra decisor baixa a flag → o score corrige.
+    patch.has_decision_maker = found.some((p) => p.role_category === 'decision_maker');
     await client.request(updateItem('sites', site.id, patch));
     await pub(SUBJECTS.score, { domain: site.domain, siteId: site.id }, `score:${site.domain}`);
     return 'ack';

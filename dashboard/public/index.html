@@ -349,6 +349,14 @@ let STATS = null;
 // Submenus do nav (ordem preservada). Cada item = [id, ícone, label, countKey?] (countKey lê t[key]).
 const NAV_GROUPS = [
   ['Geral', [['overview', 'overview', 'Visão Geral'], ['outreach', 'send', 'Outreach'], ['config', 'sliders', 'Configuração']]],
+  // Plataforma de conhecimento — URLs Tailscale (HTTPS na tailnet) enquanto o NPMplus não está feito.
+  // Trocar para netprospect.netmaster.pt/docs/ + notebook./obsidian.netmaster.pt quando o NPMplus estiver pronto.
+  ['Conhecimento', [
+    ['ext-docs', 'directory', 'Docs', null, 'https://np-server.taild948a2.ts.net/docs/'],
+    ['ext-graph', 'activity', 'Grafo', null, 'https://np-server.taild948a2.ts.net/docs/#/graph'],
+    ['ext-notebook', 'sparkles', 'Notebook', null, 'https://np-server.taild948a2.ts.net:8502/'],
+    ['ext-obsidian', 'star', 'Obsidian', null, 'https://np-server.taild948a2.ts.net:8091/'],
+  ]],
   ['Frota', [['servers', 'globe', 'Servidores'], ['vms', 'server', 'VMs'], ['workers', 'sparkles', 'Workers'], ['queues', 'activity', 'Filas'], ['autoscale', 'sparkles', 'Autoscaler'], ['coverage', 'check', 'Cobertura Jobs'], ['logs', 'clock', 'Logs']]],
   ['Observabilidade', [
     ['ext-am', 'activity', 'AlertManager', null, 'http://100.96.102.84:9093'],

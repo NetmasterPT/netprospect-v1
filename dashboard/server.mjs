@@ -1041,7 +1041,7 @@ const CRON_REGISTRY = [
 ];
 
 // Timers de manutenção do SO (ruído) — a página Crons foca nas tarefas NetProspect + monitorização.
-const OS_TIMER_NOISE = /^(apt-daily|apt-daily-upgrade|dpkg-db-backup|e2scrub_all|xfs_scrub_all|fstrim|man-db|logrotate|systemd-tmpfiles-clean|pve-daily-update|zpool-textfile|systemd-tmpfiles|update-notifier|motd-news|plocate|mlocate|snapd|ua-timer|ubuntu-advantage|phpsessionclean)\b/i;
+const OS_TIMER_NOISE = /^(apt-daily|apt-daily-upgrade|dpkg-db-backup|e2scrub_all|xfs_scrub_all|fstrim|man-db|logrotate|systemd-tmpfiles-clean|pve-daily-update|zpool-textfile|systemd-tmpfiles|update-notifier|motd-news|plocate|mlocate|snapd|ua-timer|ubuntu-advantage|phpsessionclean|wtmpdb|wtmpdb-rotate|sysstat|anacron)\b/i;
 
 // Enumera os hosts da frota (agente ativo <15min) + os seus containers/timers (np:host:<h>:containers).
 async function fleetHosts(rr) {

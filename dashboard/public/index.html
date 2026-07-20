@@ -2179,7 +2179,7 @@ window.openCron = (name) => {
       ${c.last ? `<div class="np-sec-t">Última execução</div><div class="np-kv">${kv('Quando', esc(cronAgo(c.last.ts)) + ` <span class="muted" style="font-size:11px">(${esc(c.last.ts || '')})</span>`)}${kv('Resultado', esc(c.last.summary || c.last.status || '—'))}${c.last.durationMs ? kv('Duração', esc(c.last.durationMs) + ' ms') : ''}</div>` : '<div class="muted" style="font-size:12px;margin-top:10px">Sem heartbeat registado ainda (o cron grava-o na 1ª execução via dashboard; os timers systemd mostram estado via agente).</div>'}
       ${runs.length ? `<div class="np-sec-t">Execuções recentes (${runs.length})</div><div style="max-height:240px;overflow:auto"><table style="width:100%;border-collapse:collapse">${runs.map(runRow).join('')}</table></div>` : ''}
       ${logs ? `<div class="np-sec-t">Logs (tail do agente)</div>${logs}` : ''}
-      <div style="margin-top:14px"><button class="np-btn np-btn--sm" onclick="openContainer('${esc(host)}','${esc(c.name)}')">Ver unidade no host ›</button></div>
+      ${c.unit && c.unit.name ? `<div style="margin-top:14px"><button class="np-btn np-btn--sm" onclick="openContainer('${esc(host)}','${esc(c.unit.name)}')">Ver unidade no host ›</button></div>` : ''}
     </div>`;
 };
 async function viewCoverage() {

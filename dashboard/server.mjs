@@ -1084,7 +1084,6 @@ app.get('/api/crons', async (req, res) => {
       if (rr && _redisUp) { try { const h = await rr.hGetAll(`np:cron:${c.name}`); if (h && Object.keys(h).length) last = h; runs = (await rr.lRange(`np:cron:${c.name}:runs`, 0, 29)).map((x) => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean); } catch { /* */ } }
       crons.push({ ...c, source: 'registry', last, runs });
     }
-    const known = new Set(CRON_REGISTRY.map((c) => c.name));
     try {
       const hosts = await fleetHosts(rr);
       for (const [host, H] of Object.entries(hosts)) {
@@ -1093,10 +1092,12 @@ app.get('/api/crons', async (req, res) => {
           const isDockerCron = (!u.kind || u.kind === 'container') && /(-cron\b|cron-|\bcron\b)/i.test(u.name || '');
           if (!isTimer && !isDockerCron) continue;
           const up = /up|active|running|waiting/i.test(u.state || u.status || '');
-          const found = crons.find((x) => x.name === u.name);
-          if (found) { found.unit = { host, state: u.state || '', status: u.status || '', up, logb64: u.logb64 || '' }; continue; }
-          if (known.has(u.name)) continue;
-          crons.push({ name: u.name, host, kind: isTimer ? 'timer' : 'docker', schedule: isTimer ? (u.status || '') : '', desc: isTimer ? (u.image || '') : (u.status || ''), source: 'agent', last: null, runs: [], unit: { host, state: u.state || '', status: u.status || '', up, logb64: u.logb64 || '' } });
+          const unit = { host, name: u.name, state: u.state || '', status: u.status || '', up, logb64: u.logb64 || '' };
+          // Funde com o cron do registo: o agente reporta o contentor prefixado pelo compose
+          // (server-verify-enqueue-cron-1) → casa por substring com o nome do registo (verify-enqueue-cron).
+          const reg = crons.find((x) => x.source === 'registry' && (x.name === u.name || String(u.name || '').includes(x.name)));
+          if (reg) { reg.unit = unit; continue; }
+          crons.push({ name: u.name, host, kind: isTimer ? 'timer' : 'docker', schedule: isTimer ? (u.status || '') : '', desc: isTimer ? (u.image || '') : (u.status || ''), source: 'agent', last: null, runs: [], unit });
         }
       }
     } catch { /* telemetria indisponível → mostra só o registo estático */ }

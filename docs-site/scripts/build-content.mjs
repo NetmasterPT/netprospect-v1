@@ -81,6 +81,40 @@ const md = new MarkdownIt({
   },
 }).use(anchor, { permalink: anchor.permalink.headerLink(), slugify: (s) => s.toLowerCase().replace(/[^\w]+/g, '-') });
 
+// ---- Mapeamento doc→módulo (fonte de verdade: plano v2, "Mapa final dos 52 docs") ----
+// Chave = slug sem o prefixo "docs/". Precedência: frontmatter `module:` > exacto > prefixo > 'core'.
+const stripDocs = (s) => s.replace(/^docs\//, '');
+const MODULE_EXACT = {
+  README: 'core', TODO: 'core', CONTRIBUTING: 'core', 'DOC-AUDIT': 'core', 'stack-isolation': 'core',
+  'distributed-fleet': 'core', 'orphan-offenders': 'core', 'LOAD-DISTRIBUTION': 'core', BENCHMARK: 'core',
+  'DATA-BENCHMARK': 'core', 'DEBUG-FOUND': 'core', 'DEBUGGING-TODO': 'core',
+  'reference/http-api': 'core', 'reference/modules': 'core',
+  observability: 'dashboard/observability', 'subdomain-sources-keys': 'dashboard/prospection',
+  'GMB-README': 'workers/gmb', 'posthog-setup-report': 'observability/posthog', 'deploy-watch': 'agents/docker',
+  'runbook-laptop': 'agents/windows', 'runbook-laptop-autodeploy': 'agents/windows',
+  'runbook-npm-hel1': 'servers/npmplus', 'runbook-server-hel1': 'servers/directus',
+  'runbook-worker-vms': 'workers/base', 'runbook-ollama-hel1': 'ai/ollama',
+  'runbook-analytics-de': 'data-stores/clickhouse', 'runbook-db-host': 'data-stores/postgresql',
+  'runbook-minio-de1': 'data-stores/minio', 'runbook-posthog-cloud': 'observability/posthog',
+  'comercial/subscricoes': 'dashboard/store-gate',
+  'incidents/README': 'incidents',
+  'incidents/20260716-lighthouse-aborts-hel1': 'incidents/workers/browser',
+  'incidents/20260717-duplicate-worker-project-npworker': 'incidents/workers/base',
+  'incidents/20260719-base-worker-domain-reload-storm': 'incidents/workers/base',
+  'outreach-ops/01-validation-fleet': 'workers/verify',
+  'outreach-ops/02-reacher': 'workers/verify',
+  'outreach-ops/07-reverification-policy': 'workers/verify',
+};
+const moduleOf = (slug, fm) => {
+  if (fm && fm.module) return String(fm.module);
+  const s = stripDocs(slug);
+  if (s in MODULE_EXACT) return MODULE_EXACT[s];
+  if (s.startsWith('comercial/')) return 'dashboard/prospection';       // resto do CRM
+  if (s.startsWith('outreach-ops/')) return 'dashboard/email-gateways'; // resto = envio
+  if (s.startsWith('incidents/')) return 'incidents';
+  return 'core';
+};
+
 const edges = [];
 const pages = items.map((it) => {
   const links = new Set();
@@ -91,6 +125,7 @@ const pages = items.map((it) => {
   return {
     slug: it.slug, title,
     type: it.fm.type || 'reference', tags: it.fm.tags || [],
+    module: moduleOf(it.slug, it.fm),
     status: it.fm.status || '', updated: it.fm.updated || '', owner: it.fm.owner || '',
     visibility: it.fm.visibility || 'internal',
     html, text,
@@ -98,7 +133,7 @@ const pages = items.map((it) => {
 });
 
 // grafo (Graphify): nós = páginas, arestas = wikilinks resolvidos
-const nodes = pages.map((p) => ({ id: p.slug, title: p.title, type: p.type }));
+const nodes = pages.map((p) => ({ id: p.slug, title: p.title, type: p.type, module: p.module }));
 const ids = new Set(nodes.map((n) => n.id));
 const seen = new Set();
 const links = edges

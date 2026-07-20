@@ -14,10 +14,17 @@
 
   "categories": [
     {
-      "id": "platform", "label": "Plataforma / Central", "path": "docs",
+      "id": "platform", "label": "Plataforma / Central", "path": "docs", "flat": true,
       "modules": [
         { "id": "core", "label": "Central", "status": "active", "path": "docs",
           "note": "A KB atual (vault docs/) — overview, arquitetura, CONTRIBUTING, reference/*, meta. Sempre on (base)." }
+      ]
+    },
+    {
+      "id": "incidents", "label": "Incidentes", "path": "docs/incidents", "flat": true,
+      "note": "Cada incidente leva module: incidents[/<origem>] (ex.: incidents/workers/base) + type:incident + visibility:internal.",
+      "modules": [
+        { "id": "incidents", "label": "Incidentes", "status": "active" }
       ]
     },
     {
@@ -67,7 +74,8 @@
         { "id": "base", "label": "base", "status": "declared" },
         { "id": "browser", "label": "browser", "status": "declared" },
         { "id": "security", "label": "security", "status": "declared" },
-        { "id": "verify", "label": "verify", "status": "declared" },
+        { "id": "verify", "label": "verify", "status": "active" },
+        { "id": "gmb", "label": "gmb", "status": "active" },
         { "id": "claude-runner", "label": "claude-runner", "status": "declared" },
         { "id": "gemini-runner", "label": "gemini-runner", "status": "declared" },
         { "id": "codex-runner", "label": "codex-runner", "status": "declared" },

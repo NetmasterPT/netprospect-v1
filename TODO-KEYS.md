@@ -105,6 +105,38 @@ no NPMplus — senão o prospecto bate no login do Authentik em vez da página d
 
 ---
 
+## Loja pública (Stripe) — passos de deploy (não são API keys, mas são teus)
+
+A loja `/loja` (self-checkout Stripe, modo TEST) está construída. Para funcionar atrás do reverse proxy:
+
+### a) NPMplus / Authentik — excluir as rotas PÚBLICAS da auth
+Como já fazes ao `/book/*`, `/r/*`, `/t/*` — a loja é para prospetos SEM login e o webhook é servidor-a-servidor:
+- `/loja` e `/loja/sucesso` — página pública da loja
+- `/api/store/*` — checkout
+- `/api/stripe/webhook` — webhook do Stripe (tem assinatura própria; **não pode** passar pelo Authentik)
+
+No NPMplus, no Proxy Host do dashboard, junta estas locations à lista de paths não-autenticados (onde já estão `/book`, `/r`, `/t`). *(A outra sessão está a construir mais rotas de pagamento — `/buy/:token` etc. — que também precisarão de exclusão quando terminarem.)*
+
+### b) Stripe Dashboard — criar o webhook do netprospect (o secret do netmaster-app NÃO serve)
+O signing secret é **por-endpoint**. O que está no store (copiado do netmaster-app) é do endpoint DELE → não verifica os eventos do netprospect. Passos (modo TEST):
+1. Stripe → Developers → Webhooks → **Add endpoint**.
+2. URL: `https://<dominio-publico>/api/stripe/webhook` · evento: `checkout.session.completed` (+ `invoice.paid` se quiseres recorrência).
+3. Copia o **Signing secret** (`whsec_…`) → dashboard → Servidores → Editar .env do **np-server** → `STRIPE_TEST_WEBHOOK_SECRET=` (substitui o valor atual) → avisa o Claude p/ redeploy.
+4. (opcional) `STORE_NOTIFY_EMAIL=` (notificação de venda) + `STORE_PUBLIC_URL=https://<dominio>`.
+5. Para ir a LIVE: repetir em modo LIVE + `STRIPE_MODE=live` (só depois de validar em TEST).
+
+### c) Moloni — empresa Demo/sandbox para a FATURA da loja (EM ABERTO)
+Pediste a fatura da loja numa empresa Demo em sandbox, MAS o `companies/getAll` com as creds LIVE só vê a
+**Netmaster Unipessoal Lda (207752)**. Esclarece: o **company_id da Demo**, OU preencher `SANDBOX_MOLONI_*`
+(o netmaster-app tem esse bloco), OU **criar** a empresa Demo. Até lá, `STORE_MOLONI_INVOICE` fica off.
+
+### ✅ Já tratado (2026-07-20): SMTP + WhoisXML copiados do netmaster-app
+SMTP (`SMTP_HOST/PORT/USER/PASS/SECURE`) → store do **np-server** (o netprospect não tinha email de envio).
+`WHOISXML_API_KEYS` (estava em falta → o whois de .pt falhava) → store de np-server + hel1-docker + np-wk-de1 +
+oracle-e2-1/2. Ambos vêm da config de produção do netmaster-app.
+
+---
+
 ## Onde é usado (referência)
 - Subdomains: [`docs/subdomain-sources-keys.md`](docs/subdomain-sources-keys.md) · `lib/subdomains.js`
 - Wordfence: `lib/wordfence.js` · `update-wordfence.js` · `deploy/observability/wordfence-update.{service,timer}`

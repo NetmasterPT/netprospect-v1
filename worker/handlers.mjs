@@ -44,6 +44,7 @@ import { egressDispatcher } from '../lib/egress.js';
 import { makeProviderPool } from '../lib/verify-providers.js';
 import { makeReacherPool } from '../lib/reacher.js';
 import { verifyDomain } from '../lib/verify-core.js';
+import { extractRegNumber, lookupByOrgNumber } from '../lib/company-registry.js';
 import { redisClient } from '../lib/worker-telemetry.js';
 
 const UA = 'netprospect-enrich/1.0 (+https://netmaster.pt; prospecao B2B)';
@@ -381,7 +382,13 @@ export function makeFineHandlers(ctx, js) {
     patch.has_phone = phones.length > 0;
     // Calcula sempre (antes era sticky-true → um decisor falso do extractor antigo nunca era limpo, mesmo
     // após um re-extract limpo). Agora um re-extract que não encontra decisor baixa a flag → o score corrige.
+    // MAS considera também contactos já existentes (ex.: decisores do REGISTO, source='registry', que a purga
+    // não apaga) → o re-extract não perde o decisor autoritário do registo.
     patch.has_decision_maker = found.some((p) => p.role_category === 'decision_maker');
+    if (!patch.has_decision_maker && pgEnabled()) {
+      try { const { rows } = await getPool().query("SELECT 1 FROM contacts WHERE site = $1 AND role_category = 'decision_maker' LIMIT 1", [site.id]); patch.has_decision_maker = rows.length > 0; }
+      catch { /* fail-soft: mantém só o cálculo dos site-extraídos */ }
+    }
     await client.request(updateItem('sites', site.id, patch));
     await pub(SUBJECTS.score, { domain: site.domain, siteId: site.id }, `score:${site.domain}`);
     return 'ack';
@@ -590,5 +597,50 @@ export function makeFineHandlers(ctx, js) {
     return 'ack';
   }
 
-  return { handleFetch, handleDns, handleGeoip, handleFingerprint, handleSocial, handleLocality, handleEmailauth, handleTraffic, handleContacts, handleScore, handleSsl, handleSsllabs, handleDnsprovider, handleWhois, handleSubdomains, handleDiscover, handleVerify, handleCampaignGenerate, handleCampaignSend };
+  // ---- REGISTRY (Fase 5): enriquece a empresa a partir do registo oficial ---------------
+  // Extrai o nº de registo do site (Org.nr/VAT), consulta o registo (lib/company-registry.js) e grava:
+  // dimensão (employees) + CAE oficial + DECISORES NOMEADOS (inseridos como contacts source='registry').
+  async function handleRegistry(job) {
+    const site = await siteRow(job.siteId || 0, ['id', 'domain', 'company'])
+      || (job.domain ? (await client.request(readItems('sites', { filter: { domain: { _eq: job.domain } }, fields: ['id', 'domain', 'company'], limit: 1 })))[0] : null);
+    if (!site) return 'ack';
+    const stamp = (patch = {}) => site.company
+      ? client.request(updateItem('companies', site.company, { reg_checked_at: new Date().toISOString(), ...patch })).catch(() => {})
+      : Promise.resolve();
+    const tld = (site.domain.split('.').pop() || '').toLowerCase();
+    const snap = await getSnapshot(site.id).catch(() => null);
+    const found = snap?.html ? extractRegNumber(snap.html, { tld }) : null;
+    if (!found) { await stamp(); return 'ack'; }                                // sem nº no site → marca e sai
+    const reg = await lookupByOrgNumber(found.org_number, found.country);
+    if (!reg) { await stamp({ reg_number: found.org_number, reg_country: found.country }); return 'ack'; } // nº inválido/sem match
+    const companyId = site.company || await ensureCompany(site.domain);
+    await client.request(updateItem('companies', companyId, {
+      reg_number: reg.org_number, reg_country: reg.country, employees: reg.employees ?? null,
+      reg_industry: clip(reg.industry, 200), reg_checked_at: new Date().toISOString(),
+    })).catch(() => {});
+    // Decisores nomeados → contacts source='registry' (sem duplicar por nome). Sinal forte + autoritário.
+    let inserted = 0;
+    if (reg.roles?.length) {
+      const mk = (p) => ({ name: clip(p.name, 120), role: clip(p.role, 80), role_category: p.role_category, email: null, phone: null, phone_country: null, social_profiles: null, source: 'registry', source_detail: reg.source, company: companyId, site: site.id, gdpr_basis: 'legitimate_interest', email_off_domain: false });
+      if (pgEnabled()) {
+        const { rows: ex } = await getPool().query('SELECT lower(name) n FROM contacts WHERE company = $1 AND name IS NOT NULL', [companyId]);
+        const have = new Set(ex.map((r) => r.n));
+        const fresh = reg.roles.filter((p) => p.name && !have.has(p.name.toLowerCase()));
+        if (fresh.length) { await pgInsertContacts(fresh.map(mk)); inserted = fresh.length; }
+      } else {
+        for (const p of reg.roles) {
+          const exists = await client.request(readItems('contacts', { filter: { company: { _eq: companyId }, name: { _eq: p.name } }, fields: ['id'], limit: 1 }));
+          if (!exists.length) { await client.request(createItem('contacts', mk(p))); inserted++; }
+        }
+      }
+      // O registo diz AUTORITARIAMENTE que há decisor → marca a flag (o has_decision_maker do handleContacts
+      // já considera contactos existentes, por isso não é revertido num re-extract).
+      if (reg.roles.some((p) => p.role_category === 'decision_maker')) await client.request(updateItem('sites', site.id, { has_decision_maker: true })).catch(() => {});
+      await pub(SUBJECTS.score, { domain: site.domain, siteId: site.id }, `score:${site.domain}`);
+    }
+    console.log(`${new Date().toISOString().slice(11, 19)} registry ${site.domain}: org ${reg.org_number} · ${reg.roles.length} papéis (+${inserted}) · ${reg.employees ?? '?'} emp`);
+    return 'ack';
+  }
+
+  return { handleFetch, handleDns, handleGeoip, handleFingerprint, handleSocial, handleLocality, handleEmailauth, handleTraffic, handleContacts, handleScore, handleSsl, handleSsllabs, handleDnsprovider, handleWhois, handleSubdomains, handleDiscover, handleVerify, handleRegistry, handleCampaignGenerate, handleCampaignSend };
 }

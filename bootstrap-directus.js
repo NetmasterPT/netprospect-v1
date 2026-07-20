@@ -362,6 +362,13 @@ async function main() {
   // Integrações — ligação ao cliente Moloni.
   await ensureField('companies', 'moloni_customer_id', str()); // customer_id no Moloni
   await ensureField('companies', 'nif', str());                // NIF/VAT — chave de match c/ Moloni
+  // Enriquecimento por REGISTOS de empresas oficiais (Fase 5 — lib/company-registry.js). O nº de registo é
+  // extraído do site (Org.nr/VAT) e dá dimensão + CAE oficial + decisores nomeados (inseridos como contacts source='registry').
+  await ensureField('companies', 'reg_number', str());         // nº de registo oficial (org.nr NO, etc.)
+  await ensureField('companies', 'reg_country', str());        // país do registo (NO/SE/FI/NL/PT)
+  await ensureField('companies', 'employees', int());          // dimensão (nº de empregados do registo)
+  await ensureField('companies', 'reg_industry', str());       // indústria/CAE oficial (mais fiável que a heurística)
+  await ensureField('companies', 'reg_checked_at', ts());      // quando o registo foi consultado (marca de "correu")
 
   console.log('Campos: contacts');
   await ensureField('contacts', 'name', str());
@@ -373,11 +380,12 @@ async function main() {
     meta: {
       interface: 'select-dropdown',
       options: {
-        choices: ['site', 'social', 'directory', 'dork', 'database', 'csv_import'].map((v) => ({ text: v, value: v })),
+        choices: ['site', 'social', 'directory', 'dork', 'database', 'csv_import', 'registry'].map((v) => ({ text: v, value: v })),
       },
     },
     schema: {},
   });
+  await ensureEnumChoices('contacts', 'source', ['site', 'social', 'directory', 'dork', 'database', 'csv_import', 'registry']); // +registry (decisores dos registos de empresas)
   await ensureField('contacts', 'source_detail', str());
   await ensureField('contacts', 'phone_country', str()); // ISO2 do telefone (E.164 normalizado em phone)
   await ensureField('contacts', 'role_category', enumS(['decision_maker', 'manager', 'dpo', 'staff', 'general', 'unknown']));

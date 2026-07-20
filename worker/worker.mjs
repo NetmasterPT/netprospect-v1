@@ -529,7 +529,7 @@ const DRAIN = new Set(['audit_ondemand', 'audit_qualified', 'audit_rest']);
 const _CORES = os.cpus().length;
 const _RAM_FREE = Math.max(256, Math.round(os.totalmem() / 1048576) - 550); // MB livres (reserva OS+Node)
 const _REP = Math.max(1, parseInt(process.env.WORKER_REPLICAS || '1', 10));
-const _PER_CORE = { enrich: 3, contacts: 5, fingerprint: 5, fetch: 1.5, dns: 2, geoip: 2, ssl: 2, dnsprovider: 2, emailauth: 2, traffic: 3, social: 1.5, locality: 1.5, subdomains: 0.5, whois: 0.5, verify: 0.75, gmb: 0.5, score: 0.3, campaign_generate: 0.5, campaign_send: 0.75, discover: 0.3, nuclei: 1.5, wpscan: 0.5, lighthouse: 0.4, industry: 1.5, ssllabs: 0.5 };
+const _PER_CORE = { enrich: 3, contacts: 5, fingerprint: 5, fetch: 1.5, dns: 2, geoip: 2, ssl: 2, dnsprovider: 2, emailauth: 2, traffic: 3, social: 1.5, locality: 1.5, subdomains: 0.5, whois: 0.5, verify: 0.75, gmb: 0.5, score: 0.3, campaign_generate: 0.5, campaign_send: 0.75, discover: 0.3, nuclei: 1.5, wpscan: 0.5, lighthouse: 0.4, industry: 1.5, ssllabs: 0.5, registry: 0.5 };
 const _RAM_PER = { nuclei: 250, wpscan: 450, lighthouse: 550, industry: 300, gmb: 400 }; // MB por instância
 const _CAP = { fingerprint: 64, contacts: 128, enrich: 128, traffic: 64, dns: 48, geoip: 48, emailauth: 48 };
 function _auto(job) {
@@ -545,6 +545,7 @@ const CONC = {
   fingerprint: _conc('FINGERPRINT_CONC', 'fingerprint'), social: _conc(null, 'social'), locality: _conc(null, 'locality'),
   emailauth: _conc(null, 'emailauth'), traffic: _conc(null, 'traffic'), score: _conc('SCORE_CONC', 'score'),
   ssl: _conc('DOMAIN_HEALTH_CONC', 'ssl'), whois: _conc('WHOIS_CONC', 'whois'), dnsprovider: _conc('DOMAIN_HEALTH_CONC', 'dnsprovider'),
+  registry: _conc('DOMAIN_HEALTH_CONC', 'registry'),
   subdomains: _conc(null, 'subdomains'), verify: _conc('VERIFY_CONCURRENCY', 'verify'), discover: _conc(null, 'discover'),
   campaign_generate: _conc(null, 'campaign_generate'), campaign_send: _conc(null, 'campaign_send'),
   nuclei: _conc('NUCLEI_JOB_CONC', 'nuclei'), wpscan: _conc('WPSCAN_CONC', 'wpscan'),
@@ -624,7 +625,7 @@ async function main() {
     fetch: fine.handleFetch, fetch_residential: fine.handleFetch, dns: fine.handleDns, geoip: fine.handleGeoip, fingerprint: fine.handleFingerprint,
     social: fine.handleSocial, locality: fine.handleLocality, emailauth: fine.handleEmailauth, traffic: fine.handleTraffic,
     score: fine.handleScore, ssl: fine.handleSsl, ssllabs: fine.handleSsllabs, whois: fine.handleWhois, dnsprovider: fine.handleDnsprovider,
-    subdomains: fine.handleSubdomains, discover: fine.handleDiscover,
+    registry: fine.handleRegistry, subdomains: fine.handleSubdomains, discover: fine.handleDiscover,
     campaign_generate: fine.handleCampaignGenerate, campaign_send: fine.handleCampaignSend,
     industry: heavy.industry, lighthouse_mobile: heavy.lighthouse_mobile, lighthouse_desktop: heavy.lighthouse_desktop,
     nuclei: heavy.nuclei, wpscan: heavy.wpscan, gmb: heavy.gmb,

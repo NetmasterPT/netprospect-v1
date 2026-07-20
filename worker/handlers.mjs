@@ -106,6 +106,10 @@ function cmsVersion(tech, slug) {
   return { version, outdated: !!(dv && lv && dv < lv) };
 }
 
+// Builders/CMS-hospedados: um redirect do domínio próprio p/ estes é um site vivo num builder (lead de
+// upsell), NÃO um domínio morto → NÃO despromover no cross-brand (ver handleFetch).
+const BUILDER_HOST = /(^|\.)(wix\.com|wixsite\.com|editorx\.io|jimdo(free)?\.com|jimdosite\.com|weebly\.com|squarespace\.com|webnode\.[a-z.]+|wordpress\.com|blogspot\.[a-z.]+|sites\.google\.com|business\.site|jouwweb\.nl|webador\.[a-z.]+|site123\.me|strikingly\.com|mystrikingly\.com|carrd\.co|mozello\.com|simplesite\.com|e-monsite\.com|yola\.com|myshopify\.com|godaddysites\.com|webflow\.io|webflow\.com)$/i;
+
 export function makeFineHandlers(ctx, js) {
   const client = wrapClientPg(ctx.client, js);
   const pub = (subject, obj, msgId) => publishJob(js, subject, obj, msgId ? { msgId } : {});
@@ -195,8 +199,11 @@ export function makeFineHandlers(ctx, js) {
     let crossBrand = false;
     try {
       const base = (d) => (getDomainWithoutSuffix(d) || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
-      const b1 = base(domain), b2 = base(new URL(resp.finalUrl).hostname);
-      crossBrand = !!b1 && !!b2 && b1 !== b2;
+      const finalHost = new URL(resp.finalUrl).hostname;
+      const b1 = base(domain), b2 = base(finalHost);
+      // EXCEÇÃO builders/CMS-hospedados: um redirect p/ wix/wordpress.com/sites.google… NÃO é domínio morto
+      // — o negócio TEM site (num builder) e é um BOM lead (upsell). Só cross-brand p/ NÃO-builder é morto.
+      crossBrand = !!b1 && !!b2 && b1 !== b2 && !BUILDER_HOST.test(finalHost);
     } catch { /* ignora */ }
     await client.request(updateItem('sites', siteId, {
       is_live: resp.status < 400 && !crossBrand, http_status: resp.status, final_url: clip(resp.finalUrl), redirects_www,

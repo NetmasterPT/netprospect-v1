@@ -12,6 +12,8 @@ export function Brandmark({ label = 'NetProspect', pill }) {
       <span className="np-brandmark"><i /></span>
       <span className="np-word">{word}</span>
       {pill && <span className="np-pilltag">{pill}</span>}
+      {/* mobile: só o nome da app (ex.: "Docs"), sem "NetProspect" — CSS mostra só ≤820px */}
+      <span className="np-appname">{pill || label}</span>
     </span>
   );
 }

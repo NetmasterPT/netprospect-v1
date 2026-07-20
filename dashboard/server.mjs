@@ -273,7 +273,9 @@ async function captureServerEvent(req, event, distinctId, properties = {}) {
 }
 
 const app = express();
-app.use(express.json({ limit: '4mb' })); // 4mb: as métricas de host trazem stats + tail de logs por container
+// O webhook do Stripe precisa do corpo RAW (verificação de assinatura) → salta o parser JSON global nele.
+const _json = express.json({ limit: '4mb' }); // 4mb: as métricas de host trazem stats + tail de logs por container
+app.use((req, res, next) => (req.path === '/api/stripe/webhook' ? next() : _json(req, res, next)));
 app.use('/vendor', express.static(path.join(__dirname, 'node_modules')));
 app.get('/api/posthog-config', (req, res) => {
   res.json({
@@ -2681,6 +2683,87 @@ app.post('/api/book/:token', async (req, res) => {
     void captureServerEvent(req, 'call_booked', posthogDistinctId(req, `book:${req.params.token}`), { domain: em.site?.domain || null });
     res.json({ ok: true, meetLink: r.meetLink, start });
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
+
+// ── Loja pública (Fase 6) — self-checkout via Stripe (TEST por defeito) ───────
+// ⚠️ /loja e /api/store/* + /api/stripe/webhook TÊM de ser excluídos do Authentik no NPMplus (como /book/*).
+// O webhook do Stripe usa raw body (bypass do express.json acima). Fulfillment: ativa a subscrição + marca
+// cliente + notifica; a FATURA no Moloni fica atrás de STORE_MOLONI_INVOICE=1 (usar a empresa Demo/sandbox).
+const importStore = async () => { try { return await import('./lib/store.js'); } catch { return import('../lib/store.js'); } };
+const storeBase = (req) => (process.env.STORE_PUBLIC_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+const eur2 = (n) => (Number(n) || 0).toFixed(2).replace('.', ',');
+const _sEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const FREQ_LBL = { one_off: 'pagamento único', monthly: '/mês', quarterly: '/trimestre', semiannual: '/semestre', annual: '/ano' };
+function storeShell(inner, title = 'Loja — Netmaster') {
+  return `<!doctype html><html lang=pt><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><title>${_sEsc(title)}</title><style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7f9;color:#202124;margin:0;padding:24px;line-height:1.5}.wrap{max-width:920px;margin:0 auto}h1{font-size:24px;margin:8px 0 4px}p.sub{color:#5f6368;margin:0 0 24px;font-size:15px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}.card{background:#fff;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:22px;display:flex;flex-direction:column}.name{font-weight:800;font-size:17px}.cat{color:#5f6368;font-size:12px;text-transform:uppercase;letter-spacing:.04em}.price{font-size:26px;font-weight:800;margin:12px 0 2px}.freq{color:#5f6368;font-size:13px}ul{margin:12px 0;padding-left:18px;font-size:13.5px;color:#3c4043}li{margin:3px 0}button{margin-top:auto;padding:12px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-size:15px;font-weight:700;cursor:pointer}button:hover{background:#1d4ed8}button[disabled]{opacity:.5;cursor:default}.box{border-radius:10px;padding:18px;margin:16px 0}.ok{background:#e6f4ea;border:1px solid #34a853}.err{background:#fce8e6;border:1px solid #d93025}.badge{display:inline-block;background:#fef3c7;color:#92400e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:8px}</style><body><div class=wrap>${inner}</div></body></html>`;
+}
+app.get('/loja', async (req, res) => {
+  try {
+    const store = await importStore().catch(() => null);
+    const { stripeEnabled } = await import('./lib/stripe.js').catch(() => import('../lib/stripe.js'));
+    if (!stripeEnabled()) return res.type('html').send(storeShell('<h1>Loja</h1><div class="box err">A loja está temporariamente indisponível.</div>'));
+    const test = (process.env.STRIPE_MODE || '').toLowerCase() !== 'live';
+    const subs = await d(`/items/subscriptions?filter[active][_eq]=true&sort[]=sort&limit=-1&fields=id,name,frequency,category,features,price_ex_vat,price_inc_vat,moloni_service_id`);
+    const cancel = req.query.cancelado ? '<div class="box err">Pagamento cancelado — sem cobrança.</div>' : '';
+    const cards = (subs || []).filter((s) => (s.price_inc_vat ?? s.price_ex_vat) > 0).map((s) => `<div class=card>
+      <div class=cat>${_sEsc(s.category || 'serviço')}</div><div class=name>${_sEsc(s.name)}</div>
+      <div class=price>€${eur2(s.price_inc_vat ?? s.price_ex_vat)}</div><div class=freq>${FREQ_LBL[s.frequency] || ''} · c/ IVA</div>
+      ${(s.features || []).length ? `<ul>${(s.features || []).slice(0, 6).map((f) => `<li>${_sEsc(f)}</li>`).join('')}</ul>` : '<div style="flex:1"></div>'}
+      <button onclick="buy(${s.id},this)">Subscrever</button></div>`).join('') || '<div class="box">Sem pacotes disponíveis de momento.</div>';
+    res.type('html').send(storeShell(`<h1>Loja Netmaster${test ? '<span class=badge>MODO TESTE</span>' : ''}</h1><p class=sub>Escolhe um pacote — pagamento seguro via Stripe.</p>${cancel}<div class=grid>${cards}</div>
+      <script>async function buy(id,btn){btn.disabled=true;btn.textContent='A abrir…';try{const r=await fetch('/api/store/checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({subscriptionId:id})}),j=await r.json();if(j.url){location.href=j.url;}else{btn.disabled=false;btn.textContent='Subscrever';alert(j.error||'Não foi possível iniciar o checkout.');}}catch(e){btn.disabled=false;btn.textContent='Subscrever';alert('Erro de rede.');}}</script>`));
+  } catch (e) { res.type('html').send(storeShell(`<h1>Loja</h1><div class="box err">Erro: ${_sEsc(e.message)}</div>`)); }
+});
+app.post('/api/store/checkout', async (req, res) => {
+  try {
+    const id = parseInt(req.body?.subscriptionId, 10);
+    if (!id) return res.status(400).json({ error: 'subscriptionId em falta' });
+    const sub = (await d(`/items/subscriptions/${id}?fields=id,name,frequency,category,price_ex_vat,price_inc_vat,active,moloni_service_id`).catch(() => null));
+    if (!sub || sub.active === false) return res.status(404).json({ error: 'pacote indisponível' });
+    const store = await importStore();
+    const session = await store.createCheckoutSession(sub, { baseUrl: storeBase(req), email: (req.body?.email || '').trim() || null });
+    void captureServerEvent(req, 'store_checkout_started', posthogDistinctId(req, `store:${id}`), { subscription_id: id, mode: session.mode, sandbox: session.isSandbox });
+    res.json({ url: session.url, id: session.id });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+app.get('/loja/sucesso', (req, res) => res.type('html').send(storeShell('<h1>Obrigado! 🎉</h1><div class="box ok"><b>Pagamento recebido.</b><br>Vais receber um email com os próximos passos. A equipa Netmaster entra em contacto em breve.</div>')));
+// Webhook do Stripe (raw body). Verifica a assinatura e faz a fulfillment do checkout concluído.
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  let event;
+  try { const store = await importStore(); event = store.verifyWebhookEvent(req.body, req.get('stripe-signature')); }
+  catch (e) { console.error('[store] webhook inválido:', e.message); return res.status(400).send(`webhook error: ${e.message}`); }
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const s = event.data.object;
+      const email = s.customer_details?.email || s.customer_email || null;
+      const name = s.customer_details?.name || '';
+      const subId = parseInt(s.metadata?.subscription_id || s.client_reference_id, 10);
+      const amount = (s.amount_total || 0) / 100;
+      console.log(`[store] pago: sub=${subId} ${email} €${amount} (${s.mode})`);
+      // 1) empresa: por domínio do email → marca cliente + liga a subscrição; cria se não existir.
+      let companyId = null;
+      if (email) {
+        const dom = (email.split('@')[1] || '').toLowerCase();
+        const found = dom ? await d(`/items/companies?filter[org_domain][_eq]=${encodeURIComponent(dom)}&fields=id,client_ids&limit=1`).catch(() => []) : [];
+        if (found && found[0]) companyId = found[0].id;
+        else if (dom) { const c = await dwrite('POST', '/items/companies', { org_domain: dom, name: name || dom, is_client: true }).catch(() => null); companyId = c?.id || null; }
+        if (companyId) await dwrite('PATCH', `/items/companies/${companyId}`, { is_client: true }).catch(() => {});
+      }
+      // 2) liga a company à subscrição (client_ids) — best-effort.
+      if (subId && companyId) {
+        const sub = await d(`/items/subscriptions/${subId}?fields=id,client_ids`).catch(() => null);
+        const ids = Array.isArray(sub?.client_ids) ? sub.client_ids.map(Number) : [];
+        if (!ids.includes(companyId)) await dwrite('PATCH', `/items/subscriptions/${subId}`, { client_ids: [...ids, companyId] }).catch(() => {});
+      }
+      // 3) notifica a equipa (best-effort).
+      const notify = process.env.STORE_NOTIFY_EMAIL || '';
+      if (notify) { try { const { sendEmail } = await import('./lib/mailer.js').catch(() => import('../lib/mailer.js')); await sendEmail({ to: notify, subject: `💶 Nova venda: ${s.metadata?.subscription_name || subId} — €${amount}`, body: `Cliente: ${name || '—'} <${email || '—'}>\nPacote: ${s.metadata?.subscription_name || subId}\nValor: €${amount}\nModo: ${s.mode}${s.livemode ? ' (LIVE)' : ' (teste)'}\nCompany: ${companyId || '—'}` }); } catch (e) { console.error('[store] notify falhou:', e.message); } }
+      // 4) FATURA no Moloni — atrás de flag (usa a empresa Demo/sandbox). Fica logado até se configurar a Demo.
+      if (process.env.STORE_MOLONI_INVOICE === '1') { console.log(`[store] TODO fatura Moloni p/ sub=${subId} (empresa Demo/sandbox) — a implementar quando a company Demo estiver configurada`); }
+      void captureServerEvent(req, 'store_purchase', posthogDistinctId(req, `store:${subId}`), { subscription_id: subId, amount, sandbox: !s.livemode });
+    }
+    res.json({ received: true });
+  } catch (e) { console.error('[store] fulfillment erro:', e.message); res.json({ received: true, warning: e.message }); }
 });
 
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

@@ -1040,6 +1040,9 @@ const CRON_REGISTRY = [
   { name: 'gmb-enqueue-cron', host: 'np-server', kind: 'docker', schedule: 'de 3/3h', endpoint: '/api/gmb/enqueue', desc: 'Top-up da fila GMB pelos melhores leads — só repõe se a fila estiver baixa (evita a expiração de 48h do stream).' },
 ];
 
+// Timers de manutenção do SO (ruído) — a página Crons foca nas tarefas NetProspect + monitorização.
+const OS_TIMER_NOISE = /^(apt-daily|apt-daily-upgrade|dpkg-db-backup|e2scrub_all|xfs_scrub_all|fstrim|man-db|logrotate|systemd-tmpfiles-clean|pve-daily-update|zpool-textfile|systemd-tmpfiles|update-notifier|motd-news|plocate|mlocate|snapd|ua-timer|ubuntu-advantage|phpsessionclean)\b/i;
+
 // Enumera os hosts da frota (agente ativo <15min) + os seus containers/timers (np:host:<h>:containers).
 async function fleetHosts(rr) {
   const out = {};
@@ -1091,6 +1094,8 @@ app.get('/api/crons', async (req, res) => {
           const isTimer = u.kind === 'timer';
           const isDockerCron = (!u.kind || u.kind === 'container') && /(-cron\b|cron-|\bcron\b)/i.test(u.name || '');
           if (!isTimer && !isDockerCron) continue;
+          // Filtra os timers de MANUTENÇÃO do SO (ruído: não são tarefas nossas) — mantém NetProspect + monitorização.
+          if (isTimer && OS_TIMER_NOISE.test(u.name || '')) continue;
           const up = /up|active|running|waiting/i.test(u.state || u.status || '');
           const unit = { host, name: u.name, state: u.state || '', status: u.status || '', up, logb64: u.logb64 || '' };
           // Funde com o cron do registo: o agente reporta o contentor prefixado pelo compose

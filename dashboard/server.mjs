@@ -2955,6 +2955,28 @@ app.post('/api/portal/:companyId/link', async (req, res) => {
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 
+// --- Sell (Fase 6c) — staff gera um link /buy/:token p/ um prospeto/cliente -----------------------
+// Resolve o email (contacto decisor > geral da empresa), cria uma linha `emails` com token (o /buy resolve
+// o contexto por aí), e devolve o URL com UTMs de origem 'sell'. O staff envia; ao pagar, o fulfill converte.
+app.post('/api/sell/:companyId', async (req, res) => {
+  try {
+    const id = parseInt(req.params.companyId, 10);
+    if (!id) return res.status(400).json({ error: 'companyId inválido' });
+    const co = await d(`/items/companies/${id}?fields=id,name,general_email`).catch(() => null);
+    if (!co) return res.status(404).json({ error: 'empresa não encontrada' });
+    let to = (req.body?.email || '').trim() || null; let toName = (req.body?.name || '').trim() || null; let siteId = parseInt(req.body?.siteId, 10) || null;
+    if (!to) { // preferir um contacto decisor com email; senão qualquer contacto com email
+      const dm = (await d(`/items/contacts?filter[company][_eq]=${id}&filter[role_category][_eq]=decision_maker&filter[email][_nnull]=true&fields=email,name,site&limit=1`).catch(() => []))[0]
+        || (await d(`/items/contacts?filter[company][_eq]=${id}&filter[email][_nnull]=true&fields=email,name,site&limit=1`).catch(() => []))[0];
+      if (dm) { to = dm.email; toName = toName || dm.name; siteId = siteId || dm.site; }
+    }
+    to = to || co.general_email || null;
+    const token = newToken() + crypto.randomBytes(8).toString('hex');
+    await dwrite('POST', '/items/emails', { company: id, ...(siteId ? { site: siteId } : {}), to_email: to, to_name: toName || co.name, token });
+    res.json({ ok: true, url: `${storeBase(req)}/buy/${token}?utm_source=sell&utm_medium=dashboard`, to_email: to });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
 app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
 app.listen(PORT, () => { ensureFleetDir(); console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`); });

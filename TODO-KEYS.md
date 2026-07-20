@@ -53,8 +53,13 @@ Snippets completos em [`docs/runbook-npm-hel1.md`](docs/runbook-npm-hel1.md).
 
 Todas herdam **Authentik** do proxy host. `/notebook/` e `/obsidian/` (com dados) **nunca abertos**.
 
-> **Acesso no telefone entretanto:** o IP-cru por HTTP falha no telemóvel (modo HTTPS-only promove a https
-> sem TLS). Ou aplicar o NPMplus acima (dá HTTPS real), ou o Tailscale Serve (HTTPS na tailnet — ver §4 se ativado).
+> **Acesso no telefone entretanto:** já funciona por **Tailscale Serve** (HTTPS na tailnet, cert real):
+> Docs `https://np-server.taild948a2.ts.net/docs/` · Grafo `…/docs/#/graph` · Notebook `…ts.net:8502/` ·
+> Obsidian `…ts.net:8091/`. São estes os URLs que o **grupo "Conhecimento" do dashboard** usa por agora.
+
+> ⚠️ **DEPOIS do NPMplus:** dar ao Claude os 4 URLs finais (`netprospect.netmaster.pt/docs/` + `notebook.`/
+> `obsidian.netmaster.pt`) para **trocar os links do grupo "Conhecimento"** no `dashboard/public/index.html`
+> (hoje apontam para os URLs Tailscale acima).
 
 ## 4. Capacidade de verify — mais workers / 2.º IP Reacher ⚠️ CAPACIDADE (não é uma key)
 

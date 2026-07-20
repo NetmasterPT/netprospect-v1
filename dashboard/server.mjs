@@ -3009,6 +3009,20 @@ app.post('/api/sell/:companyId', async (req, res) => {
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 
-app.get('*', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// A SPA é hash-routed e servida em '/' pelo express.static → o catch-all só apanha paths DESCONHECIDOS
+// (bare /t/ ou /r/ sem token, GET num webhook que é POST, typos). Antes devolvia o index.html inteiro
+// (o "dashboard sem estilos" sob subpath); agora: /api/* → JSON 404; resto → página 404 brandada.
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) return res.status(404).json({ error: 'not found', path: req.path });
+  res.status(404).sendFile(path.join(__dirname, 'public', '404.html'));
+});
+// Handler de erro (4 args → TEM de ser o último middleware): erros não-tratados nos handlers → 500.html
+// (ou JSON no /api/*), em vez de rebentar o pedido ou servir HTML partido.
+app.use((err, req, res, next) => {
+  console.error('[dashboard] erro não-tratado:', err?.stack || err?.message || err);
+  if (res.headersSent) return next(err);
+  if (req.path.startsWith('/api/')) return res.status(500).json({ error: 'erro interno' });
+  res.status(500).sendFile(path.join(__dirname, 'public', '500.html'));
+});
 
 app.listen(PORT, () => { ensureFleetDir(); console.log(`NetProspect dashboard em http://localhost:${PORT} (Directus: ${DIRECTUS_URL})`); });

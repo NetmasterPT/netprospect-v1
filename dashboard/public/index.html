@@ -228,7 +228,7 @@
 <div class="np-shell">
   <nav class="np-nav" id="nav"></nav>
   <div class="np-navscrim" id="navscrim"></div>
-  <main class="np-main" id="view"></main>
+  <main class="np-main" id="view"><style>@keyframes npspin{to{transform:rotate(360deg)}}</style><div style="display:grid;place-items:center;min-height:60vh"><div style="text-align:center;opacity:.65"><div style="width:36px;height:36px;margin:0 auto 14px;border:3px solid currentColor;border-top-color:transparent;border-radius:50%;animation:npspin .8s linear infinite;opacity:.6"></div>A carregar…</div></div></main>
 </div>
 <div class="np-scrim" id="scrim"></div>
 <aside class="np-drawer" id="drawer"></aside>
@@ -349,13 +349,13 @@ let STATS = null;
 // Submenus do nav (ordem preservada). Cada item = [id, ícone, label, countKey?] (countKey lê t[key]).
 const NAV_GROUPS = [
   ['Geral', [['overview', 'overview', 'Visão Geral'], ['outreach', 'send', 'Outreach'], ['config', 'sliders', 'Configuração']]],
-  // Plataforma de conhecimento — URLs Tailscale (HTTPS na tailnet) enquanto o NPMplus não está feito.
-  // Trocar para netprospect.netmaster.pt/docs/ + notebook./obsidian.netmaster.pt quando o NPMplus estiver pronto.
+  // Plataforma de conhecimento — via NPMplus: Docs sob /docs/ (netprospect.netmaster.pt); Notebook/Obsidian
+  // em subdomínios próprios (o Streamlit/KasmVNC não servem sob subpath).
   ['Conhecimento', [
-    ['ext-docs', 'directory', 'Docs', null, 'https://np-server.taild948a2.ts.net/docs/'],
-    ['ext-graph', 'activity', 'Grafo', null, 'https://np-server.taild948a2.ts.net/docs/#/graph'],
-    ['ext-notebook', 'sparkles', 'Notebook', null, 'https://np-server.taild948a2.ts.net:8502/'],
-    ['ext-obsidian', 'star', 'Obsidian', null, 'https://np-server.taild948a2.ts.net:8091/'],
+    ['ext-docs', 'directory', 'Docs', null, 'https://netprospect.netmaster.pt/docs/'],
+    ['ext-graph', 'activity', 'Grafo', null, 'https://netprospect.netmaster.pt/docs/#/graph'],
+    ['ext-notebook', 'sparkles', 'Notebook', null, 'http://netprospect.notebook.netmaster.pt/'],
+    ['ext-obsidian', 'star', 'Obsidian', null, 'http://netprospect.obsidian.netmaster.pt/'],
   ]],
   ['Frota', [['servers', 'globe', 'Servidores'], ['vms', 'server', 'VMs'], ['workers', 'sparkles', 'Workers'], ['queues', 'activity', 'Filas'], ['crons', 'clock', 'Crons'], ['autoscale', 'sparkles', 'Autoscaler'], ['coverage', 'check', 'Cobertura Jobs'], ['logs', 'clock', 'Logs']]],
   ['Observabilidade', [

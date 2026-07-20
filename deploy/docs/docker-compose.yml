@@ -32,10 +32,16 @@ services:
     command: ["node", "mcp/server.mjs"]
     environment:
       QDRANT_URL: http://qdrant:6333
-      KB_EMBED_BACKEND: ${KB_EMBED_BACKEND:-local}
+      KB_EMBED_BACKEND: ${KB_EMBED_BACKEND:-local}   # embeddings LOCAIS (transformers.js) — não usa OLLAMA_URL
       HF_HOME: /hf-cache                        # cache do modelo (download 1x na 1ª query)
       KB_HTTP_HOST: 0.0.0.0
       KB_HTTP_PORT: "8099"
+      DOCS_PROFILE: ${DOCS_PROFILE:-interno}    # perfil ativo → filtro de módulos na federação
+      OLLAMA_URL: ${OLLAMA_URL:-http://100.126.196.112:11434}   # chat (gemma3:4b); só o /chat o usa
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
+      DOCS_OLLAMA_ENABLED: ${DOCS_OLLAMA_ENABLED:-1}             # flag: 0/off desliga o provider ollama
+      POSTHOG_PUBLIC_KEY: ${POSTHOG_PUBLIC_KEY:-}                # $ai + /posthog-config p/ o SPA (fail-soft se vazio)
+      POSTHOG_PUBLIC_HOST: ${POSTHOG_PUBLIC_HOST:-https://eu.i.posthog.com}
     volumes:
       - ../..:/app:ro                           # repo (node_modules + kb/ + content.json)
       - hf-cache:/hf-cache

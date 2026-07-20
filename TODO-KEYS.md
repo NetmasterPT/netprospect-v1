@@ -73,11 +73,35 @@ para escalar — **nenhuma precisa de código novo** (a lista de proxies do `lib
   `pull-deploy.sh` recria no próximo ciclo (~5 min). Chaves free em `config/verify-providers.json` mintadas **do IP
   desse host**, ou correr só-Reacher (sem chaves).
 
-**b) 2.º IP no Reacher** (mais IPs limpos por onde o SMTP `RCPT` sai):
-- FCrDNS: `p2.<domínio>` → novo IP (PTR no Hetzner Robot + registo A no OpenProvider) — ver `docs/outreach-ops/dns-per-domain.md`.
-- 2.º Dante nesse host, **ligado à tailnet** (o atual só escuta em `127.0.0.1`) — ver `deploy/reacher/`.
-- 1 entrada `{host,port,ip,helo}` em `config/verify-proxies.json` a apontar o (único) Reacher para esse Dante.
-- Automação pendente: `deploy/reacher/activate.sh` só faz **1 IP** → estender com um modo `add-proxy` (Fase 3 do roadmap).
+**b) 2.º IP no Reacher** (mais IPs limpos por onde o SMTP `RCPT` sai) — **já automatizado** em
+`deploy/reacher/add-proxy.sh` (gate FCrDNS + Dante tailnet-bound + append a `config/verify-proxies.json`; o
+`lib/reacher.js` já faz round-robin da lista). Faz FCrDNS `p2.<domínio>` → novo IP, sobe um Dante ligado à
+tailnet nesse host (o co-locado do de-minio escuta só em `127.0.0.1`) e acrescenta a entrada ao pool.
+
+> ⚠️ **A FAZER (tu):** depois de configurares um **2.º domínio com FCrDNS (`p2.<domínio>`: registo A no
+> OpenProvider + PTR no Hetzner Robot) a apontar para um IP HEL1 que NÃO seja o do WHM/cPanel** (o WHM tem a
+> porta 25 / a reputação dele — nunca misturar envio-frio com o IP do WHM), corre **no hel1**:
+> ```
+> ./deploy/reacher/add-proxy.sh <domínio> <IP-HEL1-limpo> <tailnet-IP-desse-host> root@<tailnet-IP>
+> ```
+> Pré-req: porta 25 aberta + IP Spamhaus-limpo nesse IP HEL1 (`docs/outreach-ops/00-port25-and-ips.md`).
+> ⚠️ o script **ainda não foi testado com um IP real** (é a 1.ª execução) — corre e avisa o Claude se algo falhar.
+> Ver `deploy/reacher/README.md §Fase 3`.
+
+## 5. Book Call público — excluir `/book/*` do Authentik (NPMplus) ⚠️ A FAZER
+
+A página pública de **marcação de chamada** (`GET /book/:token` + `POST /api/book/:token`) já está no
+dashboard (`netprospect.netmaster.pt`) — token-gated (só quem recebeu outreach), mostra os horários livres do
+Google Calendar e cria o evento com link Meet. Como o `/r/*` e o `/t/*`, **TEM de ser excluída do Authentik**
+no NPMplus — senão o prospecto bate no login do Authentik em vez da página de marcação.
+
+- Na box **`hel1-npm`** (NPMplus), no proxy host de `netprospect.netmaster.pt`: adicionar `/book/` **e**
+  `/api/book/` à lista de *locations* públicas (sem auth), tal como já existe para `/r/`, `/t/`.
+  (Snippets no estilo de [`docs/runbook-npm-hel1.md`](docs/runbook-npm-hel1.md).)
+- Só funciona depois de o **dashboard redeployar** o código novo (pull-deploy do np-server) — confirma com
+  `curl -s https://netprospect.netmaster.pt/book/<token>` a devolver a página (não o login).
+- Depois: o link entra nos emails de outreach como `https://netprospect.netmaster.pt/book/{{token}}` (CTA
+  "marcar chamada"), a substituir o `mailto:` atual do relatório.
 
 ---
 
@@ -85,3 +109,5 @@ para escalar — **nenhuma precisa de código novo** (a lista de proxies do `lib
 - Subdomains: [`docs/subdomain-sources-keys.md`](docs/subdomain-sources-keys.md) · `lib/subdomains.js`
 - Wordfence: `lib/wordfence.js` · `update-wordfence.js` · `deploy/observability/wordfence-update.{service,timer}`
 - Plataforma de docs: [`docs/runbook-npm-hel1.md`](docs/runbook-npm-hel1.md) · `deploy/docs/` · `.claude/plans/current/docs-plan.md`
+- 2.º IP Reacher: `deploy/reacher/add-proxy.sh` · [`deploy/reacher/README.md`](deploy/reacher/README.md) (§Fase 3)
+- Book Call: `dashboard/server.mjs` (`/book/:token`, `/api/book/:token`) · fundação Agendamentos (GCal+Notion)

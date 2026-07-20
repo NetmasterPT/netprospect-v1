@@ -2807,6 +2807,45 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
   } catch (e) { console.error('[store] fulfillment erro:', e.message); res.json({ received: true, warning: e.message }); }
 });
 
+// --- /buy/:token (Fase 6b) — checkout por-link de OUTREACH + analytics UTM server-side ------------
+// ⚠️ excluir /buy/* + /api/buy/* do Authentik no NPMplus. O token = destinatário do outreach (como /book/).
+// Captura TODOS os params da URL (utm_* + custom: segment/interest/target_public/…) + o contexto do token no
+// PostHog SERVER-SIDE → atribuição campanha × segmento × interesse × público × método × conversão.
+const _buyLookup = async (t) => (await d(`/items/emails?filter[token][_eq]=${encodeURIComponent(t)}&fields=id,token,to_email,to_name,company.id,site.domain,campaign.id,campaign.angle&limit=1`).catch(() => []))[0] || null;
+const pickUtm = (q) => { const o = {}; for (const [k, v] of Object.entries(q || {})) if (typeof v === 'string' && v.length <= 200 && /^[a-z0-9_.-]{1,40}$/i.test(k)) o[k] = v; return o; };
+app.get('/buy/:token', async (req, res) => {
+  try {
+    const em = await _buyLookup(req.params.token);
+    if (!em) return res.status(404).type('html').send(storeShell('<h1>Loja</h1><div class="box err">Link inválido ou expirado.</div>'));
+    const utm = pickUtm(req.query);
+    void captureServerEvent(req, 'buy_viewed', posthogDistinctId(req, `buy:${req.params.token}`), { ...utm, campaign_id: em.campaign?.id || null, angle: em.campaign?.angle || null, domain: em.site?.domain || null, company: em.company?.id || null });
+    const subs = await d(`/items/subscriptions?filter[active][_eq]=true&sort[]=sort&limit=-1&fields=id,name,frequency,category,features,price_ex_vat,price_inc_vat`);
+    const test = (process.env.STRIPE_MODE || '').toLowerCase() !== 'live';
+    const cancel = req.query.cancelado ? '<div class="box err">Pagamento cancelado — sem cobrança.</div>' : '';
+    const cards = (subs || []).filter((s) => (s.price_inc_vat ?? s.price_ex_vat) > 0).map((s) => `<div class=card><div class=cat>${_sEsc(s.category || 'serviço')}</div><div class=name>${_sEsc(s.name)}</div><div class=price>€${eur2(s.price_inc_vat ?? s.price_ex_vat)}</div><div class=freq>${FREQ_LBL[s.frequency] || ''} · c/ IVA</div>${(s.features || []).length ? `<ul>${(s.features || []).slice(0, 6).map((f) => `<li>${_sEsc(f)}</li>`).join('')}</ul>` : '<div style="flex:1"></div>'}<button onclick="buy(${s.id},this)">Subscrever</button></div>`).join('') || '<div class="box">Sem pacotes disponíveis de momento.</div>';
+    const hi = em.to_name ? `Olá ${_sEsc(String(em.to_name).split(' ')[0])}, ` : '';
+    const tokJs = JSON.stringify(req.params.token).replace(/</g, '\\u003c'); const utmJs = JSON.stringify(utm).replace(/</g, '\\u003c');
+    res.type('html').send(storeShell(`<h1>${hi}a tua proposta Netmaster${test ? '<span class=badge>MODO TESTE</span>' : ''}</h1><p class=sub>Escolhe um pacote — pagamento seguro.</p>${cancel}<div class=grid>${cards}</div>
+      <script>const TOK=${tokJs},UTM=${utmJs};async function buy(id,btn){btn.disabled=true;btn.textContent='A abrir…';try{const r=await fetch('/api/buy/'+encodeURIComponent(TOK)+'/checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({subscriptionId:id,utm:UTM})}),j=await r.json();if(j.url){location.href=j.url;}else{btn.disabled=false;btn.textContent='Subscrever';alert(j.error||'Não foi possível iniciar o checkout.');}}catch(e){btn.disabled=false;btn.textContent='Subscrever';alert('Erro de rede.');}}</script>`, 'Proposta — Netmaster'));
+  } catch { res.status(500).type('html').send(storeShell('<h1>Loja</h1><div class="box err">Erro a carregar.</div>')); }
+});
+app.post('/api/buy/:token/checkout', async (req, res) => {
+  try {
+    const em = await _buyLookup(req.params.token);
+    if (!em) return res.status(404).json({ error: 'link inválido' });
+    const id = parseInt(req.body?.subscriptionId, 10);
+    if (!id) return res.status(400).json({ error: 'subscriptionId em falta' });
+    const sub = await d(`/items/subscriptions/${id}?fields=id,name,frequency,category,price_ex_vat,price_inc_vat,active,moloni_service_id`).catch(() => null);
+    if (!sub || sub.active === false) return res.status(404).json({ error: 'pacote indisponível' });
+    const utm = pickUtm(req.body?.utm || {});
+    const store = await importStore();
+    const base = storeBase(req);
+    const session = await store.createCheckoutSession(sub, { baseUrl: base, email: em.to_email || null, cancelUrl: `${base}/buy/${encodeURIComponent(req.params.token)}?cancelado=1`, extraMeta: { company_id: em.company?.id || '', buy_token: req.params.token, utm: JSON.stringify(utm) } });
+    void captureServerEvent(req, 'buy_payment_started', posthogDistinctId(req, `buy:${req.params.token}`), { subscription_id: id, provider: 'stripe', campaign_id: em.campaign?.id || null, ...utm });
+    res.json({ url: session.url, id: session.id });
+  } catch (e) { res.status(502).json({ error: e.message }); }
+});
+
 // --- Client Portal (Fase 6a) — read-only, token-gated (empresa por companies.portal_token) --------
 // ⚠️ excluir /portal/* + /api/portal/* do Authentik no NPMplus (como /r/*, /t/*).
 const _portalLookup = async (token) => {

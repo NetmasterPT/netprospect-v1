@@ -437,7 +437,9 @@ async function consumeLoop(js, durable, concurrency, fn, ackWaitSec = 60) {
             }
             m.ack(); taskEnd(durable, started, true); logLine(`✓ ${durable} ${label} (${Date.now() - started}ms)`);
           } catch (e) {
-            const msg = e?.errors ? JSON.stringify(e.errors) : (e?.message || String(e));
+            // Inclui a CAUSA do undici ('fetch failed' esconde o EMFILE/EAI_AGAIN/ETIMEDOUT/ECONNRESET real)
+            const cz = e?.cause ? ` [cause: ${e.cause.code || e.cause.errno || e.cause.syscall || e.cause.message || e.cause}]` : '';
+            const msg = (e?.errors ? JSON.stringify(e.errors) : (e?.message || String(e))) + cz;
             taskEnd(durable, started, false);
             if (isTransientJobErr(e)) { m.nak(); log(`↻ ${durable} ${job?.domain}: ${msg}`); logLine(`↻ ${durable} ${label}: ${msg}`); }
             else { m.term(); log(`✗ ${durable} ${job?.domain}: ${msg}`); logLine(`✗ ${durable} ${label}: ${msg}`); }

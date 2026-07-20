@@ -52,6 +52,24 @@ Todas herdam **Authentik** do proxy host. `/notebook/` e `/obsidian/` (com dados
 > **Acesso no telefone entretanto:** o IP-cru por HTTP falha no telemóvel (modo HTTPS-only promove a https
 > sem TLS). Ou aplicar o NPMplus acima (dá HTTPS real), ou o Tailscale Serve (HTTPS na tailnet — ver §4 se ativado).
 
+## 4. Capacidade de verify — mais workers / 2.º IP Reacher ⚠️ CAPACIDADE (não é uma key)
+
+O verify está **destravado** (Reacher live) mas o backlog é grande (~162k contactos, ~76k domínios elegíveis) e a
+vazão é limitada por (a) a quota free das APIs **por-IP** e (b) a capacidade SMTP de **um** Reacher. Duas alavancas
+para escalar — **nenhuma precisa de código novo** (a lista de proxies do `lib/reacher.js` já faz round-robin), só ops:
+
+**a) Mais workers de verify** (mais IPs → mais quota free + mais paralelismo):
+- Novo VM: `deploy/bootstrap-vm.sh <authkey> <hostname> tag:worker` (instala Docker + Tailscale + clona o repo).
+- Pôr `WORKER_ROLES=verify` no `.env` do host pelo **dashboard → Servidores → Editar .env** (fleet-env store); o
+  `pull-deploy.sh` recria no próximo ciclo (~5 min). Chaves free em `config/verify-providers.json` mintadas **do IP
+  desse host**, ou correr só-Reacher (sem chaves).
+
+**b) 2.º IP no Reacher** (mais IPs limpos por onde o SMTP `RCPT` sai):
+- FCrDNS: `p2.<domínio>` → novo IP (PTR no Hetzner Robot + registo A no OpenProvider) — ver `docs/outreach-ops/dns-per-domain.md`.
+- 2.º Dante nesse host, **ligado à tailnet** (o atual só escuta em `127.0.0.1`) — ver `deploy/reacher/`.
+- 1 entrada `{host,port,ip,helo}` em `config/verify-proxies.json` a apontar o (único) Reacher para esse Dante.
+- Automação pendente: `deploy/reacher/activate.sh` só faz **1 IP** → estender com um modo `add-proxy` (Fase 3 do roadmap).
+
 ---
 
 ## Onde é usado (referência)

@@ -2477,34 +2477,36 @@ app.get('/api/agendamentos', async (req, res) => {
     res.json({ rows: json.data || [], total: json.meta?.filter_count ?? (json.data || []).length, page, limit });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
+// Cria um agendamento: GCal (âncora + Meet) → Notion (best-effort) → Directus. Partilhado pelo
+// endpoint interno (POST /api/agendamentos) e pela página pública de marcação (POST /api/book/:token).
+async function createAgendamento(b) {
+  const startIso = b.start;
+  const endIso = b.end || new Date(new Date(b.start).getTime() + (Number(b.duration_min) || 30) * 60000).toISOString();
+  const title = b.title || `Reunião — ${b.contact_name || b.contact_email}`;
+  const [gcal, notion] = await Promise.all([importGcal(), importNotion()]);
+  let ev = null; let notionRes = null; const warnings = [];
+  if (gcal.isCalendarConfigured()) {
+    ev = await gcal.createEvent({ userEmail: CAL_USER, summary: title, description: b.notes || '', startIso, endIso, timezone: CAL_TZ, attendees: [{ email: b.contact_email, displayName: b.contact_name || undefined }] }).catch((e) => { warnings.push('gcal: ' + e.message); return null; });
+  } else warnings.push('google desligado / sem domain-wide delegation');
+  if (notion.notionEnabled()) {
+    notionRes = await notion.createAgendamentoPage({ title, email: b.contact_email, company: b.company_name, startIso, meetLink: ev && ev.meetLink, calendarLink: ev && ev.htmlLink, notes: b.notes }).catch((e) => { warnings.push('notion: ' + e.message); return null; });
+  }
+  if (ev && notionRes && notionRes.url) await gcal.appendEventDescription({ userEmail: CAL_USER, eventId: ev.id, appendText: `Notion: ${notionRes.url}` }).catch(() => {});
+  const row = await dwrite('POST', '/items/agendamentos', {
+    title, contact_name: b.contact_name || null, contact_email: b.contact_email,
+    start: startIso, end: endIso, status: 'agendado',
+    meet_link: (ev && ev.meetLink) || null, gcal_event_id: (ev && ev.id) || null,
+    notion_page_id: (notionRes && notionRes.pageId) || null, notion_url: (notionRes && notionRes.url) || null,
+    notes: b.notes || null, ...(b.company_id ? { company: b.company_id } : {}),
+  });
+  return { row, meetLink: (ev && ev.meetLink) || null, warnings };
+}
 app.post('/api/agendamentos', async (req, res) => {
   try {
     const b = req.body || {};
     if (!b.start || !b.contact_email) return res.status(400).json({ ok: false, error: 'start e contact_email obrigatórios' });
-    const startIso = b.start;
-    const endIso = b.end || new Date(new Date(b.start).getTime() + (Number(b.duration_min) || 30) * 60000).toISOString();
-    const title = b.title || `Reunião — ${b.contact_name || b.contact_email}`;
-    const [gcal, notion] = await Promise.all([importGcal(), importNotion()]);
-    let ev = null; let notionRes = null; const warnings = [];
-    // 1) Google Calendar = âncora (+ Meet)
-    if (gcal.isCalendarConfigured()) {
-      ev = await gcal.createEvent({ userEmail: CAL_USER, summary: title, description: b.notes || '', startIso, endIso, timezone: CAL_TZ, attendees: [{ email: b.contact_email, displayName: b.contact_name || undefined }] }).catch((e) => { warnings.push('gcal: ' + e.message); return null; });
-    } else warnings.push('google desligado / sem domain-wide delegation');
-    // 2) Notion (best-effort) — a propriedade date fá-lo aparecer no calendário Notion
-    if (notion.notionEnabled()) {
-      notionRes = await notion.createAgendamentoPage({ title, email: b.contact_email, company: b.company_name, startIso, meetLink: ev && ev.meetLink, calendarLink: ev && ev.htmlLink, notes: b.notes }).catch((e) => { warnings.push('notion: ' + e.message); return null; });
-    }
-    // 3) Ligar o Notion de volta ao evento (Notion Calendar deteta o URL na descrição)
-    if (ev && notionRes && notionRes.url) await gcal.appendEventDescription({ userEmail: CAL_USER, eventId: ev.id, appendText: `Notion: ${notionRes.url}` }).catch(() => {});
-    // 4) Persistir no Directus
-    const row = await dwrite('POST', '/items/agendamentos', {
-      title, contact_name: b.contact_name || null, contact_email: b.contact_email,
-      start: startIso, end: endIso, status: 'agendado',
-      meet_link: (ev && ev.meetLink) || null, gcal_event_id: (ev && ev.id) || null,
-      notion_page_id: (notionRes && notionRes.pageId) || null, notion_url: (notionRes && notionRes.url) || null,
-      notes: b.notes || null, ...(b.company_id ? { company: b.company_id } : {}),
-    });
-    res.json({ ok: true, result: row, meetLink: (ev && ev.meetLink) || null, warnings });
+    const r = await createAgendamento(b);
+    res.json({ ok: true, result: r.row, meetLink: r.meetLink, warnings: r.warnings });
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
 app.post('/api/agendamentos/:id/cancel', async (req, res) => {
@@ -2515,6 +2517,66 @@ app.post('/api/agendamentos/:id/cancel', async (req, res) => {
     if (ag && ag.gcal_event_id && gcal.isCalendarConfigured()) await gcal.deleteCalendarEvent({ userEmail: CAL_USER, eventId: ag.gcal_event_id }).catch(() => {});
     await dwrite('PATCH', `/items/agendamentos/${id}`, { status: 'cancelado' });
     res.json({ ok: true });
+  } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
+
+// --- Página pública de marcação (Book Call) — token-gated (só quem recebeu outreach) -----------
+// ⚠️ /book/* e /api/book/* TÊM de ser excluídos do Authentik no NPMplus (como /r/* e /t/*).
+const _tzParts = (tz, date) => new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12: false, weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  .formatToParts(date).reduce((a, x) => (a[x.type] = x.value, a), {});
+const _tzOffMin = (tz, date) => { const p = _tzParts(tz, date); return (Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute, +p.second) - date.getTime()) / 60000; };
+const _localIso = (tz, y, mo, d, h, mi) => { const g = Date.UTC(y, mo - 1, d, h, mi); return new Date(g - _tzOffMin(tz, new Date(g)) * 60000).toISOString(); }; // ISO UTC p/ a hora-parede local (trata DST)
+async function bookingSlots({ userEmail, tz, days = 7 }) {
+  const now = Date.now();
+  let busy = [];
+  try { const gcal = await importGcal(); if (gcal.isCalendarConfigured()) busy = await gcal.getBusyIntervals({ userEmail, timeMin: new Date(now).toISOString(), timeMax: new Date(now + (days + 3) * 864e5).toISOString(), timezone: tz }); } catch { /* freebusy off → oferece todos */ }
+  const bR = busy.map((b) => [Date.parse(b.start), Date.parse(b.end)]);
+  const clash = (s, e) => bR.some(([bs, be]) => s < be && e > bs);
+  const out = [];
+  for (let dd = 0; dd <= days + 2 && out.length < 21; dd++) {
+    const p = _tzParts(tz, new Date(now + dd * 864e5));
+    if (p.weekday === 'Sat' || p.weekday === 'Sun') continue;             // dias úteis
+    for (let h = 10; h < 17 && out.length < 21; h++) {                    // 10h–17h
+      if (h === 13) continue;                                            // almoço
+      for (const mi of [0, 30]) {
+        const iso = _localIso(tz, +p.year, +p.month, +p.day, h, mi); const s = Date.parse(iso);
+        if (s < now + 36e5) continue;                                    // >= 1h de antecedência
+        if (!clash(s, s + 18e5)) out.push(iso);
+      }
+    }
+  }
+  return out;
+}
+const _bLookup = async (t) => (await d(`/items/emails?filter[token][_eq]=${encodeURIComponent(t)}&fields=id,token,to_email,to_name,company.id,company.name,site.domain,campaign.from_name&limit=1`).catch(() => []))[0] || null;
+const _bEsc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const _bFmt = (iso, tz) => new Intl.DateTimeFormat('pt-PT', { timeZone: tz, weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+function bookHtml(o) {
+  const shell = (inner) => `<!doctype html><html lang=pt><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><title>Marcar chamada — Netmaster</title><style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7f9;color:#202124;margin:0;padding:24px;line-height:1.5}.card{max-width:560px;margin:24px auto;background:#fff;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:28px}h1{font-size:20px;margin:0 0 6px}p.sub{color:#5f6368;margin:0 0 20px;font-size:14px}.slots{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.slot{padding:10px;border:1px solid #dadce0;border-radius:8px;background:#fff;cursor:pointer;font-size:13px;text-transform:capitalize}.slot:hover{border-color:#2563eb;background:#eff4ff}.slot[disabled]{opacity:.4;cursor:default}.box{border-radius:8px;padding:16px;margin-top:16px}.ok{background:#e6f4ea;border:1px solid #34a853}.err{background:#fce8e6;border:1px solid #d93025}.empty{color:#5f6368;font-size:14px}a{color:#1a73e8}</style><body><div class=card>${inner}</div></body></html>`;
+  if (o.notFound) return shell('<h1>Link inválido</h1><p class=sub>Este link de marcação não é válido ou expirou.</p>');
+  if (o.error) return shell('<h1>Erro</h1><p class=sub>Não foi possível carregar a marcação. Tenta mais tarde.</p>');
+  const btns = (o.slots || []).map((iso) => `<button class=slot data-start="${_bEsc(iso)}">${_bEsc(_bFmt(iso, o.tz))}</button>`).join('');
+  const hi = o.name ? `Olá ${_bEsc(String(o.name).split(' ')[0])}, ` : '';
+  const tokJs = JSON.stringify(o.token || '').replace(/</g, '\\u003c');
+  return shell(`<h1>${hi}vamos falar 30 minutos?</h1><p class=sub>Escolhe um horário (${_bEsc(o.tz)}). Recebes um convite com link Google Meet.</p><div class=slots id=slots>${btns || '<span class=empty>Sem horários nos próximos dias — responde ao email e combinamos.</span>'}</div><div id=result></div><script>const TOK=${tokJs},R=document.getElementById('result'),S=document.getElementById('slots');S.addEventListener('click',async e=>{const b=e.target.closest('.slot');if(!b||b.disabled)return;[...S.querySelectorAll('.slot')].forEach(x=>x.disabled=true);b.textContent='A marcar…';try{const r=await fetch('/api/book/'+encodeURIComponent(TOK),{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({start:b.dataset.start})}),j=await r.json();if(j.ok){S.style.display='none';R.innerHTML='<div class="box ok"><b>Chamada marcada!</b><br>Recebes um convite por email'+(j.meetLink?' com o link <a href=\\''+j.meetLink+'\\'>Google Meet</a>':'')+'.</div>';}else{R.innerHTML='<div class="box err"><b>Não deu.</b> '+(j.error||'')+'</div>';[...S.querySelectorAll('.slot')].forEach(x=>x.disabled=false);}}catch(_){R.innerHTML='<div class="box err">Erro de rede — tenta outra vez.</div>';[...S.querySelectorAll('.slot')].forEach(x=>x.disabled=false);}});</script>`);
+}
+app.get('/book/:token', async (req, res) => {
+  try {
+    const em = await _bLookup(req.params.token);
+    if (!em) return res.status(404).type('html').send(bookHtml({ notFound: true }));
+    const slots = await bookingSlots({ userEmail: CAL_USER, tz: CAL_TZ });
+    res.type('html').send(bookHtml({ token: req.params.token, name: em.to_name, slots, tz: CAL_TZ }));
+  } catch { res.status(500).type('html').send(bookHtml({ error: true })); }
+});
+app.post('/api/book/:token', async (req, res) => {
+  try {
+    const em = await _bLookup(req.params.token);
+    if (!em || !em.to_email) return res.status(404).json({ ok: false, error: 'link inválido' });
+    const start = String(req.body?.start || '');
+    const slots = await bookingSlots({ userEmail: CAL_USER, tz: CAL_TZ }); // valida contra os slots livres ATUAIS (anti-abuso)
+    if (!slots.includes(start)) return res.status(400).json({ ok: false, error: 'esse horário já não está disponível — recarrega a página' });
+    const r = await createAgendamento({ start, contact_email: em.to_email, contact_name: em.to_name || undefined, company_id: em.company?.id, company_name: em.company?.name, title: `Chamada — ${em.company?.name || em.site?.domain || em.to_email}`, notes: `Marcada pelo próprio via /book${em.site?.domain ? ` (${em.site.domain})` : ''}.` });
+    void captureServerEvent(req, 'call_booked', posthogDistinctId(req, `book:${req.params.token}`), { domain: em.site?.domain || null });
+    res.json({ ok: true, meetLink: r.meetLink, start });
   } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
 

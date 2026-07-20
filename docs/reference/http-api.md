@@ -14,7 +14,8 @@ visibility: internal
 # Referência da API HTTP (dashboard)
 
 **88 endpoints** expostos por `dashboard/server.mjs`. Servido em `netprospect.netmaster.pt`
-**atrás do Authentik** (NPMplus); as rotas `/t/*` e `/r/*` (tracking público) são exceções abertas.
+**atrás do Authentik** (NPMplus); as rotas `/t/*`, `/r/*` (tracking/relatório) e **`/book/*` + `/api/book/*`**
+(marcação de chamada pública, token-gated) são exceções abertas — **excluir estes prefixos do Authentik no NPMplus**.
 
 ## Filas (NATS)
 

@@ -90,10 +90,8 @@ services:
     volumes:
       - onb-data:/app/data
     ports:
-      - "${TAILNET_IP:-127.0.0.1}:8502:8502"    # UI (Streamlit) — via NPMplus, atrás de Authentik
-      - "127.0.0.1:8502:8502"
-      - "${TAILNET_IP:-127.0.0.1}:5055:5055"    # REST API — o browser chama-a (API_URL); tailnet-only
-      - "127.0.0.1:5055:5055"
+      - "127.0.0.1:8502:8502"    # UI (Streamlit) — exposta na tailnet por Tailscale Serve (ts.net:8502)
+      - "127.0.0.1:5055:5055"    # REST API — idem (ts.net:5055); API_URL aponta para o URL ts.net (HTTPS)
 
   # --- F8: Obsidian (web) — navegar/editar o vault online ---
   # Monta um CLONE dedicado do repo (não o checkout dos serviços) para não colidir com o auto-deploy.

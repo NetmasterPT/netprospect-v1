@@ -1,0 +1,34 @@
+# docker-mailserver — VM de ENVIO (cold outreach Fase 2). Um por IP/domínio de envio LIMPO
+# (NUNCA IPs de produção nem os de validação — sondar/enviar tainta reputação). Assina DKIM, entrega
+# do IP limpo da VM, e recebe bounces + respostas (lidos por imap-poller.js).
+#
+# Pré-req: docs/outreach-ops/00-port25-and-ips.md feito p/ este IP (porta 25 aberta + PTR + blocklist-clean).
+# Config por VM em .env (copiar de .env.example). Runbook completo + registos DNS: ./README.md.
+services:
+  mailserver:
+    image: ghcr.io/docker-mailserver/docker-mailserver:${DMS_TAG:-latest}
+    container_name: mailserver
+    hostname: ${MAIL_HOSTNAME:?define MAIL_HOSTNAME no .env (ex. mail.secondary-domain-1.tld)}
+    ports:
+      - "25:25"     # SMTP — entrega + recebe bounces/respostas
+      - "587:587"   # submission STARTTLS — o drip (campaign-drip.js) autentica aqui
+      - "465:465"   # submission TLS implícito (contas com secure:true)
+      - "993:993"   # IMAPS — imap-poller.js lê bounces/respostas
+    volumes:
+      - ./mail-data/:/var/mail/
+      - ./mail-state/:/var/mail-state/
+      - ./mail-logs/:/var/log/mail/
+      - ./config/:/tmp/docker-mailserver/
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      - ENABLE_RSPAMD=1          # anti-spam + DKIM signing moderno
+      - ENABLE_OPENDKIM=1        # geração/assinatura DKIM (setup config dkim)
+      - ENABLE_FAIL2BAN=1        # trava brute-force no 587/993
+      - ENABLE_CLAMAV=0          # off por defeito (poupa ~1GB RAM em VM pequena); 1 se >2GB
+      - ENABLE_AMAVIS=0
+      - PERMIT_DOCKER=network    # aceita submission da rede docker (o drip corre no host/rede)
+      - SSL_TYPE=${SSL_TYPE:-letsencrypt}   # cert válido em mail.<domínio> ajuda a entregabilidade
+      - POSTMASTER_ADDRESS=${POSTMASTER_ADDRESS:-postmaster@localhost}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    cap_add: ["NET_ADMIN"]       # fail2ban precisa de manipular iptables
+    restart: unless-stopped

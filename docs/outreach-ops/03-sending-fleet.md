@@ -17,6 +17,10 @@ each running **`docker-mailserver`** (DMS) that: authenticates the drip's SMTP s
 
 Prereq: `00-port25-and-ips.md` done for these IPs (open 25 + PTR + blocklist-clean).
 
+> **Turnkey artifact:** [`deploy/mailserver/`](../../deploy/mailserver/) has a parameterized compose +
+> `.env.example` + `setup.sh` (deploys DMS, creates the mailbox, generates DKIM, and **prints all the DNS
+> records** to add). The steps below are the manual reference; on a VM just run `./setup.sh <mailbox@domain>`.
+
 ## Step 1 — Secondary domains (isolate from Netmaster + from the validation domain)
 
 Buy **2–3 cheap secondary domains** (~€10/yr). Reputation is separate from the org root, so a burnt

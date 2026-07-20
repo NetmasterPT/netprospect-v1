@@ -47,7 +47,7 @@ const JOBS = {
   nuclei: { subject: SUBJECTS.nuclei, role: 'security', resume: 'security_findings' },
   industry: { subject: SUBJECTS.industry, role: 'ai', resume: 'industry' },
   wpscan: { subject: SUBJECTS.wpscan, role: 'security', resume: 'wp_vuln_count' },
-  gmb: { subject: SUBJECTS.gmb, role: 'residential', resume: 'gmb_name' },
+  gmb: { subject: SUBJECTS.gmb, role: 'residential', resume: 'gmb_checked_at' }, // marca de "correu" (gmb_name fica NULL em sites sem match → re-enfileirava-os p/ sempre)
 };
 
 async function main() {

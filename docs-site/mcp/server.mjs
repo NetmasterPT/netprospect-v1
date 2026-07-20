@@ -40,15 +40,15 @@ app.get('/posthog-config', (_req, res) => res.json({
 // Chat de docs. GET /chat/providers lista os disponíveis; POST /chat faz stream SSE (event: cite|token|done).
 app.get('/chat/providers', (_req, res) => res.json(chatProviders()));
 app.post('/chat', async (req, res) => {
-  const { query, profile, provider, distinctId } = req.body || {};
+  const { query, profile, source, model, provider, distinctId } = req.body || {};
   if (!query) return res.status(400).json({ error: 'query em falta' });
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive', 'X-Accel-Buffering': 'no' });
   const send = (event, data) => res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   try {
-    const r = await answer({ query, profile, provider, distinctId,
+    const r = await answer({ query, profile, source, model: model || provider, distinctId,
       onCite: (cites) => send('cite', cites),
       onToken: (t) => send('token', { t }) });
-    send('done', { provider: r.provider, model: r.model, cites: r.cites, error: r.error || null });
+    send('done', { provider: r.provider, model: r.model, source: r.source, cites: r.cites, error: r.error || null });
   } catch (e) { send('error', { error: e.message }); }
   res.end();
 });

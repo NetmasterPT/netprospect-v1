@@ -86,8 +86,9 @@ function Sidebar({ q, groups, navOpen, onCloseNav, onSearch, onGraph }) {
     <aside className={`np-nav${navOpen ? ' open' : ''}`}>
       <div className="np-nav-actions">
         <button className="np-iconbtn" onClick={onSearch} title="Pesquisar"><Icon name="search" size={16} /></button>
+        <Link to="/chat" className="np-iconbtn" onClick={onCloseNav} title="Chat de IA"><Icon name="sparkles" size={16} /></Link>
         <button className="np-iconbtn" onClick={onGraph} title="Grafo do conhecimento"><Icon name="activity" size={16} /></button>
-        <a href="/docs/storybook/" target="_blank" rel="noreferrer" className="np-iconbtn" title="Storybook"><Icon name="sparkles" size={16} /></a>
+        <a href="/docs/storybook/" target="_blank" rel="noreferrer" className="np-iconbtn" title="Storybook"><Icon name="sliders" size={16} /></a>
         <a href="/notebook/" target="_blank" rel="noreferrer" className="np-iconbtn" title="Open Notebook"><Icon name="star" size={16} /></a>
         <a href="/obsidian/" target="_blank" rel="noreferrer" className="np-iconbtn" title="Obsidian"><Icon name="shield" size={16} /></a>
       </div>
@@ -181,14 +182,14 @@ function GraphChat({ bare, onClose, onCites, onHover }) {
   const [msgs, setMsgs] = useState([]);
   const [busy, setBusy] = useState(false);
   const bodyRef = useRef(null);
-  useEffect(() => { kbProviders().then((p) => { setProviders(p); const d = p.find((x) => x.available); if (d) setProvider(d.id); }); }, []);
+  useEffect(() => { kbProviders().then((p) => { const ms = (p.models || []).filter((m) => m.available); setProviders(ms); if (ms[0]) setProvider(ms[0].id); }); }, []);
   useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [msgs]);
   const ask = useCallback(async () => {
     const query = input.trim(); if (!query || busy) return;
     setInput(''); setBusy(true);
     setMsgs((m) => [...m, { role: 'user', text: query }, { role: 'assistant', text: '', cites: [] }]);
     const patchLast = (fn) => setMsgs((m) => { const c = [...m]; c[c.length - 1] = fn(c[c.length - 1]); return c; });
-    await kbChatStream({ query, provider }, {
+    await kbChatStream({ query, model: provider }, {
       onCite: (cites) => { patchLast((a) => ({ ...a, cites })); onCites && onCites(cites.map((c) => c.slug)); },
       onToken: (t) => patchLast((a) => ({ ...a, text: a.text + t })),
       onError: (e) => patchLast((a) => ({ ...a, text: (a.text || '') + `\n⚠️ ${e.message}` })),
@@ -202,7 +203,7 @@ function GraphChat({ bare, onClose, onCites, onHover }) {
         <div className="np-head-actions">
           {providers.length > 0 && (
             <Segmented value={provider} onChange={setProvider}
-              options={providers.map((p) => ({ value: p.id, label: p.available ? p.label.split(' · ')[0] : `${p.label} (off)` }))} />
+              options={providers.map((p) => ({ value: p.id, label: p.label.split(' · ')[0] }))} />
           )}
           {onClose && (
             <button className="np-iconbtn" onClick={onClose} aria-label="Fechar" style={{ borderColor: 'var(--np-border)', color: 'var(--np-text-2)' }}><Icon name="x" size={16} /></button>
@@ -301,6 +302,94 @@ function GraphDrawer({ open, onClose }) {
   );
 }
 
+// Página de CHAT (estilo home do Claude, branding NetProspect). Fontes × modelos; resposta animada.
+function ChatPage() {
+  const content = useContent();
+  const [prov, setProv] = useState({ sources: [], models: [] });
+  const [source, setSource] = useState('rag');
+  const [model, setModel] = useState('');
+  const [input, setInput] = useState('');
+  const [msgs, setMsgs] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const bodyRef = useRef(null);
+  useEffect(() => { kbProviders().then((p) => { setProv(p); const d = (p.models || []).find((m) => m.available); if (d) setModel(d.id); }); }, []);
+  useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [msgs]);
+  const ask = useCallback(async (override) => {
+    const query = String(override ?? input).trim(); if (!query || busy) return;
+    setInput(''); setBusy(true);
+    setMsgs((m) => [...m, { role: 'user', text: query }, { role: 'assistant', text: '', cites: [] }]);
+    const patchLast = (fn) => setMsgs((m) => { const c = [...m]; c[c.length - 1] = fn(c[c.length - 1]); return c; });
+    await kbChatStream({ query, source, model }, {
+      onCite: (cites) => patchLast((a) => ({ ...a, cites })),
+      onToken: (t) => patchLast((a) => ({ ...a, text: a.text + t })),
+      onError: (e) => patchLast((a) => ({ ...a, text: (a.text || '') + `\n⚠️ ${e.message}` })),
+    });
+    setBusy(false);
+  }, [input, busy, source, model]);
+
+  const controls = (
+    <div className="chat-controls">
+      <label className="chat-select" title="Fonte de pesquisa"><Icon name="sliders" size={13} />
+        <select value={source} onChange={(e) => setSource(e.target.value)}>
+          {(prov.sources || []).map((s) => <option key={s.id} value={s.id} disabled={!s.available}>{s.label}</option>)}
+        </select>
+      </label>
+      <label className="chat-select" title="Modelo"><Icon name="sparkles" size={13} />
+        <select value={model} onChange={(e) => setModel(e.target.value)}>
+          {(prov.models || []).map((m) => <option key={m.id} value={m.id} disabled={!m.available}>{m.label}{m.available ? '' : ' · sem key'}</option>)}
+        </select>
+      </label>
+    </div>
+  );
+  const composer = (big) => (
+    <div className={`chat-composer${big ? ' big' : ''}`}>
+      <textarea className="chat-input" rows={big ? 3 : 2} placeholder="Pergunta à documentação…" value={input}
+        onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); ask(); } }} disabled={busy} />
+      <div className="chat-composer-bar">
+        {controls}
+        <Button variant="primary" onClick={() => ask()} disabled={busy || !input.trim()}><Icon name="send" size={15} /></Button>
+      </div>
+    </div>
+  );
+  const SUGGEST = ['O que faz o Reacher?', 'Como funciona a federação da KB?', 'Runbook do hel1-npm', 'Arquitetura da frota distribuída'];
+
+  return (
+    <main className="np-main chatpage">
+      {msgs.length === 0 ? (
+        <div className="chat-hero">
+          <div className="chat-hero-mark"><span className="np-brandmark" style={{ width: 48, height: 48 }}><i style={{ width: 20, height: 20 }} /></span></div>
+          <h1 className="chat-hero-h">Pergunta à documentação do <span style={{ color: 'var(--np-brand)' }}>NetProspect</span></h1>
+          <p className="muted" style={{ fontSize: 14 }}>Pesquisa federada sobre {content.pages.length} docs · cita as fontes. Escolhe a fonte e o modelo.</p>
+          {composer(true)}
+          <div className="chat-suggest">
+            {SUGGEST.map((s) => <button key={s} className="np-chip" onClick={() => ask(s)}>{s}</button>)}
+          </div>
+        </div>
+      ) : (
+        <div className="chat-convo">
+          <div ref={bodyRef} className="chat-convo-body">
+            {msgs.map((m, i) => (
+              <div className="np-chatmsg chat-turn" key={i} data-role={m.role}>
+                <div className="chat-bubble" data-role={m.role}>{m.text || (m.role === 'assistant' && busy ? '▋' : '')}</div>
+                {m.cites && m.cites.length > 0 && (
+                  <div className="chat-cites">
+                    {m.cites.map((c) => (
+                      <Link key={c.slug} to={'/' + c.slug} className="np-chip">
+                        <span className="np-dot" style={{ width: 7, height: 7, borderRadius: 999, background: TYPE_COLOR[c.module?.split('/')[0]] || 'var(--np-brand)' }} />[{c.n}] {c.title}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {composer(false)}
+        </div>
+      )}
+    </main>
+  );
+}
+
 export default function App() {
   const [theme, toggleTheme] = useTheme();
   const [q, setQ] = useState('');
@@ -355,6 +444,7 @@ export default function App() {
         <Sidebar q={q} groups={groups} navOpen={nav} onCloseNav={() => setNav(false)}
           onSearch={() => only('search')} onGraph={() => only('graph')} />
         <Routes>
+          <Route path="/chat" element={<ChatPage />} />
           <Route path="/*" element={<Page />} />
         </Routes>
       </div>

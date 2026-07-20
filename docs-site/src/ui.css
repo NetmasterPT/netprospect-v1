@@ -178,6 +178,32 @@ table.np-table { width: 100%; border-collapse: collapse; }
 .np-table tbody tr:hover { background: var(--np-surface-3); }
 .np-table tbody tr.sel { background: var(--np-surface-sel); }
 
+/* ---- Chat page (clone da home do Claude, branding NP) ---- */
+.chatpage { display: flex; flex-direction: column; min-height: calc(100vh - var(--np-topbar-h) - 52px); max-width: 860px; }
+.chat-hero { margin: auto; width: 100%; text-align: center; padding: 32px 0; animation: npfadeup var(--np-dur-slow) var(--np-ease); }
+.chat-hero-mark { display: grid; place-items: center; margin-bottom: 18px; }
+.chat-hero-mark .np-brandmark { box-shadow: var(--np-shadow-brand); }
+.chat-hero-h { font-size: 28px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 6px; }
+.chat-composer { background: var(--np-surface); border: 1px solid var(--np-border-2); border-radius: var(--np-radius-xl); box-shadow: var(--np-shadow-raise); padding: 12px 14px; text-align: left; }
+.chat-composer.big { margin: 22px auto 0; max-width: 680px; }
+.chat-input { width: 100%; border: none; background: none; color: var(--np-text); font: inherit; font-size: 15px; resize: none; outline: none; line-height: 1.55; }
+.chat-input::placeholder { color: var(--np-text-faint); }
+.chat-composer-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 8px; flex-wrap: wrap; }
+.chat-controls { display: flex; gap: 8px; flex-wrap: wrap; }
+.chat-select { display: inline-flex; align-items: center; gap: 6px; background: var(--np-surface-2); border: 1px solid var(--np-border); border-radius: var(--np-radius-sm); padding: 0 8px; height: 30px; color: var(--np-text-3); }
+.chat-select select { border: none; background: none; color: var(--np-text); font: inherit; font-size: 12px; font-weight: 600; outline: none; cursor: pointer; max-width: 170px; }
+.chat-suggest { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 20px; }
+.chat-suggest .np-chip { cursor: pointer; height: 30px; }
+.chat-suggest .np-chip:hover { border-color: var(--np-brand-soft-bd); color: var(--np-brand-ink); }
+.chat-convo { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.chat-convo-body { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; padding: 8px 2px 16px; }
+.chat-turn { display: flex; flex-direction: column; }
+.chat-turn[data-role="user"] { align-items: flex-end; }
+.chat-bubble { border: 1px solid var(--np-border); border-radius: var(--np-radius-lg); padding: 11px 15px; font-size: 14.5px; line-height: 1.6; white-space: pre-wrap; max-width: 90%; }
+.chat-bubble[data-role="user"] { background: var(--np-brand-soft); color: var(--np-brand-ink); border-color: var(--np-brand-soft-bd); }
+.chat-bubble[data-role="assistant"] { background: var(--np-surface-2); color: var(--np-text); max-width: 100%; }
+.chat-cites { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
 /* ---- Palette (Storybook) ---- */
 .np-swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px,1fr)); gap: 10px; }
 .np-swatch { border: 1px solid var(--np-border); border-radius: var(--np-radius); overflow: hidden; font-size: 11px; }

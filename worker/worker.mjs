@@ -558,6 +558,23 @@ log(`conc auto (cores=${_CORES} RAM_free=${_RAM_FREE}MB rep=${_REP}): whois=${CO
 // a correr o build mais recente (o laptop já teve builds stale). Bump a cada mudança relevante.
 const CODE_VERSION = 'gmb-strict-v7';
 
+// Retry de ARRANQUE: o createEnrichContext faz um read ao Directus (platforms). Se o Directus estiver
+// "Under pressure" (503) OU houver um blip de rede, lançava e o main() morria (exit 1) → CRASH-LOOP
+// (cada ciclo re-liga o NATS + re-tenta — ruidoso; foi o incidente do arranque). Retry in-process com
+// backoff mantém o worker vivo até o control-plane recuperar, sem churn de restarts. (loadKnownDomains
+// já é resiliente por si; o ensureBucket/MinIO já é fail-soft.)
+async function withStartupRetry(fn, label, attempts = 12) {
+  for (let i = 1; ; i++) {
+    try { return await fn(); }
+    catch (e) {
+      if (i >= attempts) throw e;
+      const wait = Math.min(i * 3000, 30000);
+      log(`arranque: '${label}' falhou (${e?.message || e}) — retry ${i}/${attempts} em ${Math.round(wait / 1000)}s`);
+      await sleep(wait);
+    }
+  }
+}
+
 async function main() {
   log(`a arrancar v=${CODE_VERSION} (roles=${WORKER_ROLES || 'todos'}, audit=${AUDIT_ENABLED ? 'on' : 'off'})`);
   await initEgress(); // egresso externo via EGRESS_PROXY (exit node), se definido
@@ -581,7 +598,7 @@ async function main() {
   // loadKnownDomains: false → o set é carregado ABAIXO pelo loader endurecido (lib/known-domains.js,
   // volume-mounted → chega à frota sem rebuild; createEnrichContext está baked em enrich-sites.js).
   const ctx = needsDomains
-    ? await createEnrichContext({ wappalyzer: true, loadKnownDomains: false })
+    ? await withStartupRetry(() => createEnrichContext({ wappalyzer: true, loadKnownDomains: false }), 'createEnrichContext (read Directus)')
     : { client: makeClient(), geoip: { mode: 'off', lookup: async () => ({}) }, platformIdBySlug: {}, knownDomains: new Set() };
   // Carga endurecida: PG direto (não pressiona o Directus de 4c) + retry/guard (nunca 0 em silêncio)
   // + jitter (dessincroniza reloads simultâneos da frota). Corrige o incidente do reload-storm.

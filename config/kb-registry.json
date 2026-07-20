@@ -1,0 +1,185 @@
+{
+  "_meta": {
+    "purpose": "Registry hierárquico e orientado a dados das knowledgebases da plataforma. Espelha o (futuro) monorepo: cada componente (dashboard/server/worker/script/agent/data-store/observability/automation/AI/integration) tem a sua pasta e a sua KB, todas federadas na KB central.",
+    "convention": "Uma KB = qualquer pasta com um manifesto kb.json (ou uma subpasta docs/). O scripts/kb-discover.mjs percorre o monorepo, recolhe manifestos e (re)constrói este registry. Módulos declarados aqui mas ainda sem pasta ficam com status 'declared' até a pasta existir; passam a 'active' quando têm conteúdo.",
+    "moduleId": "<category>/<module>[/<sub>] (ex.: servers/directus, workers/verify, agents/proxmox-host/pull)",
+    "collection": "Cada módulo indexa para a coleção Qdrant kb_<category>_<module> (barras→underscores); a KB central federa todas as coleções dos módulos ativos do perfil.",
+    "federation": "hibrida — base RAG-MCP (Qdrant por módulo) + adapters ao vivo onde aplicável (Graphify/Obsidian/Context-Mode/OKF).",
+    "flags": "Ativação por env DOCS_PROFILE (perfil nomeado) + override por-módulo via PostHog feature flag kb_module_<category>_<module>.",
+    "status_values": ["active", "declared", "planned"],
+    "visibility_axis": "Ortogonal ao módulo: cada doc tem visibility (internal|public). Deploys de cliente só mostram docs public dos módulos do seu perfil."
+  },
+
+  "_plans": "Perfis/planos nomeados + entitlements/limites de utilização vivem em config/plans.json (referenciam os módulos deste registry por id).",
+
+  "categories": [
+    {
+      "id": "platform", "label": "Plataforma / Central", "path": "docs",
+      "modules": [
+        { "id": "core", "label": "Central", "status": "active", "path": "docs",
+          "note": "A KB atual (vault docs/) — overview, arquitetura, CONTRIBUTING, reference/*, meta. Sempre on (base)." }
+      ]
+    },
+    {
+      "id": "dashboard", "label": "Dashboards", "path": "dashboard",
+      "note": "Cada dashboard = pasta de projeto própria dentro de dashboard/, com a sua KB.",
+      "modules": [
+        { "id": "docs", "label": "Docs (esta mini-app)", "status": "active", "clientFacing": true,
+          "note": "A plataforma de docs/design-system deste projeto React. Confirmado: criar KB própria." },
+        { "id": "fleet", "label": "Fleet", "status": "declared" },
+        { "id": "observability", "label": "Observability", "status": "declared" },
+        { "id": "data", "label": "Data", "status": "declared", "clientFacing": true },
+        { "id": "crm", "label": "CRM", "status": "declared", "clientFacing": true },
+        { "id": "work", "label": "Work", "status": "declared", "clientFacing": true },
+        { "id": "accounting", "label": "Accounting", "status": "declared", "clientFacing": true },
+        { "id": "ai", "label": "AI", "status": "declared" },
+        { "id": "prospection", "label": "Prospection", "status": "declared", "clientFacing": true },
+        { "id": "store-gate", "label": "Store Gate", "status": "declared", "clientFacing": true },
+        { "id": "booking-gate", "label": "Booking Gate", "status": "declared", "clientFacing": true },
+        { "id": "report-gate", "label": "Report Gate", "status": "declared", "clientFacing": true },
+        { "id": "email-gateways", "label": "Email Gateways", "status": "declared" },
+        { "id": "sms-gateways", "label": "SMS Gateways", "status": "declared" },
+        { "id": "whatsapp-gateways", "label": "WhatsApp Gateways", "status": "declared" },
+        { "id": "configurations", "label": "Configurations", "status": "declared" },
+        { "id": "platform-emails", "label": "Platform Emails", "status": "declared" }
+      ]
+    },
+    {
+      "id": "servers", "label": "Servers", "path": "servers",
+      "note": "Cada server da fleet = pasta própria dentro de servers/, com a sua KB.",
+      "modules": [
+        { "id": "feathers-api", "label": "Feathers API", "status": "declared",
+          "note": "NPMplus load-balanced com réplicas, distribuído em vários servers. REST + Feathers Sockets. Os workers reportam aqui e tiram carga do Directus." },
+        { "id": "directus", "label": "Directus", "status": "declared", "note": "NPMplus load-balanced com réplicas, distribuído em vários servers." },
+        { "id": "npmplus", "label": "NPMplus", "status": "declared" },
+        { "id": "authentik", "label": "Authentik", "status": "declared" },
+        { "id": "documenso", "label": "Documenso", "status": "declared" },
+        { "id": "chatwoot", "label": "Chatwoot", "status": "declared" },
+        { "id": "evolution-api", "label": "Evolution API", "status": "declared" },
+        { "id": "mcp", "label": "MCP (nosso)", "status": "declared", "note": "O nosso MCP — servers/mcp/." },
+        { "id": "cli", "label": "CLI", "status": "declared", "note": "Oclif CLI + plugins." }
+      ]
+    },
+    {
+      "id": "workers", "label": "Workers", "path": "workers",
+      "note": "Cada worker = pasta própria dentro de workers/, com a sua KB.",
+      "modules": [
+        { "id": "base", "label": "base", "status": "declared" },
+        { "id": "browser", "label": "browser", "status": "declared" },
+        { "id": "security", "label": "security", "status": "declared" },
+        { "id": "verify", "label": "verify", "status": "declared" },
+        { "id": "claude-runner", "label": "claude-runner", "status": "declared" },
+        { "id": "gemini-runner", "label": "gemini-runner", "status": "declared" },
+        { "id": "codex-runner", "label": "codex-runner", "status": "declared" },
+        { "id": "cursor-runner", "label": "cursor-runner", "status": "declared" },
+        { "id": "grok-runner", "label": "grok-runner", "status": "declared" },
+        { "id": "deepseek-runner", "label": "deepseek-runner", "status": "declared" },
+        { "id": "ollama-runner", "label": "ollama-runner", "status": "declared" },
+        { "id": "opencode-runner", "label": "opencode-runner", "status": "declared" },
+        { "id": "docker-model-runner", "label": "docker-model-runner", "status": "declared" }
+      ]
+    },
+    {
+      "id": "scripts", "label": "Scripts", "path": "scripts",
+      "note": "Cada script = pasta própria dentro de scripts/, separado por plataforma.",
+      "modules": [
+        { "id": "windows", "label": "windows", "status": "declared" },
+        { "id": "linux", "label": "linux", "status": "declared" },
+        { "id": "crons", "label": "crons", "status": "declared" }
+      ]
+    },
+    {
+      "id": "agents", "label": "Agents", "path": "agents",
+      "note": "Cada agent = pasta própria dentro de agents/, organizado por hostname e/ou plataforma. Sub-módulos (pull/stats/…) por agente.",
+      "modules": [
+        { "id": "proxmox-host", "label": "proxmox-host", "status": "declared", "subs": ["pull", "stats"] },
+        { "id": "vm", "label": "vm", "status": "declared", "subs": ["pull", "stats"] },
+        { "id": "ct", "label": "ct", "status": "declared", "subs": ["pull", "stats"] },
+        { "id": "windows", "label": "windows", "status": "declared", "subs": ["pull", "stats"] },
+        { "id": "docker", "label": "docker", "status": "declared", "subs": ["pull", "stats"] },
+        { "id": "prometheus-exporters", "label": "prometheus-exporters", "status": "declared", "subs": ["laptop", "hel1"] },
+        { "id": "loki-exporters", "label": "loki-exporters", "status": "declared", "subs": ["laptop", "hel1"] },
+        { "id": "otel-exporters", "label": "otel-exporters", "status": "declared", "subs": ["laptop", "hel1"] }
+      ]
+    },
+    {
+      "id": "data-stores", "label": "Data Stores", "path": "data-stores",
+      "modules": [
+        { "id": "postgresql", "label": "PostgreSQL", "status": "declared" },
+        { "id": "redis", "label": "Redis", "status": "declared" },
+        { "id": "nats", "label": "NATS", "status": "declared" },
+        { "id": "clickhouse", "label": "ClickHouse", "status": "declared" },
+        { "id": "minio", "label": "MinIO", "status": "declared" },
+        { "id": "posthog", "label": "PostHog", "status": "declared" }
+      ]
+    },
+    {
+      "id": "observability", "label": "Observability", "path": "observability",
+      "modules": [
+        { "id": "prometheus", "label": "Prometheus", "status": "declared" },
+        { "id": "grafana", "label": "Grafana", "status": "declared" },
+        { "id": "loki", "label": "Loki", "status": "declared" },
+        { "id": "jaeger", "label": "Jaeger", "status": "declared" },
+        { "id": "alertmanager", "label": "Alertmanager", "status": "declared" },
+        { "id": "ntfy", "label": "ntfy", "status": "declared" },
+        { "id": "posthog", "label": "PostHog", "status": "declared" },
+        { "id": "clickhouse", "label": "ClickHouse", "status": "declared" },
+        { "id": "wazuh", "label": "Wazuh", "status": "planned", "note": "falta config" }
+      ]
+    },
+    {
+      "id": "automation", "label": "Automation", "path": "automation",
+      "modules": [
+        { "id": "n8n", "label": "n8n", "status": "planned", "note": "falta adicionar à stack" },
+        { "id": "paperclip", "label": "paperclip", "status": "planned", "note": "falta adicionar à stack" },
+        { "id": "hermes", "label": "hermes", "status": "planned", "note": "falta adicionar à stack" },
+        { "id": "openclaw", "label": "openclaw", "status": "planned", "note": "falta adicionar à stack" }
+      ]
+    },
+    {
+      "id": "ai", "label": "AI", "path": "AI",
+      "note": "AI features e chats — cada um a sua pasta dentro de AI/, com a sua KB.",
+      "modules": [
+        { "id": "ollama", "label": "ollama", "status": "declared" },
+        { "id": "speech", "label": "speech", "status": "planned", "note": "falta config, há CT" },
+        { "id": "plan-proxy", "label": "plano proxy", "status": "planned", "note": "falta adicionar à stack" },
+        { "id": "3rdparty", "label": "3rd party", "status": "declared" },
+        { "id": "memory", "label": "memory", "status": "declared" },
+        { "id": "knowledgebases", "label": "knowledgebases", "status": "declared" },
+        { "id": "history", "label": "history", "status": "declared" },
+        { "id": "plans", "label": "plans", "status": "declared" },
+        { "id": "agents", "label": "agents", "status": "declared" },
+        { "id": "prompts", "label": "prompts", "status": "declared" },
+        { "id": "rules", "label": "rules", "status": "declared" },
+        { "id": "research", "label": "research", "status": "declared" },
+        { "id": "transcripts", "label": "transcripts", "status": "declared" },
+        { "id": "translations", "label": "translations", "status": "declared" },
+        { "id": "mcp", "label": "mcp", "status": "declared", "note": "o nosso MCP — servers/mcp/." },
+        { "id": "external-mcps", "label": "external MCPs", "status": "declared", "note": "MCPs de 3rd party — Claude, Gemini, etc." },
+        { "id": "connectors", "label": "connectors", "status": "declared", "note": "Connectors de 3rd party — Claude, Gemini, etc." },
+        { "id": "plugins", "label": "plugins", "status": "declared", "note": "Plugins de 3rd party — Claude, Gemini, etc." }
+      ]
+    },
+    {
+      "id": "integrations", "label": "Integrations", "path": "integrations",
+      "note": "Cada integração = pasta própria dentro de integrations/, com a sua KB.",
+      "modules": [
+        { "id": "mailchimp", "label": "Mailchimp", "status": "declared" },
+        { "id": "gmail", "label": "Gmail", "status": "declared" },
+        { "id": "workspace", "label": "Google Workspace", "status": "declared" },
+        { "id": "notion", "label": "Notion", "status": "declared" },
+        { "id": "docs", "label": "Google Docs", "status": "declared" },
+        { "id": "sheets", "label": "Google Sheets", "status": "declared" },
+        { "id": "slides", "label": "Google Slides", "status": "declared" },
+        { "id": "openprovider", "label": "OpenProvider", "status": "declared" },
+        { "id": "moloni", "label": "Moloni", "status": "declared" },
+        { "id": "stripe", "label": "Stripe", "status": "declared" },
+        { "id": "paypal", "label": "PayPal", "status": "declared" },
+        { "id": "eupago", "label": "EuPago", "status": "declared" },
+        { "id": "wise", "label": "Wise", "status": "declared" },
+        { "id": "coingate", "label": "CoinGate", "status": "declared" },
+        { "id": "posthog", "label": "PostHog", "status": "declared" }
+      ]
+    }
+  ]
+}

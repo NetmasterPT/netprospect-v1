@@ -1,0 +1,57 @@
+{
+  "_meta": {
+    "purpose": "Planos comerciais (perfis nomeados) + entitlements/limites de utilização por funcionalidade. Os 'modules' referenciam ids do config/kb-registry.json (wildcards: 'servers/*', '@starter' = herda os módulos do plano starter).",
+    "access_model": "Acesso a uma funcionalidade = PostHog feature flag (feature.flag). Se o utilizador TEM acesso, o plano define o limite de utilizações por período. Ordem: (1) flag PostHog decide acesso on/off (pode ser por-utilizador/cohort/plano no PostHog); (2) se on, o limite do plano restringe o nº de utilizações no período.",
+    "limit_shape": "{ amount: number|null, period: 'daily'|'weekly'|'monthly' }. amount:null = ilimitado.",
+    "enforcement": "lib/entitlements.js resolve o plano do utilizador → para cada feature devolve { access, limit, remaining }. A contagem de uso por período liga-se quando as features reais existirem (metering).",
+    "status": "RASCUNHO — módulos por plano e valores dos limites a afinar depois. Duas features de exemplo criadas: ai-credits, contacts-extracted."
+  },
+
+  "periods": ["daily", "weekly", "monthly"],
+
+  "features": [
+    {
+      "id": "ai-credits", "label": "AI Credits", "unit": "credit", "flag": "feature_ai_credits",
+      "note": "Créditos de IA consumidos por chat/geração (chat do grafo, escaladas, etc.). Exemplo de limite meterável."
+    },
+    {
+      "id": "contacts-extracted", "label": "Contacts Extracted", "unit": "contact", "flag": "feature_contacts_extracted",
+      "note": "Contactos extraídos pelo pipeline de prospeção. Exemplo de limite meterável."
+    }
+  ],
+
+  "plans": {
+    "starter": {
+      "label": "Starter",
+      "modules": ["platform/*", "dashboard/prospection", "dashboard/data", "workers/base", "workers/browser", "workers/verify"],
+      "limits": {
+        "ai-credits": { "amount": 100, "period": "monthly" },
+        "contacts-extracted": { "amount": 1000, "period": "monthly" }
+      }
+    },
+    "pro": {
+      "label": "Pro",
+      "modules": ["@starter", "dashboard/crm", "dashboard/accounting", "dashboard/work", "integrations/*"],
+      "limits": {
+        "ai-credits": { "amount": 1000, "period": "monthly" },
+        "contacts-extracted": { "amount": 25000, "period": "monthly" }
+      }
+    },
+    "enterprise": {
+      "label": "Enterprise",
+      "modules": ["@pro", "dashboard/store-gate", "dashboard/booking-gate", "dashboard/report-gate", "dashboard/email-gateways", "dashboard/sms-gateways", "dashboard/whatsapp-gateways", "ai/*"],
+      "limits": {
+        "ai-credits": { "amount": 10000, "period": "monthly" },
+        "contacts-extracted": { "amount": null, "period": "monthly" }
+      }
+    },
+    "interno": {
+      "label": "Interno (Netmaster)",
+      "modules": ["*"],
+      "limits": {
+        "ai-credits": { "amount": null, "period": "monthly" },
+        "contacts-extracted": { "amount": null, "period": "monthly" }
+      }
+    }
+  }
+}

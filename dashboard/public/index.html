@@ -357,7 +357,7 @@ const NAV_GROUPS = [
     ['ext-notebook', 'sparkles', 'Notebook', null, 'https://np-server.taild948a2.ts.net:8502/'],
     ['ext-obsidian', 'star', 'Obsidian', null, 'https://np-server.taild948a2.ts.net:8091/'],
   ]],
-  ['Frota', [['servers', 'globe', 'Servidores'], ['vms', 'server', 'VMs'], ['workers', 'sparkles', 'Workers'], ['queues', 'activity', 'Filas'], ['autoscale', 'sparkles', 'Autoscaler'], ['coverage', 'check', 'Cobertura Jobs'], ['logs', 'clock', 'Logs']]],
+  ['Frota', [['servers', 'globe', 'Servidores'], ['vms', 'server', 'VMs'], ['workers', 'sparkles', 'Workers'], ['queues', 'activity', 'Filas'], ['crons', 'clock', 'Crons'], ['autoscale', 'sparkles', 'Autoscaler'], ['coverage', 'check', 'Cobertura Jobs'], ['logs', 'clock', 'Logs']]],
   ['Observabilidade', [
     ['ext-am', 'activity', 'AlertManager', null, 'http://100.96.102.84:9093'],
     ['ext-prom', 'activity', 'Prometheus', null, 'http://100.125.24.44:9090'],
@@ -2128,6 +2128,60 @@ function covRowHtml(r, badge) {
     <td style="padding:8px 10px;min-width:160px">${covBar(r.pct)}</td>
     <td class="tnum" style="text-align:right;padding:8px 10px;font-weight:800">${r.pct}%</td></tr>`;
 }
+// ---------- Crons (Frota) ----------
+let CRONS = [];
+const cronAgo = (ts) => { if (!ts) return '—'; const t = new Date(ts).getTime(); return Number.isFinite(t) ? timeAgo(t / 1000) : '—'; };
+function cronStatusBadge(c) {
+  const st = c.last && c.last.status;
+  if (st === 'erro') return `<span class="np-badge warn" style="height:18px">erro</span>`;
+  if (st === 'skip') return `<span class="np-badge" style="height:18px">saltou</span>`;
+  if (st === 'ok') return `<span class="np-badge ok" style="height:18px">ok</span>`;
+  if (c.unit) return `<span class="np-badge ${c.unit.up ? 'ok' : 'warn'}" style="height:18px">${c.unit.up ? 'ativo' : 'parado'}</span>`;
+  return `<span class="np-badge" style="height:18px">—</span>`;
+}
+async function viewCrons() {
+  renderNav('crons');
+  const head = `<div class="np-head"><div><div class="np-eyebrow">Frota</div><h1 class="np-h1">Crons</h1><div class="np-sub">Tarefas agendadas em cada servidor da frota (crons Docker do np-server + timers systemd dos hosts) · última execução e resultado · clica para detalhes</div></div></div>`;
+  let d; try { d = await api('/api/crons'); } catch (e) { $('#view').innerHTML = head + `<div class="np-card"><div class="np-card-b"><b>Erro:</b> ${esc(e.message)}</div></div>`; return; }
+  CRONS = (d && d.crons) || [];
+  if (!CRONS.length) { $('#view').innerHTML = head + `<div class="np-empty">Sem crons reportados. <div class="muted" style="font-size:12px;margin-top:6px">Os crons Docker aparecem após a 1ª execução; os timers systemd após o agente de métricas reportar (~5 min).</div></div>`; return; }
+  // agrupa por host (datacenter para rótulo)
+  const byHost = {};
+  for (const c of CRONS) { const h = (c.unit && c.unit.host) || c.host || '—'; (byHost[h] = byHost[h] || []).push(c); }
+  const row = (c) => `<tr style="cursor:pointer" onclick="openCron('${esc(c.name)}')">
+    <td style="padding:8px 10px"><b>${esc(c.name)}</b>${c.kind === 'timer' ? ' <span class="np-badge" style="height:15px;font-size:9px">systemd</span>' : c.kind === 'docker' ? ' <span class="np-badge" style="height:15px;font-size:9px">docker</span>' : ''}<div class="muted" style="font-size:11px;margin-top:2px">${esc(c.desc || '')}</div></td>
+    <td style="padding:8px 10px;white-space:nowrap;font-size:12px">${esc(c.schedule || '—')}</td>
+    <td style="padding:8px 10px;white-space:nowrap;font-size:12px">${c.last ? cronAgo(c.last.ts) : (c.unit ? '<span class="muted">via agente</span>' : '—')}${c.last && c.last.summary ? `<div class="muted" style="font-size:10px;max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(c.last.summary)}</div>` : ''}</td>
+    <td style="padding:8px 10px;text-align:right">${cronStatusBadge(c)}</td></tr>`;
+  const sections = Object.entries(byHost).sort((a, b) => a[0].localeCompare(b[0])).map(([host, list]) => `
+    <section class="np-card" style="margin-bottom:14px;overflow:hidden">
+      <div class="np-card-b" style="padding:0">
+        <div style="display:flex;align-items:center;gap:8px;padding:12px 14px;border-bottom:1px solid var(--np-divider)">
+          ${ic('server', 15)}<b>${esc(host)}</b><span class="np-badge" style="height:16px;font-size:9px">${esc(DC_OF(host))}</span><span class="muted" style="font-size:12px;margin-left:auto">${list.length} cron${list.length !== 1 ? 's' : ''}</span></div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px"><thead><tr class="muted" style="text-align:left;font-size:11px">
+          <th style="padding:6px 10px">Cron</th><th style="padding:6px 10px">Agendamento</th><th style="padding:6px 10px">Última execução</th><th style="padding:6px 10px;text-align:right">Estado</th></tr></thead>
+          <tbody>${list.sort((a, b) => a.name.localeCompare(b.name)).map(row).join('')}</tbody></table>
+      </div></section>`).join('');
+  $('#view').innerHTML = head + sections;
+}
+window.openCron = (name) => {
+  const c = CRONS.find((x) => x.name === name); if (!c) return;
+  const dw = $('#drawer'); $('#scrim').classList.add('open'); dw.classList.add('open');
+  const host = (c.unit && c.unit.host) || c.host || '—';
+  const kv = (k, v) => `<div class="k">${k}</div><div class="v">${v}</div>`;
+  const runRow = (r) => `<tr><td style="padding:5px 8px;white-space:nowrap;font-size:11px">${esc(cronAgo(r.ts))}</td><td style="padding:5px 8px">${r.status === 'erro' ? '<span class="np-badge warn" style="height:15px;font-size:9px">erro</span>' : r.status === 'skip' ? '<span class="np-badge" style="height:15px;font-size:9px">saltou</span>' : '<span class="np-badge ok" style="height:15px;font-size:9px">ok</span>'}</td><td style="padding:5px 8px;font-size:11px" class="muted">${esc(r.summary || '')}${r.durationMs ? ` · ${r.durationMs}ms` : ''}</td></tr>`;
+  const runs = (c.runs || []);
+  const logs = c.unit && c.unit.logb64 ? containerLogsBlock({ logb64: c.unit.logb64 }) : '';
+  dw.innerHTML = `<div class="np-drawer-h" style="display:flex;justify-content:space-between;align-items:start"><div><div style="font-size:16px;font-weight:800">${esc(c.name)}</div><div class="muted" style="font-size:12px">${c.kind === 'timer' ? 'timer systemd' : 'cron Docker'} em <b>${esc(host)}</b> · ${esc(DC_OF(host))}</div></div><button class="np-iconbtn" style="border-color:var(--np-border)" onclick="closeDrawer()">${ic('x', 16)}</button></div>
+    <div style="padding:16px 18px">
+      ${c.desc ? `<div class="muted" style="font-size:12px;margin-bottom:12px">${esc(c.desc)}</div>` : ''}
+      <div class="np-kv">${kv('Agendamento', esc(c.schedule || '—'))}${kv('Estado', cronStatusBadge(c))}${c.endpoint ? kv('Endpoint', `<span class="np-mono" style="font-size:11px">${esc(c.endpoint)}</span>`) : ''}${c.unit ? kv('Unidade', `<span class="np-mono" style="font-size:11px">${esc(c.unit.status || c.unit.state || '—')}</span>`) : ''}</div>
+      ${c.last ? `<div class="np-sec-t">Última execução</div><div class="np-kv">${kv('Quando', esc(cronAgo(c.last.ts)) + ` <span class="muted" style="font-size:11px">(${esc(c.last.ts || '')})</span>`)}${kv('Resultado', esc(c.last.summary || c.last.status || '—'))}${c.last.durationMs ? kv('Duração', esc(c.last.durationMs) + ' ms') : ''}</div>` : '<div class="muted" style="font-size:12px;margin-top:10px">Sem heartbeat registado ainda (o cron grava-o na 1ª execução via dashboard; os timers systemd mostram estado via agente).</div>'}
+      ${runs.length ? `<div class="np-sec-t">Execuções recentes (${runs.length})</div><div style="max-height:240px;overflow:auto"><table style="width:100%;border-collapse:collapse">${runs.map(runRow).join('')}</table></div>` : ''}
+      ${logs ? `<div class="np-sec-t">Logs (tail do agente)</div>${logs}` : ''}
+      <div style="margin-top:14px"><button class="np-btn np-btn--sm" onclick="openContainer('${esc(host)}','${esc(c.name)}')">Ver unidade no host ›</button></div>
+    </div>`;
+};
 async function viewCoverage() {
   renderNav('coverage');
   const head = `<div class="np-head"><div><div class="np-eyebrow">Sistema</div><h1 class="np-h1">Cobertura de jobs</h1><div class="np-sub">Fração de sites onde o job <b>já correu</b> (não “tem resultado” — um job que correu e não achou nada conta como coberto) · filtra por lead score · via np-db</div></div></div>`;
@@ -2861,6 +2915,7 @@ async function route(_retry) {
     else if (h === 'vms') await viewVms();
     else if (h === 'workers') await viewWorkers();
     else if (h === 'queues') await viewQueues();
+    else if (h === 'crons') await viewCrons();
     else if (h === 'autoscale') await viewAutoscale();
     else if (h === 'coverage') await viewCoverage();
     else if (h === 'data-coverage') await viewDataCoverage();

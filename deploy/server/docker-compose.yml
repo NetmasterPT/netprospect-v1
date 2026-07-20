@@ -257,6 +257,28 @@ services:
           sleep 600
         done
 
+  # Cron do top-up da fila GMB — o stream NP_JOBS expira jobs a 48h, por isso NÃO se despeja o backlog todo;
+  # este serviço repõe a fila (pelos melhores leads, lead_score desc) SÓ quando ela está baixa (guarda maxPending
+  # no endpoint), de 3/3h. Drena os ~644k sites sem GMB em ondas, sem perder nada por expiração. $$=escape.
+  gmb-enqueue-cron:
+    image: alpine:3.20
+    restart: unless-stopped
+    depends_on:
+      - dashboard
+    command:
+      - sh
+      - -c
+      - |
+        apk add --no-cache curl >/dev/null 2>&1
+        echo "gmb-enqueue-cron iniciado ($$(date -u))"
+        sleep 120
+        while true; do
+          echo "$$(date -u) -> gmb enqueue top-up (limit=30000, minScore=30, maxPending=15000)"
+          curl -fsS --max-time 300 -X POST "http://dashboard:3000/api/gmb/enqueue?limit=30000&minScore=30&maxPending=15000" || echo "curl falhou"
+          echo
+          sleep 10800
+        done
+
   # ── Documenso (assinatura de contratos, self-host) ──────────────────────
   # DB própria (Documenso corre as suas migrações). Secrets no store (DOCUMENSO_*).
   # UI: http://<np-server>:${DOCUMENSO_PORT:-3500}. API interna p/ o dashboard: http://documenso:3000.

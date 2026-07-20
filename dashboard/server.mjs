@@ -1011,7 +1011,96 @@ app.post('/api/verify/enqueue', async (req, res) => {
         LIMIT $1`, [maxEmails])).rows;
     const seen = new Set(); let jobs = 0;
     for (const r of rows) { const dom = r.domain; if (!dom || seen.has(dom)) continue; seen.add(dom); await natsPublish('jobs.verify', { domain: dom }, `verify:${dom}`); jobs++; }
+    await recordCron('verify-enqueue-cron', { status: 'ok', summary: `enfileirados ${jobs} domínios (maxEmails ${maxEmails})` });
     res.json({ ok: true, scanned: rows.length, domains: jobs, maxEmails });
+  } catch (e) { await recordCron('verify-enqueue-cron', { status: 'erro', summary: e.message }); res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// --- Crons: registo de execuções + observabilidade (Frota › Crons) -----------
+// Os crons do np-server são contentores busybox que fazem `curl` a endpoints daqui; ao servir o endpoint
+// gravamos um heartbeat em Redis (np:cron:<name>) → última execução + resultado. Os timers systemd dos
+// hosts-worker (pull/metrics) vêm da telemetria do agente (kind=timer em np:host:<h>:containers).
+async function recordCron(name, { host = 'np-server', status = 'ok', summary = '', durationMs = null } = {}) {
+  try {
+    const rr = await redisClient(); if (!rr || !_redisUp) return;
+    const ts = new Date().toISOString();
+    const rec = { name, host, status, summary: String(summary).slice(0, 500), durationMs: durationMs == null ? '' : String(durationMs), ts };
+    await rr.hSet(`np:cron:${name}`, rec);
+    await rr.expire(`np:cron:${name}`, 40 * 24 * 3600);
+    await rr.lPush(`np:cron:${name}:runs`, JSON.stringify({ ts, status, summary: rec.summary, durationMs: rec.durationMs }));
+    await rr.lTrim(`np:cron:${name}:runs`, 0, 29);
+    await rr.expire(`np:cron:${name}:runs`, 40 * 24 * 3600);
+  } catch { /* fail-soft: o heartbeat é um bónus, não bloqueia o cron */ }
+}
+
+// Registo ESTÁTICO dos crons conhecidos (schedule/descrição não vêm da telemetria dos contentores Docker).
+const CRON_REGISTRY = [
+  { name: 'verify-enqueue-cron', host: 'np-server', kind: 'docker', schedule: '06:00 UTC · diário', endpoint: '/api/verify/enqueue', desc: 'Enfileira o verify de email pelos melhores leads (após o reset da quota free à meia-noite UTC).' },
+  { name: 'moloni-sync-cron', host: 'np-server', kind: 'docker', schedule: '05:00 UTC · diário', endpoint: '/api/moloni/sync', desc: 'Sincroniza a Contabilidade (Moloni → Directus): empresas/produtos/documentos.' },
+  { name: 'gmb-enqueue-cron', host: 'np-server', kind: 'docker', schedule: 'de 3/3h', endpoint: '/api/gmb/enqueue', desc: 'Top-up da fila GMB pelos melhores leads — só repõe se a fila estiver baixa (evita a expiração de 48h do stream).' },
+];
+
+// Enumera os hosts da frota (agente ativo <15min) + os seus containers/timers (np:host:<h>:containers).
+async function fleetHosts(rr) {
+  const out = {};
+  if (!rr || !_redisUp) return out;
+  const names = await rr.zRangeByScore('np:host:index', Date.now() - 900000, '+inf').catch(() => []);
+  for (const hn of names) {
+    let containers = null; try { const cs = await rr.get(`np:host:${hn}:containers`); containers = cs ? JSON.parse(cs) : null; } catch { containers = null; }
+    out[hn] = { containers };
+  }
+  return out;
+}
+
+// Top-up da fila GMB: enfileira os melhores leads que precisam de GMB, MAS só se a fila estiver baixa (o stream
+// NP_JOBS expira jobs a 48h → despejar 100k desperdiça; mantém-se só o que drena). Idempotente por msgId
+// gmb:<domain> (dedup 24h). Chamado pelo gmb-enqueue-cron; protegido por FLEET_PULL_TOKEN se definido.
+app.post('/api/gmb/enqueue', async (req, res) => {
+  if (FLEET_PULL_TOKEN) { const tok = (req.get('authorization') || '').replace(/^Bearer\s+/i, '') || req.query.token || ''; if (tok !== FLEET_PULL_TOKEN) return res.status(401).json({ error: 'não autorizado' }); }
+  const t0 = Date.now();
+  const limit = Math.max(1, Math.min(60000, parseInt(req.query.limit ?? req.body?.limit, 10) || 30000));
+  const ms = parseInt(req.query.minScore ?? req.body?.minScore, 10); const MIN = Number.isFinite(ms) ? ms : 30;
+  const maxPending = Math.max(0, parseInt(req.query.maxPending ?? req.body?.maxPending, 10) || 15000);
+  try {
+    const p = await pgPool(); if (!p) return res.status(503).json({ ok: false, error: 'PG desligado (falta PG_HOST/creds)' });
+    // guarda de top-up: se a fila já tem trabalho que chegue, NÃO repõe (evita expiração a 48h).
+    let pending = 0; try { const jsm = await natsManager(); pending = (await jsm.consumers.info('NP_JOBS', 'gmb')).num_pending || 0; } catch { /* fila indisponível → segue e tenta enfileirar */ }
+    if (pending >= maxPending) { await recordCron('gmb-enqueue-cron', { status: 'skip', summary: `fila alta (${pending} ≥ ${maxPending}) — sem top-up`, durationMs: Date.now() - t0 }); return res.json({ ok: true, skipped: true, pending }); }
+    const rows = (await p.query(`SELECT id, domain FROM sites WHERE qualified AND is_live AND gmb_checked_at IS NULL AND lead_score >= $1 ORDER BY lead_score DESC, id LIMIT $2`, [MIN, limit])).rows;
+    let n = 0; for (const r of rows) { if (!r.domain) continue; await natsPublish('jobs.gmb', { siteId: r.id, domain: r.domain }, `gmb:${r.domain}`); n++; }
+    await recordCron('gmb-enqueue-cron', { status: 'ok', summary: `enfileirados ${n} (fila estava ${pending}, min-score ${MIN})`, durationMs: Date.now() - t0 });
+    res.json({ ok: true, enqueued: n, pending_before: pending, minScore: MIN });
+  } catch (e) { await recordCron('gmb-enqueue-cron', { status: 'erro', summary: e.message, durationMs: Date.now() - t0 }); res.status(500).json({ ok: false, error: e.message }); }
+});
+
+// Agrega os crons de TODA a frota: registo estático (schedule/desc) + heartbeats (np:cron:*) + unidades
+// kind=timer / *-cron da telemetria do agente. Agrupado por host para a página Frota › Crons.
+app.get('/api/crons', async (req, res) => {
+  try {
+    const rr = await redisClient();
+    const crons = [];
+    for (const c of CRON_REGISTRY) {
+      let last = null, runs = [];
+      if (rr && _redisUp) { try { const h = await rr.hGetAll(`np:cron:${c.name}`); if (h && Object.keys(h).length) last = h; runs = (await rr.lRange(`np:cron:${c.name}:runs`, 0, 29)).map((x) => { try { return JSON.parse(x); } catch { return null; } }).filter(Boolean); } catch { /* */ } }
+      crons.push({ ...c, source: 'registry', last, runs });
+    }
+    const known = new Set(CRON_REGISTRY.map((c) => c.name));
+    try {
+      const hosts = await fleetHosts(rr);
+      for (const [host, H] of Object.entries(hosts)) {
+        for (const u of (H.containers || [])) {
+          const isTimer = u.kind === 'timer';
+          const isDockerCron = (!u.kind || u.kind === 'container') && /(-cron\b|cron-|\bcron\b)/i.test(u.name || '');
+          if (!isTimer && !isDockerCron) continue;
+          const up = /up|active|running|waiting/i.test(u.state || u.status || '');
+          const found = crons.find((x) => x.name === u.name);
+          if (found) { found.unit = { host, state: u.state || '', status: u.status || '', up, logb64: u.logb64 || '' }; continue; }
+          if (known.has(u.name)) continue;
+          crons.push({ name: u.name, host, kind: isTimer ? 'timer' : 'docker', schedule: isTimer ? (u.status || '') : '', desc: isTimer ? (u.image || '') : (u.status || ''), source: 'agent', last: null, runs: [], unit: { host, state: u.state || '', status: u.status || '', up, logb64: u.logb64 || '' } });
+        }
+      }
+    } catch { /* telemetria indisponível → mostra só o registo estático */ }
+    res.json({ ok: true, crons });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 
@@ -2371,8 +2460,9 @@ app.post('/api/moloni/sync', async (req, res) => {
     try { mod = await import('./lib/moloni-sync.js'); }        // container: /app/lib
     catch { mod = await import('../lib/moloni-sync.js'); }     // host: repo/lib
     const result = entity === 'all' ? await mod.syncAll() : await mod.syncEntity(entity);
+    await recordCron('moloni-sync-cron', { status: 'ok', summary: `sync ${entity}: ${(() => { try { return JSON.stringify(result).slice(0, 200); } catch { return 'ok'; } })()}` });
     res.json({ ok: true, result });
-  } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+  } catch (e) { await recordCron('moloni-sync-cron', { status: 'erro', summary: e.message }); res.status(502).json({ ok: false, error: e.message }); }
 });
 
 // ── Moloni — leitura (A4): as páginas Contabilidade lêem o Directus sincronizado. ──

@@ -113,9 +113,12 @@ A loja `/loja` (self-checkout Stripe, modo TEST) está construída. Para funcion
 Como já fazes ao `/book/*`, `/r/*`, `/t/*` — a loja é para prospetos SEM login e o webhook é servidor-a-servidor:
 - `/loja` e `/loja/sucesso` — página pública da loja
 - `/api/store/*` — checkout
-- `/api/stripe/webhook` — webhook do Stripe (tem assinatura própria; **não pode** passar pelo Authentik)
+- **`/buy/*` e `/api/buy/*`** — checkout por-link de outreach (Fase 6b, com analytics UTM)
+- **`/portal/*` e `/api/portal/*`** — Client Portal read-only do cliente (Fase 6a)
+- **`/api/stripe/webhook` · `/api/eupago/webhook` · `/api/paypal/webhook` · `/api/coingate/callback`** — webhooks/
+  callbacks dos providers (têm verificação própria; **não podem** passar pelo Authentik)
 
-No NPMplus, no Proxy Host do dashboard, junta estas locations à lista de paths não-autenticados (onde já estão `/book`, `/r`, `/t`). *(A outra sessão está a construir mais rotas de pagamento — `/buy/:token` etc. — que também precisarão de exclusão quando terminarem.)*
+No NPMplus, no Proxy Host do dashboard, junta estas locations à lista de paths não-autenticados (onde já estão `/book`, `/r`, `/t`). *(Todas construídas — Fase 6 completa.)*
 
 ### b) Stripe Dashboard — criar o webhook do netprospect (o secret do netmaster-app NÃO serve)
 O signing secret é **por-endpoint**. O que está no store (copiado do netmaster-app) é do endpoint DELE → não verifica os eventos do netprospect. Passos (modo TEST):
@@ -130,6 +133,20 @@ Pediste a fatura da loja numa empresa Demo em sandbox, MAS o `companies/getAll` 
 **Netmaster Unipessoal Lda (207752)**. Esclarece: o **company_id da Demo**, OU preencher `SANDBOX_MOLONI_*`
 (o netmaster-app tem esse bloco), OU **criar** a empresa Demo. Até lá, `STORE_MOLONI_INVOICE` fica off.
 
+### d) Multi-método de pagamento (Fase 6b — para além do Stripe) ⚠️ VALIDAR com sandbox
+O código dos métodos está construído (dispatcher `lib/store.js createPayment` + webhooks/callbacks + o modelo
+pending→settle idempotente), mas **cada provider precisa das creds sandbox no store do np-server + validação E2E**
+(não deu para testar sem creds). Só aparecem no seletor da loja os que estiverem configurados:
+- **EuPago (MB WAY + Multibanco):** `EUPAGO_API_KEY` (+ `EUPAGO_MODE=live` p/ produção; `EUPAGO_WEBHOOK_KEY` p/ o
+  callback). Confirmar o formato do callback do EuPago v1 (o handler é permissivo — validar).
+- **PayPal:** `PAYPAL_SANDBOX_CLIENT_ID/SECRET` (+ `PAYPAL_SANDBOX_WEBHOOK_ID`). ⚠️ falta: verificar a assinatura do
+  webhook + o passo de *capture* (fluxo approve→capture) — validar com sandbox.
+- **CoinGate (cripto):** `COINGATE_SANDBOX_API_TOKEN` (+ `COINGATE_SANDBOX_CALLBACK_SECRET`).
+- **Transferência bancária:** `STORE_IBAN=` (mostra o IBAN+referência; o staff confirma o comprovativo em
+  `POST /api/store/payment/:ref/mark-paid`). Sem API → já funciona.
+- **Wise:** fica **desligado** (token sandbox expirado — ver [[netprospect-integrations]]).
+- Configurar o webhook de cada provider a apontar para o respetivo endpoint acima (secção a).
+
 ### ✅ Já tratado (2026-07-20): SMTP + WhoisXML copiados do netmaster-app
 SMTP (`SMTP_HOST/PORT/USER/PASS/SECURE`) → store do **np-server** (o netprospect não tinha email de envio).
 `WHOISXML_API_KEYS` (estava em falta → o whois de .pt falhava) → store de np-server + hel1-docker + np-wk-de1 +
@@ -143,3 +160,5 @@ oracle-e2-1/2. Ambos vêm da config de produção do netmaster-app.
 - Plataforma de docs: [`docs/runbook-npm-hel1.md`](docs/runbook-npm-hel1.md) · `deploy/docs/` · `.claude/plans/current/docs-plan.md`
 - 2.º IP Reacher: `deploy/reacher/add-proxy.sh` · [`deploy/reacher/README.md`](deploy/reacher/README.md) (§Fase 3)
 - Book Call: `dashboard/server.mjs` (`/book/:token`, `/api/book/:token`) · fundação Agendamentos (GCal+Notion)
+- Loja/Pagamentos (Fase 6): `lib/store.js` (createPayment/availableMethods) · `dashboard/server.mjs` (`/loja`,
+  `/buy/:token`, `/portal/:token`, `startPayment`/`settlePayment`/`runFulfillment`, webhooks) · `.claude/todo/plans/client-portal.md`

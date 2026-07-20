@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { embed } from '../kb/embed.mjs';
 import { search } from '../kb/qdrant.mjs';
 import { htmlToText } from '../kb/chunk.mjs';
-import { activeCollections, contentModules } from '../kb/registry.mjs';
+import { moduleFilter, KB_COLLECTION, contentModules, activeModules } from '../kb/registry.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const CONTENT = process.env.KB_CONTENT || path.join(HERE, '../src/content.json');
@@ -16,17 +16,12 @@ try { content = JSON.parse(fs.readFileSync(CONTENT, 'utf8')); }
 catch { console.error(`kb: content.json não encontrado (${CONTENT}) — corre \`npm run content\`. search_docs continua a funcionar via Qdrant.`); }
 const bySlug = Object.fromEntries(content.pages.map((p) => [p.slug, p]));
 
-// Search FEDERADO: embed 1× → fan-out sobre as coleções ativas do perfil → merge global por score → top-N.
-// (Escape hatch se o fan-out for lento: coleção única + payload.module + filter do search().)
+// Search FEDERADO: embed 1× → 1 coleção (KB_COLLECTION) + FILTRO por-módulo do perfil (Qdrant) → top-N.
 export async function searchDocs(query, limit = 8, profile) {
   const vec = await embed(String(query || ''));
   const k = Math.min(+limit || 8, 25);
-  const colls = activeCollections(profile);
-  const settled = await Promise.allSettled(colls.map((c) => search(c, vec, k)));
-  const hits = [];
-  for (const r of settled) if (r.status === 'fulfilled') hits.push(...(r.value || []));
-  hits.sort((a, b) => b.score - a.score);
-  return hits.slice(0, k).map((h) => ({
+  const hits = await search(KB_COLLECTION, vec, k, moduleFilter(profile) || undefined);
+  return hits.map((h) => ({
     slug: h.payload.slug, title: h.payload.title, type: h.payload.type, module: h.payload.module,
     score: +Number(h.score).toFixed(3), text: h.payload.text,
   }));
@@ -46,5 +41,5 @@ export function listRelated(slug) {
 }
 export const meta = () => ({
   docs: content.pages.length, generated: content.generated,
-  modules: contentModules().length, collections: activeCollections().length,
+  modules: contentModules().length, activeModules: activeModules().length, collection: KB_COLLECTION,
 });

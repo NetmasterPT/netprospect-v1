@@ -10,16 +10,26 @@ import { planModules } from '../../lib/entitlements.js';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REG_PATH = process.env.KB_REGISTRY || path.resolve(HERE, '../../config/kb-registry.json');
 const CONTENT = process.env.KB_CONTENT || path.resolve(HERE, '../src/content.json');
-const PREFIX = process.env.KB_COLLECTION_PREFIX || 'kb_';
 const DEFAULT_PROFILE = process.env.DOCS_PROFILE || 'interno';
+
+// Federação = 1 COLEÇÃO ÚNICA + payload.module + filter do Qdrant (escape hatch do plano). Racional: N coleções
+// pequenas (20→100+ módulos) esgotam recursos do Qdrant (RocksDB "IO error"/fd). O filtro por-módulo dá o mesmo
+// efeito de federação sem esse custo.
+export const KB_COLLECTION = process.env.KB_COLLECTION || 'netprospect_kb';
 
 let _reg = null, _content = null;
 export const registry = () => (_reg ||= JSON.parse(fs.readFileSync(REG_PATH, 'utf8')));
 const content = () => (_content ||= JSON.parse(fs.readFileSync(CONTENT, 'utf8')));
 
-/** Coleção Qdrant p/ um module tag (ex.: 'dashboard/prospection' → 'kb_dashboard_prospection'). */
-export const collectionFor = (tag) =>
-  PREFIX + String(tag).replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').toLowerCase();
+/** (legado) nome de coleção por-módulo — mantido só para referência; a federação usa KB_COLLECTION+filtro. */
+export const collectionFor = () => KB_COLLECTION;
+
+/** Filtro Qdrant p/ restringir aos módulos ativos do perfil (null se TODOS ativos → sem filtro, mais rápido). */
+export function moduleFilter(profile = DEFAULT_PROFILE) {
+  const active = activeModules(profile);
+  if (active.length >= contentModules().length) return null;
+  return { must: [{ key: 'module', match: { any: active } }] };
+}
 
 /** Module tags com conteúdo (distintos em content.json). */
 export function contentModules() {

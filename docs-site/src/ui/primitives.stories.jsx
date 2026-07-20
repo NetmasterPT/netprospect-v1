@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Button, Segmented, Badge, Chip, IconButton, Input } from './primitives.jsx';
+import { Icon } from './icons.jsx';
 
 export default { title: 'UI/Primitivos', parameters: { layout: 'padded' } };
 
@@ -43,9 +44,10 @@ export const Chips = () => (
 
 export const IconButtons = () => (
   <div style={{ background: 'var(--np-chrome)', padding: 14, borderRadius: 10, display: 'flex', gap: 8 }}>
-    <IconButton label="Notificações">🔔</IconButton>
-    <IconButton label="Definições">⚙️</IconButton>
-    <IconButton label="Ajuda">?</IconButton>
+    <IconButton label="Atualizar"><Icon name="refresh" /></IconButton>
+    <IconButton label="Notificações"><Icon name="bell" /></IconButton>
+    <IconButton label="Importar"><Icon name="upload" /></IconButton>
+    <IconButton label="Definições"><Icon name="gear" /></IconButton>
   </div>
 );
 

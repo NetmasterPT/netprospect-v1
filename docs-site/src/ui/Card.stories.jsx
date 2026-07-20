@@ -21,9 +21,11 @@ export const CartaoSimples = () => (
 
 export const CartoesDeEstatistica = () => (
   <StatGrid>
-    <StatCard label="Sites .pt" icon="◆" value="78.204" href="#" />
-    <StatCard label="Qualificados" icon="✓" value="38.412" href="#" />
-    <StatCard label="Verificados" icon="✉" value="12.901" sub="e-mails válidos" />
-    <StatCard label="Contactos" icon="☎" value="162.330" />
+    <StatCard label="Sites" icon="directory" value="78.204" href="#" />
+    <StatCard label="Live" icon="power" value="72.140" href="#" />
+    <StatCard label="Qualificados" icon="check" value="38.412" href="#" />
+    <StatCard label="Empresas" icon="server" value="41.905" />
+    <StatCard label="Contactos" icon="contacts" value="162.330" />
+    <StatCard label="E-mails verif." icon="mail" value="12.901" />
   </StatGrid>
 );

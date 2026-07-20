@@ -1,5 +1,6 @@
 /** Chrome estrutural: marca (brandmark), Topbar e contentor de shell (topbar + nav + main). */
 import React from 'react';
+import { Icon } from './icons.jsx';
 
 export function Brandmark({ label = 'NetProspect', pill }) {
   // Espelha o dashboard: "Net" + "Prospect" a vermelho de marca.
@@ -18,9 +19,8 @@ export function Brandmark({ label = 'NetProspect', pill }) {
 export function SearchBox({ placeholder = 'Procurar…', value, onChange }) {
   return (
     <div className="np-tsearch">
-      <span style={{ opacity: .6 }}>⌕</span>
+      <Icon name="search" size={16} />
       <input placeholder={placeholder} value={value} onChange={(e) => onChange && onChange(e.target.value)} />
-      <span className="np-kbd">↩</span>
     </div>
   );
 }
@@ -37,9 +37,10 @@ export function Topbar({ brand, search, actions }) {
 }
 
 export function ThemeToggleButton({ theme = 'dark', onToggle }) {
+  // Igual ao dashboard: botão só-ícone (sol no escuro → passa a claro; lua no claro → passa a escuro).
   return (
-    <button className="np-iconbtn np-themebtn" onClick={onToggle} title="Alternar tema">
-      {theme === 'dark' ? '☀️ Claro' : '🌙 Escuro'}
+    <button className="np-iconbtn" onClick={onToggle} title="Alternar tema" aria-label="Alternar tema">
+      <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={16} />
     </button>
   );
 }

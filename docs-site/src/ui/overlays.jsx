@@ -1,5 +1,6 @@
 /** Sobreposições do chrome: scrim, side drawer, drawer de notificações e menu de perfil da topbar. */
 import React from 'react';
+import { Icon, hasIcon } from './icons.jsx';
 
 export function Scrim({ open, onClick }) {
   return <div className={`np-scrim${open ? ' open' : ''}`} onClick={onClick} />;
@@ -16,7 +17,7 @@ export function Drawer({ open, onClose, title, actions, children }) {
           <div className="np-head-actions">
             {actions}
             <button className="np-iconbtn" onClick={onClose} aria-label="Fechar"
-              style={{ borderColor: 'var(--np-border)', color: 'var(--np-text-2)' }}>✕</button>
+              style={{ borderColor: 'var(--np-border)', color: 'var(--np-text-2)' }}><Icon name="x" size={16} /></button>
           </div>
         </div>
         <div className="np-drawer-b">{children}</div>
@@ -25,7 +26,7 @@ export function Drawer({ open, onClose, title, actions, children }) {
   );
 }
 
-const NOTIF_ICON = { ok: '✓', warn: '!', info: 'i', danger: '✕', neutral: '•' };
+const NOTIF_ICON = { ok: 'check', warn: 'bell', info: 'activity', danger: 'x', neutral: 'dash' };
 
 export function NotificationsDrawer({ open, onClose, items = [] }) {
   return (
@@ -33,10 +34,11 @@ export function NotificationsDrawer({ open, onClose, items = [] }) {
       {items.length === 0 && <p className="muted" style={{ padding: '4px 0' }}>Sem notificações.</p>}
       {items.map((n, i) => {
         const tone = n.tone || 'neutral';
+        const iconName = n.icon || NOTIF_ICON[tone];
         return (
           <div className="np-notif" key={i}>
             <span className="np-kpi-ic" style={{ background: `var(--np-${tone}-soft)`, color: `var(--np-${tone})` }}>
-              {n.icon || NOTIF_ICON[tone]}
+              {hasIcon(iconName) ? <Icon name={iconName} size={15} /> : iconName}
             </span>
             <div style={{ flex: 1 }}>
               <div className="np-notif-t">{n.title}</div>

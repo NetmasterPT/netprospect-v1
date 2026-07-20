@@ -4,6 +4,7 @@ import ForceGraph2D from 'react-force-graph-2d';
 import content from './content.json';
 import { Chip } from './ui/primitives.jsx';
 import { Brandmark, SearchBox, ThemeToggleButton } from './ui/shell.jsx';
+import { Icon } from './ui/icons.jsx';
 
 const TYPE_ORDER = ['explanation', 'how-to', 'tutorial', 'reference', 'incident', 'working'];
 const TYPE_LABEL = {
@@ -73,8 +74,8 @@ function Sidebar({ q, groups }) {
 
   return (
     <aside className="np-nav">
-      <Link to="/graph" className="np-nav-row" style={{ fontWeight: 700 }}>🕸️ <span>Grafo do conhecimento</span></Link>
-      <a href="/docs/storybook/" target="_blank" rel="noreferrer" className="np-nav-row" style={{ fontWeight: 700 }}>🎨 <span>Storybook</span><span className="np-nav-count">↗</span></a>
+      <Link to="/graph" className="np-nav-row" style={{ fontWeight: 700 }}><Icon name="activity" size={16} /><span>Grafo do conhecimento</span></Link>
+      <a href="/docs/storybook/" target="_blank" rel="noreferrer" className="np-nav-row" style={{ fontWeight: 700 }}><Icon name="sparkles" size={16} /><span>Storybook</span><span className="np-nav-count"><Icon name="ext" size={13} /></span></a>
       {results ? (
         <div className="np-nav-group">
           <div className="np-nav-head"><span>{results.length} resultado(s)</span></div>

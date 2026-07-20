@@ -475,6 +475,25 @@ async function main() {
   await ensureField('moloni_avencas', 'active', bool(true));
   await ensureField('moloni_avencas', 'created_at', dateCreated());
 
+  // Pagamentos (Fase 6b) — 1 linha por pagamento, qualquer provider. event_id ÚNICO = idempotência do fulfill
+  // (webhook re-entregue não duplica). company/subscription são ints simples (sem relação Directus). utm = JSON.
+  console.log('Coleção + campos: payments');
+  await ensureCollection('payments', { icon: 'payments', note: 'Pagamentos da loja (Stripe/EuPago/PayPal/CoinGate/transferência)' });
+  await ensureField('payments', 'provider', str());        // stripe/eupago/paypal/coingate/bank
+  await ensureField('payments', 'method', str());          // card/mbway/multibanco/paypal/crypto/transfer
+  await ensureField('payments', 'event_id', strUnique());  // chave de dedup (id do evento/sessão do provider)
+  await ensureField('payments', 'provider_ref', str());    // id da sessão/order/pagamento no provider
+  await ensureField('payments', 'status', str());          // pending/fulfilled/failed
+  await ensureField('payments', 'amount', float());
+  await ensureField('payments', 'currency', str());
+  await ensureField('payments', 'email', str());
+  await ensureField('payments', 'company', int());         // companyId (int, sem relação)
+  await ensureField('payments', 'subscription', int());    // subscriptionId
+  await ensureField('payments', 'token', str());           // /buy/:token (se veio de outreach)
+  await ensureField('payments', 'utm', json());            // {utm_*, campaign_id, angle, segment, target_public, interest, domain}
+  await ensureField('payments', 'fulfilled_at', ts());
+  await ensureField('payments', 'created_at', dateCreated());
+
   console.log('Campos: agendamentos');
   await ensureField('agendamentos', 'title', str());
   await ensureField('agendamentos', 'contact_name', str());

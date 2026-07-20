@@ -2727,40 +2727,81 @@ app.post('/api/store/checkout', async (req, res) => {
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 app.get('/loja/sucesso', (req, res) => res.type('html').send(storeShell('<h1>Obrigado! 🎉</h1><div class="box ok"><b>Pagamento recebido.</b><br>Vais receber um email com os próximos passos. A equipa Netmaster entra em contacto em breve.</div>')));
-// Webhook do Stripe (raw body). Verifica a assinatura e faz a fulfillment do checkout concluído.
+// --- Fulfillment UNIFICADO da loja (Fase 6b) — chamado por TODOS os providers ---------------------
+// order = { provider, event_id, method, amount, currency, email, name, subscriptionId, companyId?, token?, utm?, livemode }
+// IDEMPOTENTE por payments.event_id (o INSERT falha em duplicado → salta; webhook re-entregue não duplica).
+// Faz: cliente + subscrição + Moloni (flagged) + portal (token+email, entrega #2) + notify + PostHog.
+const _pJson = (s) => { try { return typeof s === 'string' ? JSON.parse(s) : (s || null); } catch { return null; } };
+async function fulfill(order, req) {
+  const base = storeBase(req);
+  let payId = null;
+  try {
+    const row = await dwrite('POST', '/items/payments', {
+      provider: order.provider, method: order.method || null, event_id: order.event_id, provider_ref: order.provider_ref || null,
+      status: 'pending', amount: order.amount ?? null, currency: order.currency || 'EUR', email: order.email || null,
+      company: order.companyId || null, subscription: order.subscriptionId || null, token: order.token || null, utm: order.utm || null,
+    });
+    payId = row?.id;
+  } catch (e) {
+    if (/unique|duplicate|RECORD_NOT_UNIQUE/i.test(JSON.stringify(e?.errors || e?.message || ''))) { console.log(`[store] fulfill dup event=${order.event_id} → salta (idempotente)`); return { skipped: true }; }
+    throw e;
+  }
+  const warn = [];
+  // empresa → cliente (companyId do /buy, ou resolve pelo domínio do email; cria se preciso)
+  let companyId = order.companyId || null;
+  if (!companyId && order.email) {
+    const dom = (order.email.split('@')[1] || '').toLowerCase();
+    const found = dom ? await d(`/items/companies?filter[org_domain][_eq]=${encodeURIComponent(dom)}&fields=id&limit=1`).catch(() => []) : [];
+    if (found?.[0]) companyId = found[0].id;
+    else if (dom) { const cc = await dwrite('POST', '/items/companies', { org_domain: dom, name: order.name || dom, is_client: true }).catch(() => null); companyId = cc?.id || null; }
+  }
+  if (companyId) await dwrite('PATCH', `/items/companies/${companyId}`, { is_client: true }).catch(() => {});
+  // liga a subscrição (client_ids)
+  if (order.subscriptionId && companyId) {
+    const sub = await d(`/items/subscriptions/${order.subscriptionId}?fields=id,client_ids`).catch(() => null);
+    const ids = Array.isArray(sub?.client_ids) ? sub.client_ids.map(Number) : [];
+    if (!ids.includes(companyId)) await dwrite('PATCH', `/items/subscriptions/${order.subscriptionId}`, { client_ids: [...ids, companyId] }).catch(() => {});
+  }
+  // FATURA no Moloni — atrás de STORE_MOLONI_INVOICE (bloqueado nas permissões sandbox; seam abaixo).
+  if (process.env.STORE_MOLONI_INVOICE === '1' && companyId) { try { await emitMoloniInvoice(order, companyId); } catch (e) { warn.push('moloni: ' + e.message); } }
+  // portal: token + ativa + email do link (entrega #2 — onboarding automático)
+  if (companyId) {
+    try {
+      const co = await d(`/items/companies/${companyId}?fields=id,name,portal_token,general_email`).catch(() => null);
+      const token = co?.portal_token || (newToken() + crypto.randomBytes(8).toString('hex'));
+      await dwrite('PATCH', `/items/companies/${companyId}`, { portal_token: token, portal_enabled: true }).catch(() => {});
+      const to = order.email || co?.general_email;
+      if (to) { const { sendEmail } = await import('./lib/mailer.js').catch(() => import('../lib/mailer.js')); await sendEmail({ to, subject: 'A tua conta Netmaster', body: `Obrigado pela tua compra! 🎉\n\nAcede à tua conta (faturas, subscrições, avenças):\n${base}/portal/${token}\n\n— Equipa Netmaster` }).catch((e) => warn.push('email: ' + e.message)); }
+    } catch (e) { warn.push('portal: ' + e.message); }
+  }
+  // notifica a equipa
+  const notify = process.env.STORE_NOTIFY_EMAIL || '';
+  if (notify) { try { const { sendEmail } = await import('./lib/mailer.js').catch(() => import('../lib/mailer.js')); await sendEmail({ to: notify, subject: `💶 Venda (${order.provider}): €${order.amount}`, body: `Cliente: ${order.name || '—'} <${order.email || '—'}>\nMétodo: ${order.method || order.provider}\nValor: €${order.amount}\nSub: ${order.subscriptionId || '—'}\nCompany: ${companyId || '—'}\n${order.livemode ? 'LIVE' : 'TESTE'}${warn.length ? '\n⚠ ' + warn.join('; ') : ''}` }); } catch { /* best-effort */ } }
+  void captureServerEvent(req, 'store_purchase', posthogDistinctId(req, order.token ? `buy:${order.token}` : `store:${order.subscriptionId}`), { provider: order.provider, method: order.method, amount: order.amount, subscription_id: order.subscriptionId, sandbox: !order.livemode, ...(order.utm || {}) });
+  if (payId) await dwrite('PATCH', `/items/payments/${payId}`, { status: 'fulfilled', company: companyId || null, fulfilled_at: new Date().toISOString() }).catch(() => {});
+  return { ok: true, companyId, warnings: warn };
+}
+// Emissão da fatura no Moloni (Fase 6b) — SEAM: liga a lib/moloni-write.js quando as permissões do app sandbox
+// estiverem OK (ver netprospect-integrations). Mapear order → {customer(nif/moloni_customer_id), items, type} + emitir.
+async function emitMoloniInvoice(order, companyId) {
+  console.log(`[store] Moloni (seam, a ligar): fatura company=${companyId} sub=${order.subscriptionId} €${order.amount}`);
+}
+
+// Webhook do Stripe (raw body). Verifica a assinatura → constrói o `order` → fulfill() unificado.
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   let event;
   try { const store = await importStore(); event = store.verifyWebhookEvent(req.body, req.get('stripe-signature')); }
   catch (e) { console.error('[store] webhook inválido:', e.message); return res.status(400).send(`webhook error: ${e.message}`); }
   try {
     if (event.type === 'checkout.session.completed') {
-      const s = event.data.object;
-      const email = s.customer_details?.email || s.customer_email || null;
-      const name = s.customer_details?.name || '';
-      const subId = parseInt(s.metadata?.subscription_id || s.client_reference_id, 10);
-      const amount = (s.amount_total || 0) / 100;
-      console.log(`[store] pago: sub=${subId} ${email} €${amount} (${s.mode})`);
-      // 1) empresa: por domínio do email → marca cliente + liga a subscrição; cria se não existir.
-      let companyId = null;
-      if (email) {
-        const dom = (email.split('@')[1] || '').toLowerCase();
-        const found = dom ? await d(`/items/companies?filter[org_domain][_eq]=${encodeURIComponent(dom)}&fields=id,client_ids&limit=1`).catch(() => []) : [];
-        if (found && found[0]) companyId = found[0].id;
-        else if (dom) { const c = await dwrite('POST', '/items/companies', { org_domain: dom, name: name || dom, is_client: true }).catch(() => null); companyId = c?.id || null; }
-        if (companyId) await dwrite('PATCH', `/items/companies/${companyId}`, { is_client: true }).catch(() => {});
-      }
-      // 2) liga a company à subscrição (client_ids) — best-effort.
-      if (subId && companyId) {
-        const sub = await d(`/items/subscriptions/${subId}?fields=id,client_ids`).catch(() => null);
-        const ids = Array.isArray(sub?.client_ids) ? sub.client_ids.map(Number) : [];
-        if (!ids.includes(companyId)) await dwrite('PATCH', `/items/subscriptions/${subId}`, { client_ids: [...ids, companyId] }).catch(() => {});
-      }
-      // 3) notifica a equipa (best-effort).
-      const notify = process.env.STORE_NOTIFY_EMAIL || '';
-      if (notify) { try { const { sendEmail } = await import('./lib/mailer.js').catch(() => import('../lib/mailer.js')); await sendEmail({ to: notify, subject: `💶 Nova venda: ${s.metadata?.subscription_name || subId} — €${amount}`, body: `Cliente: ${name || '—'} <${email || '—'}>\nPacote: ${s.metadata?.subscription_name || subId}\nValor: €${amount}\nModo: ${s.mode}${s.livemode ? ' (LIVE)' : ' (teste)'}\nCompany: ${companyId || '—'}` }); } catch (e) { console.error('[store] notify falhou:', e.message); } }
-      // 4) FATURA no Moloni — atrás de flag (usa a empresa Demo/sandbox). Fica logado até se configurar a Demo.
-      if (process.env.STORE_MOLONI_INVOICE === '1') { console.log(`[store] TODO fatura Moloni p/ sub=${subId} (empresa Demo/sandbox) — a implementar quando a company Demo estiver configurada`); }
-      void captureServerEvent(req, 'store_purchase', posthogDistinctId(req, `store:${subId}`), { subscription_id: subId, amount, sandbox: !s.livemode });
+      const s = event.data.object; const m = s.metadata || {};
+      await fulfill({
+        provider: 'stripe', event_id: `stripe:${event.id}`, provider_ref: s.id, method: 'card',
+        amount: (s.amount_total || 0) / 100, currency: (s.currency || 'eur').toUpperCase(),
+        email: s.customer_details?.email || s.customer_email || null, name: s.customer_details?.name || '',
+        subscriptionId: parseInt(m.subscription_id || s.client_reference_id, 10) || null,
+        companyId: parseInt(m.company_id, 10) || null, token: m.buy_token || null, utm: _pJson(m.utm), livemode: !!s.livemode,
+      }, req);
     }
     res.json({ received: true });
   } catch (e) { console.error('[store] fulfillment erro:', e.message); res.json({ received: true, warning: e.message }); }

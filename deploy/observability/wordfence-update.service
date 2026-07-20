@@ -1,9 +1,10 @@
 [Unit]
 Description=NetProspect — atualiza a Wordfence Intelligence vuln DB (índice compacto em MinIO)
-After=docker.service
-Requires=docker.service
+# SEM After/Requires=docker.service: é uma unit de USER (systemctl --user) e o docker.service é de SISTEMA
+# (não visível do systemd de user → falhava a arrancar). O `docker exec` funciona na mesma (daemon system-wide).
 
 [Service]
 Type=oneshot
-# Corre DENTRO de um worker (tem a env com WORDFENCE_API_KEY + MINIO_* + a lib). No-op se a key faltar.
-ExecStart=/bin/sh -c 'docker exec $(docker ps -q -f name=netprospect-worker- | head -1) node update-wordfence.js'
+# Corre DENTRO de um worker HEAVY (tem update-wordfence.js — o Dockerfile.base NÃO o copia — + env
+# WORDFENCE_API_KEY + MINIO_* + a lib). Exclui os `-base-`. No-op se a key faltar.
+ExecStart=/bin/sh -c 'c=$(docker ps --format "{{.Names}}" -f name=netprospect-worker- | grep -v -- -base- | head -1); test -n "$c" && docker exec "$c" node update-wordfence.js'

@@ -199,11 +199,20 @@ export function makeFineHandlers(ctx, js) {
     let crossBrand = false;
     try {
       const base = (d) => (getDomainWithoutSuffix(d) || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+      const toks = (d) => (getDomainWithoutSuffix(d) || '').toLowerCase().split(/[^a-z0-9]+/).filter(t => t.length >= 3);
       const finalHost = new URL(resp.finalUrl).hostname;
       const b1 = base(domain), b2 = base(finalHost);
+      // Guardas de MESMA-ENTIDADE (evitam despromover sites VIVOS — audit 2026-07-20 achou ~20% de falsos-positivos):
+      //  • PUNYCODE/IDN: "mölndalsparkering.se" ↔ "xn--mlndalsparkering-mwb.se" é o MESMO site (ö codificado).
+      //  • SUBSTRING: "flyttxpress.se" → "hanssonsflyttxpress.se" (juntou o nome do dono) = mesma empresa.
+      //  • TOKEN partilhado: "geru-usc.nl" → "usc-geru.nl" / "are-gruppen.se" → "are-group.se" = mesma entidade.
+      const puny = /xn--/.test(b1) || /xn--/.test(b2) || /xn--/.test(finalHost) || /xn--/.test(domain);
+      const contains = !!b1 && !!b2 && (b1.includes(b2) || b2.includes(b1));
+      const t1 = toks(domain), t2 = toks(finalHost);
+      const shareToken = t1.some((t) => t2.includes(t));
       // EXCEÇÃO builders/CMS-hospedados: um redirect p/ wix/wordpress.com/sites.google… NÃO é domínio morto
       // — o negócio TEM site (num builder) e é um BOM lead (upsell). Só cross-brand p/ NÃO-builder é morto.
-      crossBrand = !!b1 && !!b2 && b1 !== b2 && !BUILDER_HOST.test(finalHost);
+      crossBrand = !!b1 && !!b2 && b1 !== b2 && !puny && !contains && !shareToken && !BUILDER_HOST.test(finalHost);
     } catch { /* ignora */ }
     await client.request(updateItem('sites', siteId, {
       is_live: resp.status < 400 && !crossBrand, http_status: resp.status, final_url: clip(resp.finalUrl), redirects_www,

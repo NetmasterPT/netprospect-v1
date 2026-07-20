@@ -44,7 +44,7 @@ Snippets completos em [`docs/runbook-npm-hel1.md`](docs/runbook-npm-hel1.md).
 |---|---|---|---|
 | **Docs** | `netprospect.netmaster.pt` → Advanced → `location /docs/ { proxy_pass http://100.114.17.74:8088; }` | docs-web :8088 | **sem barra final** no proxy_pass! |
 | **Open Notebook** | subdomínio `notebook.netmaster.pt` | :8502 | Streamlit não faz subpath → subdomínio |
-| **Obsidian web** | subdomínio `obsidian.netmaster.pt` | :8091 | — |
+| **Obsidian web** | subdomínio `obsidian.netmaster.pt` | **https** :8091 | `proxy_pass https://...:8091` + **skip cert** (self-signed; KasmVNC exige HTTPS) |
 | **(opc.) busca** | `location /api/kb/ { proxy_pass http://100.114.17.74:8099; }` | kb-http :8099 | só se o site usar busca semântica |
 
 Todas herdam **Authentik** do proxy host. `/notebook/` e `/obsidian/` (com dados) **nunca abertos**.

@@ -70,22 +70,27 @@ API (5055), Surreal (8000, localhost).
    **`/notebook/` com dados NUNCA aberto** — sempre atrás de Authentik.
 
 ## Obsidian web (F8) — vault online
-`ghcr.io/sytone/obsidian-remote` (Obsidian real num browser, via KasmVNC). Porta host **8091** (8080 já ocupado no np-server).
-1. **Vault = clone dedicado** `/root/np-vault` (`git clone` do repo), **NÃO** o checkout dos serviços
-   `/root/netprospect-v1` — senão editar o vault colidiria com o `git merge --ff-only` do auto-deploy.
+**`lscr.io/linuxserver/obsidian`** (Obsidian num browser via **KasmVNC**). *(O `sytone/obsidian-remote:latest`
+usa xrdp e dá ecrã preto em VM headless — sem GPU/DRI; por isso a canónica.)* Requisitos no compose:
+`shm_size: 1gb` + `security_opt: seccomp:unconfined` (senão o renderer Electron crasha).
+1. **Vault = clone dedicado** `/root/np-vault` (`git clone` do repo), **NÃO** o checkout dos serviços — senão
+   editar colidiria com o `git merge --ff-only` do auto-deploy. Montado em `/config/vaults/np-vault`.
 2. **Subir**: `docker compose --env-file deploy/docs/.env -p npdocs -f deploy/docs/docker-compose.yml up -d obsidian-web`.
-3. **Registar o vault** (senão o Obsidian arranca sem vault nenhum): criar o registo de vaults —
+3. **Registar o vault** (senão o Obsidian arranca sem vault): criar o registo de vaults —
    ```bash
    docker exec npdocs-obsidian-web-1 sh -c 'mkdir -p /config/.config/obsidian && \
-     printf %s "{\"vaults\":{\"npvault0000000001\":{\"path\":\"/vaults\",\"ts\":1700000000000,\"open\":true}}}" \
+     printf %s "{\"vaults\":{\"npvault0000000001\":{\"path\":\"/config/vaults/np-vault\",\"ts\":1700000000000,\"open\":true}}}" \
      > /config/.config/obsidian/obsidian.json' && docker restart npdocs-obsidian-web-1
    ```
-   (persiste no volume `obsidian-config`; o `/vaults` já é um vault válido — tem `.obsidian/app.json` do repo).
-4. **Proxy** (NPMplus): subdomínio `obsidian.netmaster.pt → 100.114.17.74:8091` (Authentik). *(Suporta também
-   `SUBFOLDER` para path, mas subdomínio é mais simples.)* **Nunca aberto** — atrás de Authentik.
+   (persiste no volume `obsidian-config`; o `/config/vaults/np-vault` já é vault válido — tem `.obsidian/app.json` do repo).
+4. **Acesso — exige HTTPS** (o KasmVNC recusa contexto não-seguro). O host `8091` mapeia o porto **3001 (HTTPS
+   self-signed)** do container:
+   - **Direto:** `https://100.114.17.74:8091` — aceitar o aviso de cert self-signed 1× (funciona no telemóvel também).
+   - **Limpo (NPMplus):** `obsidian.netmaster.pt` → `proxy_pass https://100.114.17.74:8091;` **com skip de verificação
+     de cert** (backend self-signed), atrás de Authentik. **Nunca aberto.**
 5. **Sync git** (o container tem git via `DOCKER_MODS`): editas no Obsidian → na terminal do Obsidian,
-   `git -C /vaults commit -am "..." && git push` → origin → o checkout dos serviços faz auto-pull → o site
-   reconstrói (timer). O **push precisa de auth github** no clone (token/deploy-key) — passo do user.
+   `git -C /config/vaults/np-vault commit -am "..." && git push` → origin → o checkout dos serviços faz auto-pull
+   → o site reconstrói (timer). O **push precisa de auth github** no clone (token/deploy-key) — passo do user.
 
 ## Ver localmente (dev)
 ```bash

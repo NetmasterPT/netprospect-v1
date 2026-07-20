@@ -128,24 +128,49 @@ O signing secret é **por-endpoint**. O que está no store (copiado do netmaster
 4. (opcional) `STORE_NOTIFY_EMAIL=` (notificação de venda) + `STORE_PUBLIC_URL=https://<dominio>`.
 5. Para ir a LIVE: repetir em modo LIVE + `STRIPE_MODE=live` (só depois de validar em TEST).
 
-### c) Moloni — empresa Demo/sandbox para a FATURA da loja (EM ABERTO)
-Pediste a fatura da loja numa empresa Demo em sandbox, MAS o `companies/getAll` com as creds LIVE só vê a
-**Netmaster Unipessoal Lda (207752)**. Esclarece: o **company_id da Demo**, OU preencher `SANDBOX_MOLONI_*`
-(o netmaster-app tem esse bloco), OU **criar** a empresa Demo. Até lá, `STORE_MOLONI_INVOICE` fica off.
+### c) Moloni — testar a emissão da FATURA em RASCUNHO (contigo) ⚠️ [ponto 5]
+Hoje `emitMoloniInvoice` (`dashboard/server.mjs`) é um **stub** (só faz `console.log`) e o
+`lib/moloni-write.js createDocument` (pronto, real) **não é chamado** — nem com `STORE_MOLONI_INVOICE=1`.
+Bloqueio: a fatura da loja tem de sair numa **empresa Demo/sandbox**, mas o `companies/getAll` com as creds
+LIVE só vê a **Netmaster Unipessoal Lda (207752)**. Plano — fazer **juntos, em RASCUNHO (sem finalizar):**
+1. **[tu]** Decidir a empresa Demo: (a) `company_id` de uma Demo existente, OU (b) preencher o bloco
+   `SANDBOX_MOLONI_*` no store (o netmaster-app tem-no: `CLIENT_ID/SECRET/USERNAME/PASSWORD/COMPANY_ID/`
+   `DOCUMENT_SET_ID/PT_IVA_TAX_ID`), OU (c) **criar** a empresa Demo no Moloni. Confirmar as **permissões do app**
+   sandbox (o blocker conhecido — ver [[netprospect-integrations]]).
+2. **[tu]** `MOLONI_FINALIZE_DOCUMENTS=false` (ou `MOLONI_MODE=sandbox`) → os documentos ficam **rascunho**.
+3. **[Claude]** Implementar `emitMoloniInvoice` → `moloni-write.createDocument('fatura_recibo', …)` em rascunho:
+   liga por `companies.moloni_customer_id` (cria o customer se não existir); linha = produto ligado
+   (`subscriptions.moloni_service_id`). **NÃO finaliza.**
+4. **[juntos]** Venda de teste (Stripe TEST) com `STORE_MOLONI_INVOICE=1` → confirmar que aparece o **rascunho** da
+   fatura-recibo no Moloni Demo → validas visualmente → **só depois** se liga a finalização + LIVE.
 
-### d) Multi-método de pagamento (Fase 6b — para além do Stripe) ⚠️ VALIDAR com sandbox
-O código dos métodos está construído (dispatcher `lib/store.js createPayment` + webhooks/callbacks + o modelo
-pending→settle idempotente), mas **cada provider precisa das creds sandbox no store do np-server + validação E2E**
-(não deu para testar sem creds). Só aparecem no seletor da loja os que estiverem configurados:
-- **EuPago (MB WAY + Multibanco):** `EUPAGO_API_KEY` (+ `EUPAGO_MODE=live` p/ produção; `EUPAGO_WEBHOOK_KEY` p/ o
-  callback). Confirmar o formato do callback do EuPago v1 (o handler é permissivo — validar).
-- **PayPal:** `PAYPAL_SANDBOX_CLIENT_ID/SECRET` (+ `PAYPAL_SANDBOX_WEBHOOK_ID`). ⚠️ falta: verificar a assinatura do
-  webhook + o passo de *capture* (fluxo approve→capture) — validar com sandbox.
-- **CoinGate (cripto):** `COINGATE_SANDBOX_API_TOKEN` (+ `COINGATE_SANDBOX_CALLBACK_SECRET`).
-- **Transferência bancária:** `STORE_IBAN=` (mostra o IBAN+referência; o staff confirma o comprovativo em
-  `POST /api/store/payment/:ref/mark-paid`). Sem API → já funciona.
-- **Wise:** fica **desligado** (token sandbox expirado — ver [[netprospect-integrations]]).
-- Configurar o webhook de cada provider a apontar para o respetivo endpoint acima (secção a).
+### d) Meios de pagamento — setup + testes em sandbox (contigo) ⚠️ [pontos 1, 2, 3, 4, 7, 10]
+O código está construído (`lib/store.js createPayment` + webhooks + o modelo `pending→settle` idempotente). Cada
+método precisa das **creds sandbox no store** + do **webhook registado** + de um **teste E2E** (venda→confirmação→
+`fulfill` 1×). Alguns têm **fixes de código por fazer** (Claude, antes do teste). Só aparecem no seletor da loja os
+métodos com creds configuradas.
+
+| Método | Creds no store (np-server) | Webhook/callback a registar | Fix de código (Claude) | Teste (juntos, sandbox) |
+|---|---|---|---|---|
+| **Stripe** ✅ | `STRIPE_TEST_SECRET_KEY` (ok) | criar endpoint → `STRIPE_TEST_WEBHOOK_SECRET` (secção b) | — | cartão `4242…` → webhook → `fulfill` 1× |
+| **EuPago** MB/MBWay | `EUPAGO_API_KEY` + `EUPAGO_WEBHOOK_KEY` | callback no painel EuPago sandbox | endurecer validação do callback/segredo (hoje permissivo) [p.3] | ref MB + push MBWay → callback → `fulfill` |
+| **PayPal** | `PAYPAL_SANDBOX_CLIENT_ID/SECRET` + `WEBHOOK_ID` | webhook no PayPal Developer | ⚠️ verificar **assinatura** + passo **capture** (approve→capture) [p.2] | order → approve → **capture** → webhook → `fulfill` |
+| **CoinGate** | `COINGATE_SANDBOX_API_TOKEN` + `CALLBACK_SECRET` | callback no CoinGate sandbox | ⚠️ **validar o callback secret** (hoje aceita qualquer POST c/ `status=paid`) [p.1] | order → pagar → callback → `fulfill` |
+| **Transferência** | **`STORE_IBAN`** (+ opc. BIC/titular) [p.7] | — | — | mostra IBAN+ref → staff "marcar paga" → `fulfill` |
+
+- Quase todas as creds sandbox já estão no store (vieram do netmaster-app). Falta o **`STORE_IBAN`** (o netmaster-app
+  tem `BANK_TRANSFER_IBAN/BIC/HOLDER`) e os **secrets dos webhooks** de cada provider (dás-os ao registar o webhook).
+- **Idempotência [ponto 4]:** antes dos testes, o **Claude** torna o gate do `settlePayment` **atómico** (UPDATE
+  condicional `WHERE status='pending'`), para entregas simultâneas do mesmo webhook não faturarem 2×.
+- **Regra:** tudo em **sandbox/TEST** até validares cada método; o Claude constrói e testa contigo, **nunca cobra a sério**.
+- **Wise:** fica **desligado** (token sandbox expirado — [[netprospect-integrations]]).
+
+### e) ✅ A cargo do Claude (código puro, sem depender de ti) — pontos 6 e 8
+- **`client_mrr` / `client_since` [ponto 6]:** o `runFulfillment` não os atualiza → somar o MRR da subscrição ao
+  `companies.client_mrr` e gravar `client_since` na 1.ª compra.
+- **Schema `stripe_customer_id` / `stripe_price_id` [ponto 8]:** adicionar ao `bootstrap-directus.js` + persistir o
+  customer do Stripe (reutilização de cliente + base para Billing recorrente).
+*(Estes dois — e o fix de idempotência do ponto 4 — o Claude trata sem precisar de ti.)*
 
 ### ✅ Já tratado (2026-07-20): SMTP + WhoisXML copiados do netmaster-app
 SMTP (`SMTP_HOST/PORT/USER/PASS/SECURE`) → store do **np-server** (o netprospect não tinha email de envio).

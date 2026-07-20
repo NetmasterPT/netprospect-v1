@@ -15,7 +15,7 @@ import dns from 'node:dns/promises';
 import tls from 'node:tls';
 import fs from 'node:fs';
 import { domainToASCII } from 'node:url';
-import { getDomain } from 'tldts';
+import { getDomain, getDomainWithoutSuffix } from 'tldts';
 import { readItems, createItem } from '@directus/sdk';
 // updateItem shadow: p/ sites/companies com DIRECT_PG_WRITE on, escreve direto no PG
 // (via PgBouncer), contornando o Directus REST. Off → comando Directus normal. (A2)
@@ -188,8 +188,18 @@ export function makeFineHandlers(ctx, js) {
     if (!job.snapshotOnly && resp.html) for (const link of findContactLinks(resp.html, resp.finalUrl).slice(0, 3)) { const p = await tryFetch(link); if (p?.html) pages.push({ url: p.finalUrl, html: p.html }); }
     const cp = detectCpanel({ ptr, headers: resp.headers, setCookies: resp.setCookies, finalUrl: resp.finalUrl });
     let redirects_www = false; try { redirects_www = new URL(resp.finalUrl).hostname.startsWith('www.'); } catch { /* ignora */ }
+    // Redirect CROSS-BRAND (domínio parked/vendido/movido p/ site não-relacionado): o site redireciona
+    // para um domínio com BASE diferente (não só TLD/www) → o negócio original não existe. Ex.:
+    // cascaismusicfestival.pt → unik-seo.com (agência). NÃO despromove same-brand cross-TLD
+    // (standardsdigital.no → .com) nem www/http→https. → is_live=false (cai do cohort qualified+live).
+    let crossBrand = false;
+    try {
+      const base = (d) => (getDomainWithoutSuffix(d) || '').replace(/[^a-z0-9]/gi, '').toLowerCase();
+      const b1 = base(domain), b2 = base(new URL(resp.finalUrl).hostname);
+      crossBrand = !!b1 && !!b2 && b1 !== b2;
+    } catch { /* ignora */ }
     await client.request(updateItem('sites', siteId, {
-      is_live: resp.status < 400, http_status: resp.status, final_url: clip(resp.finalUrl), redirects_www,
+      is_live: resp.status < 400 && !crossBrand, http_status: resp.status, final_url: clip(resp.finalUrl), redirects_www,
       language: clip(extractLang(resp.html), 30), load_ms: resp.elapsedMs, load_bucket: bucketLoad(resp.elapsedMs),
       is_cpanel: cp.isCpanel, cpanel_signal: clip(cp.signal), cdn: clip(detectCDN(resp.headers), 50),
       blocked_datacenter: false, // fetch bom a partir do datacenter → limpa flag de bloqueio

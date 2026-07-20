@@ -2,7 +2,8 @@ import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import ForceGraph2D from 'react-force-graph-2d';
 import content from './content.json';
-import { Chip } from './components/Chip.jsx';
+import { Chip } from './ui/primitives.jsx';
+import { Brandmark, SearchBox, ThemeToggleButton } from './ui/shell.jsx';
 
 const TYPE_ORDER = ['explanation', 'how-to', 'tutorial', 'reference', 'incident', 'working'];
 const TYPE_LABEL = {
@@ -33,19 +34,9 @@ function useTheme() {
 function Topbar({ theme, toggleTheme, q, setQ }) {
   return (
     <div className="np-topbar">
-      <Link to="/" className="np-brand">
-        <span className="np-brandmark"><i /></span>
-        <span className="np-word">NetProspect</span>
-        <span className="np-pilltag">Docs</span>
-      </Link>
-      <div className="np-tsearch">
-        <span style={{ opacity: .6 }}>⌕</span>
-        <input placeholder="Procurar na documentação…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <span className="np-kbd">↩</span>
-      </div>
-      <button className="np-iconbtn np-themebtn" onClick={toggleTheme} title="Alternar tema">
-        {theme === 'dark' ? '☀️ Claro' : '🌙 Escuro'}
-      </button>
+      <Link to="/"><Brandmark pill="Docs" /></Link>
+      <SearchBox placeholder="Procurar na documentação…" value={q} onChange={setQ} />
+      <ThemeToggleButton theme={theme} onToggle={toggleTheme} />
     </div>
   );
 }

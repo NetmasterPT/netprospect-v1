@@ -1,0 +1,36 @@
+/** Cartões: contentor genérico (Card), cartão de estatística (StatCard/KPI) e grelha de KPIs. */
+import React from 'react';
+
+export function Card({ title, actions, children, padded = true }) {
+  return (
+    <section className="np-card">
+      {(title || actions) && (
+        <div className="np-card-h">
+          {title ? <h2>{title}</h2> : <span />}
+          {actions && <div className="np-head-actions">{actions}</div>}
+        </div>
+      )}
+      <div className={padded ? 'np-card-b' : undefined}>{children}</div>
+    </section>
+  );
+}
+
+export function StatCard({ label, icon, value, delta, deltaDir, href }) {
+  const Tag = href ? 'a' : 'div';
+  return (
+    <Tag className="np-kpi" href={href}>
+      <div className="np-kpi-l">
+        {icon && <span className="np-kpi-ic">{icon}</span>}
+        <span>{label}</span>
+      </div>
+      <div className="np-kpi-v tnum">
+        {value}
+        {delta != null && <span className={`np-kpi-d ${deltaDir || ''}`}>{delta}</span>}
+      </div>
+    </Tag>
+  );
+}
+
+export function StatGrid({ children }) {
+  return <div className="np-kpis">{children}</div>;
+}

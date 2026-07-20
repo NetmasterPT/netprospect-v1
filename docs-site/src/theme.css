@@ -20,6 +20,7 @@
   --np-shadow-card:0 1px 2px rgba(15,23,42,0.06);
   --np-shadow-raise:0 1px 3px rgba(15,23,42,0.08),0 4px 12px rgba(15,23,42,0.06);
   --np-shadow-pop:0 8px 28px rgba(15,23,42,0.16); --np-shadow-brand:0 6px 16px rgba(234,11,42,0.22);
+  --np-shadow-drawer:-16px 0 40px rgba(15,23,42,0.18);
   --np-focus:rgba(234,11,42,0.38);
 }
 [data-theme="dark"] {
@@ -40,6 +41,7 @@
   --np-shadow-card:0 1px 2px rgba(0,0,0,0.45);
   --np-shadow-raise:0 1px 3px rgba(0,0,0,0.5),0 6px 18px rgba(0,0,0,0.45);
   --np-shadow-pop:0 10px 34px rgba(0,0,0,0.6); --np-shadow-brand:0 6px 18px rgba(234,11,42,0.45);
+  --np-shadow-drawer:-18px 0 48px rgba(0,0,0,0.6);
   --np-focus:rgba(255,90,110,0.45);
 }
 :root {
@@ -49,8 +51,9 @@
   --np-s1:4px; --np-s2:8px; --np-s3:12px; --np-s4:16px; --np-s5:20px; --np-s6:24px; --np-s8:32px;
   --np-row-h:46px; --np-cell-x:14px; --np-nav-w:300px; --np-nav-w-collapsed:64px; --np-topbar-h:56px;
   --np-radius-xs:4px; --np-radius-sm:6px; --np-radius:8px; --np-radius-md:10px; --np-radius-lg:12px; --np-radius-pill:999px;
-  --np-ease:cubic-bezier(0.16,1,0.3,1); --np-dur-fast:120ms; --np-dur:190ms;
-  --np-z-nav:20; --np-z-dropdown:40; --np-z-toast:80;
+  --np-ease:cubic-bezier(0.16,1,0.3,1); --np-dur-fast:120ms; --np-dur:190ms; --np-dur-slow:300ms;
+  --np-drawer-w:420px; --np-row-h-compact:38px; --np-radius-md:10px; --np-radius-xl:16px;
+  --np-z-nav:20; --np-z-dropdown:40; --np-z-drawer-scrim:55; --np-z-drawer:60; --np-z-toast:80;
 }
 
 * { box-sizing: border-box; }

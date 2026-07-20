@@ -28,6 +28,7 @@ import { initEgress, egressDispatcher } from '../lib/egress.js';
 import { makeClient } from '../lib/directus.js';
 import { startTelemetry, taskStart, taskEnd, logLine } from '../lib/worker-telemetry.js';
 import { classifyIndustryHeuristic, industryFromGmbCategory } from '../lib/audit/industry-heuristic.js';
+import { isCountryName, isForeignLocality } from '../lib/audit/locality.js';
 // summarizeForClassify é uma função PURA (parsing de HTML) — importada diretamente para o job
 // `industry` correr no role 'base' SEM precisar do contexto de audit (Ollama/Chromium). O Ollama
 // só é preciso com INDUSTRY_LLM=true (audit.ollama.classifyIndustry).
@@ -245,7 +246,7 @@ function makeHeavyFineHandlers(ctx, audit, js) {
     try {
       const g = await audit.gmb.lookupGmb({ domain: site.domain, name: site.company?.name, address: site.business_address, city: site.business_city });
       if (g && g.name) {
-        Object.assign(patch, { gmb: true, gmb_name: clip(g.name), gmb_category: clip(g.category, 120), gmb_rating: g.rating, gmb_reviews: g.reviews, gmb_phone: clip(g.phone, 60), gmb_url: clip(g.url), business_city: g.city ? clip(g.city, 120) : undefined, business_region: g.region ? clip(g.region, 120) : undefined, business_address: g.address ? clip(g.address) : undefined });
+        Object.assign(patch, { gmb: true, gmb_name: clip(g.name), gmb_category: clip(g.category, 120), gmb_rating: g.rating, gmb_reviews: g.reviews, gmb_phone: clip(g.phone, 60), gmb_url: clip(g.url), business_city: (g.city && !isCountryName(g.city) && !isForeignLocality(g.city)) ? clip(g.city, 120) : undefined, business_region: g.region ? clip(g.region, 120) : undefined, business_address: g.address ? clip(g.address) : undefined });
         await upsertReport(client, site.id, 'gmb', { summary: g, report: g });
       } else if (g && g._debug) { logLine(`gmb ${site.domain} null: ${JSON.stringify(g._debug)}`); }
     } catch (e) { logLine(`gmb ${site.domain} erro: ${e.message}`); }
@@ -359,7 +360,7 @@ function makeHandlers(ctx, audit, js) {
           patch.gmb = true; patch.gmb_name = clip(g.name); patch.gmb_category = clip(g.category, 120);
           patch.gmb_rating = g.rating; patch.gmb_reviews = g.reviews; patch.gmb_phone = clip(g.phone, 60);
           patch.gmb_url = clip(g.url); patch.gmb_place_id = clip(g.placeId);
-          if (g.city) patch.business_city = clip(g.city, 120);
+          if (g.city && !isCountryName(g.city) && !isForeignLocality(g.city)) patch.business_city = clip(g.city, 120);
           if (g.region) patch.business_region = clip(g.region, 120);
           if (g.address) patch.business_address = clip(g.address);
           await upsertReport(client, site.id, 'gmb', { summary: g, report: g });

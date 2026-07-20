@@ -1,0 +1,52 @@
+{
+  "_meta": {
+    "purpose": "Providers de IA que correm um CLI dentro de um container Docker por-pedido (F2). Cada um fica 'available' se tiver auth: API key OU token de SUBSCRIÇÃO (env vars que a CLI usa). O chat despacha para o cliStream (docs-site/mcp/cli-providers.mjs).",
+    "activation": "1) construir a imagem (deploy/cli/Dockerfile.<id>); 2) pôr a env de auth no .env do kb-http (dashboard→Servidores→Editar .env ou deploy/docs/.env); 3) o kb-http precisa do socket Docker montado (ver deploy/docs/docker-compose.yml, comentado) + docker-cli na imagem. Sem isto, aparecem 'sem key' e ficam dormentes.",
+    "auth_note": "apiKey = pay-per-use; subscription = usa a quota do plano de subscrição via a auth da própria CLI (token/OAuth). Se ambos existirem, a CLI escolhe (normalmente a subscrição). promptVia: 'stdin' (default) escreve o prompt no stdin; 'arg' substitui {{prompt}} no cmd.",
+    "security": "docker run --rm sem volumes; passar SÓ as envs de auth necessárias. O socket Docker dá acesso ~root ao host — preferir um runner dedicado se for para produção aberta."
+  },
+  "providers": [
+    {
+      "id": "claude-cli", "label": "Claude Code CLI", "image": "netprospect/claude-cli:latest",
+      "cmd": ["claude", "-p"], "promptVia": "stdin",
+      "auth": { "apiKey": ["ANTHROPIC_API_KEY"], "subscription": ["CLAUDE_CODE_OAUTH_TOKEN"] },
+      "quota": "Subscrição Claude Pro/Max (CLAUDE_CODE_OAUTH_TOKEN): limites de mensagens por janela de 5h (Pro ~ dezenas; Max 5×/20×). API (ANTHROPIC_API_KEY): pay-per-use, sem limite fixo."
+    },
+    {
+      "id": "codex-cli", "label": "Codex CLI (OpenAI)", "image": "netprospect/codex-cli:latest",
+      "cmd": ["codex", "exec", "--json", "-"], "promptVia": "stdin",
+      "auth": { "apiKey": ["OPENAI_API_KEY"], "subscription": ["CODEX_AUTH_TOKEN", "CHATGPT_TOKEN"] },
+      "quota": "Sign in with ChatGPT (Plus/Pro) via token: limites do plano ChatGPT. API (OPENAI_API_KEY): pay-per-use."
+    },
+    {
+      "id": "gemini-cli", "label": "Gemini CLI", "image": "netprospect/gemini-cli:latest",
+      "cmd": ["gemini", "-p"], "promptVia": "arg",
+      "auth": { "apiKey": ["GEMINI_API_KEY", "GOOGLE_API_KEY"], "subscription": ["GOOGLE_OAUTH_TOKEN", "GEMINI_OAUTH"] },
+      "quota": "Conta Google / Gemini Code Assist (free tier via OAuth): ~60 req/min, 1000 req/dia. API (GEMINI_API_KEY): tier free 15 RPM ou pago."
+    },
+    {
+      "id": "cursor-cli", "label": "Cursor CLI", "image": "netprospect/cursor-cli:latest",
+      "cmd": ["cursor-agent", "-p", "--output-format", "text"], "promptVia": "stdin",
+      "auth": { "apiKey": ["CURSOR_API_KEY"], "subscription": ["CURSOR_TOKEN", "CURSOR_SESSION_TOKEN"] },
+      "quota": "Cursor Pro (CURSOR_TOKEN): pedidos incluídos no plano/mês. API key (CURSOR_API_KEY): conforme conta."
+    },
+    {
+      "id": "grok-cli", "label": "Grok CLI (xAI)", "image": "netprospect/grok-cli:latest",
+      "cmd": ["grok", "--prompt"], "promptVia": "arg",
+      "auth": { "apiKey": ["XAI_API_KEY", "GROK_API_KEY"], "subscription": ["GROK_TOKEN"] },
+      "quota": "X Premium+ / conta xAI (GROK_TOKEN): conforme plano. API (XAI_API_KEY): pay-per-use."
+    },
+    {
+      "id": "deepseek-cli", "label": "DeepSeek CLI", "image": "netprospect/deepseek-cli:latest",
+      "cmd": ["deepseek", "-p"], "promptVia": "stdin",
+      "auth": { "apiKey": ["DEEPSEEK_API_KEY"], "subscription": [] },
+      "quota": "API (DEEPSEEK_API_KEY): pay-per-use (barato). Sem tier de subscrição."
+    },
+    {
+      "id": "opencode-cli", "label": "OpenCode CLI", "image": "netprospect/opencode-cli:latest",
+      "cmd": ["opencode", "run"], "promptVia": "stdin",
+      "auth": { "apiKey": ["OPENCODE_API_KEY", "OPENROUTER_API_KEY"], "subscription": ["OPENCODE_TOKEN"] },
+      "quota": "OpenCode via OpenRouter/provider configurado. Conforme a key/provider por trás."
+    }
+  ]
+}

@@ -42,9 +42,27 @@ services:
       DOCS_OLLAMA_ENABLED: ${DOCS_OLLAMA_ENABLED:-1}             # flag: 0/off desliga o provider ollama
       POSTHOG_PUBLIC_KEY: ${POSTHOG_PUBLIC_KEY:-}                # $ai + /posthog-config p/ o SPA (fail-soft se vazio)
       POSTHOG_PUBLIC_HOST: ${POSTHOG_PUBLIC_HOST:-https://eu.i.posthog.com}
+      # Providers de IA — cloud API (chat.mjs) + auth reencaminhada para os CLIs em Docker (F2). Vazio = dormente.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      CLAUDE_CODE_OAUTH_TOKEN: ${CLAUDE_CODE_OAUTH_TOKEN:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      CODEX_AUTH_TOKEN: ${CODEX_AUTH_TOKEN:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GOOGLE_OAUTH_TOKEN: ${GOOGLE_OAUTH_TOKEN:-}
+      XAI_API_KEY: ${XAI_API_KEY:-}
+      GROK_TOKEN: ${GROK_TOKEN:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
+      CURSOR_TOKEN: ${CURSOR_TOKEN:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      OPENCODE_API_KEY: ${OPENCODE_API_KEY:-}
     volumes:
       - ../..:/app:ro                           # repo (node_modules + kb/ + content.json)
       - hf-cache:/hf-cache
+      # F2 (CLIs em Docker): descomentar p/ o kb-http lançar os containers dos CLIs — precisa de docker-cli na
+      # imagem e é acesso ~root ao host (ver deploy/cli/README.md; preferir runner dedicado em prod aberta).
+      # - /var/run/docker.sock:/var/run/docker.sock
     depends_on: [qdrant]
     ports:
       - "${TAILNET_IP:-127.0.0.1}:8099:8099"    # /search p/ o site + agentes por HTTP; tailnet-only

@@ -1,0 +1,9 @@
+# Codex CLI (OpenAI) num container (provider codex-cli). Auth por -e: OPENAI_API_KEY (API) ou
+# CODEX_AUTH_TOKEN (sign in with ChatGPT / subscrição). Uso: docker run --rm -i -e OPENAI_API_KEY \
+#   netprospect/codex-cli codex exec --json -   (prompt via stdin)
+FROM node:22-slim
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git \
+  && rm -rf /var/lib/apt/lists/* \
+  && npm install -g @openai/codex \
+  && npm cache clean --force
+WORKDIR /work

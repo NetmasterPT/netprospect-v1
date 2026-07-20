@@ -3,6 +3,7 @@
 // Os modelos cloud só ficam available se a env-key respetiva existir. Observabilidade $ai_generation → PostHog.
 import { searchDocs, getDoc, listRelated } from './tools.mjs';
 import { ollamaStream, ollamaEnabled, ollamaModel } from '../../lib/ollama.js';
+import { cliChatProviders, cliStream, cliList } from './cli-providers.mjs';
 
 const OLLAMA_ON = () => !['0', 'false', 'off'].includes(String(process.env.DOCS_OLLAMA_ENABLED || '').toLowerCase()) && ollamaEnabled();
 const clip = (s, n = 700) => String(s || '').replace(/\s+/g, ' ').trim().slice(0, n);
@@ -35,6 +36,7 @@ export function chatProviders() {
       { id: 'retrieval', label: 'Sem IA · extractos', kind: 'retrieval', available: true },
       { id: 'ollama', label: `Ollama · ${ollamaModel()}`, kind: 'local', available: OLLAMA_ON() },
       ...Object.entries(CLOUD).map(([id, m]) => ({ id, label: m.label, kind: 'cloud', available: !!KEY[id]() })),
+      ...cliChatProviders(),   // CLIs em Docker (F2) — available se houver auth (key/subscrição)
     ],
   };
 }
@@ -133,6 +135,14 @@ export async function answer({ query, source = 'rag', model, profile, distinctId
     const r = await ollamaStream(buildPrompt(query, hits), { model: m, onToken });
     captureAi({ distinctId, provider: 'ollama', model: m, latencyMs: Date.now() - t0, ok: r.ok, input: query, output: r.text });
     return { provider: 'ollama', model: m, source, text: r.text, cites, error: r.error };
+  }
+  // CLI-em-Docker (F2): se o modelo escolhido é um CLI provider
+  if (cliList().some((p) => p.id === chosen)) {
+    const t0 = Date.now();
+    const r = await cliStream({ provider: chosen, prompt: buildPrompt(query, hits), onToken });
+    captureAi({ distinctId, provider: chosen, model: chosen, latencyMs: Date.now() - t0, ok: r.ok, input: query, output: r.text });
+    if (!r.ok && onToken) onToken(`⚠️ ${chosen}: ${r.error}`);
+    return { provider: chosen, model: chosen, source, text: r.text, cites, error: r.error };
   }
   const cfg = CLOUD[chosen];
   if (!cfg) return failMsg(onToken, chosen, cites, source, `Modelo desconhecido: ${chosen}.`);

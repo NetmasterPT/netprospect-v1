@@ -1773,6 +1773,10 @@ SELECT
   count(*)::int AS total,
   -- wp_total: sites WordPress/WooCommerce por bucket → denominador do wpscan (não-WP não pode ter wpscan).
   count(*) FILTER (WHERE s.primary_platform IN (SELECT id FROM platforms WHERE slug IN ('wordpress','woocommerce')))::int AS wp_total,
+  -- loc_total: sites que PODEM ter localidade (têm GMB OU morada extraída) → denominador do locality. Sites
+  -- SEM fonte nenhuma (nem GMB nem morada no HTML) não podem ter cidade → N/A, saem da % de jobs (como o wpscan
+  -- exclui não-WP). O "sem morada" é conhecido pós-locality: business_address preenchido ⟺ havia morada.
+  count(*) FILTER (WHERE s.gmb = true OR s.business_address IS NOT NULL)::int AS loc_total,
   -- COBERTURA DE JOBS = "o job CORREU" (≠ "tem dado útil", que é a página Cobertura de Dados).
   -- MARCADOR PRÓPRIO POR JOB (fim dos partilhados): timestamp dedicado OU a coluna que o handler grava
   -- SEMPRE que corre (mesmo em vazio: tech_detected=[] · traffic_bucket='unranked' · ssl_grade='F' · etc.).
@@ -1787,7 +1791,7 @@ SELECT
   count(*) FILTER (WHERE s.ip_country IS NOT NULL OR s.asn IS NOT NULL)::int AS geoip,
   count(*) FILTER (WHERE s.tech_detected IS NOT NULL)::int AS fingerprint,
   count(*) FILTER (WHERE s.social IS NOT NULL)::int AS social,
-  count(*) FILTER (WHERE s.locality_checked_at IS NOT NULL)::int AS locality,
+  count(*) FILTER (WHERE s.locality_checked_at IS NOT NULL AND (s.gmb = true OR s.business_address IS NOT NULL))::int AS locality,
   count(*) FILTER (WHERE s.spf_status IS NOT NULL)::int AS emailauth,
   count(*) FILTER (WHERE s.traffic_bucket IS NOT NULL)::int AS traffic,
   count(*) FILTER (WHERE s.hostnames IS NOT NULL)::int AS subdomains,
@@ -1835,6 +1839,9 @@ SELECT
        ELSE 'lt20' END AS bucket,
   count(*)::int AS total,
   count(*) FILTER (WHERE primary_platform IN (SELECT id FROM platforms WHERE slug IN ('wordpress','woocommerce')))::int AS wp_total,
+  -- loc_total: sites com FONTE de localidade (GMB ou morada) = denominador honesto da cidade. Sem fonte = N/A
+  -- (não podem ter cidade), não contam como "cidade em falta". Ver Cobertura de Jobs (mesmo loc_total).
+  count(*) FILTER (WHERE gmb = true OR business_address IS NOT NULL)::int AS loc_total,
   count(*) FILTER (WHERE has_email)::int AS email,
   count(*) FILTER (WHERE has_phone)::int AS phone,
   count(*) FILTER (WHERE has_decision_maker)::int AS decision_maker,

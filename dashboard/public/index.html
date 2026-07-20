@@ -2083,7 +2083,7 @@ function covSum(cov, thresh) {
   const keys = COV_BUCKETS[thresh] || COV_BUCKETS.all;
   const rows = (cov.buckets || []).filter((b) => keys.includes(b.bucket));
   const sum = (f) => rows.reduce((a, b) => a + (+b[f] || 0), 0);
-  const out = { total: sum('total'), wp_total: sum('wp_total') };
+  const out = { total: sum('total'), wp_total: sum('wp_total'), loc_total: sum('loc_total') };
   for (const [k] of COV_JOBS) out[k] = sum(k);
   return out;
 }
@@ -2135,9 +2135,10 @@ async function viewCoverage() {
     // "Total" por linha = universo ELEGÍVEL do job (o que há para fazer). r.elig (feito/elegível já é a
     // barra; elegível/total = selectividade) só se mostra quando o elegível < total do filtro.
     if (k === 'verify') { const t = vb.withemail || 1; return { label: 'Verify de email (contactos)', cat: kind, n: vb.classified, total: t, pct: Math.round(1000 * vb.classified / t) / 10, note: 'nível-contacto: classificados / contactos com email' }; }
-    const elig = k === 'wpscan' ? (s.wp_total || 0) : total; // wpscan só se aplica a WordPress/WooCommerce
+    // wpscan só se aplica a WP; locality só a sites com fonte de localidade (GMB/morada) — os sem-fonte são N/A.
+    const elig = k === 'wpscan' ? (s.wp_total || 0) : k === 'locality' ? (s.loc_total || 0) : total;
     const tot = elig || 1;
-    const r = { label: k === 'wpscan' ? label + ' (só WP)' : label, cat: kind, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 };
+    const r = { label: k === 'wpscan' ? label + ' (só WP)' : k === 'locality' ? label + ' (c/ fonte)' : label, cat: kind, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 };
     if (elig < total) r.elig = { n: elig, total, pct: Math.round(1000 * elig / total) / 10 };
     return r;
   });
@@ -2173,7 +2174,7 @@ function dcovSum(cov, thresh) {
   const keys = COV_BUCKETS[thresh] || COV_BUCKETS.all;
   const rows = (cov.buckets || []).filter((b) => keys.includes(b.bucket));
   const sum = (f) => rows.reduce((a, b) => a + (+b[f] || 0), 0);
-  const out = { total: sum('total'), wp_total: sum('wp_total') };
+  const out = { total: sum('total'), wp_total: sum('wp_total'), loc_total: sum('loc_total') };
   for (const [k] of DCOV_FIELDS) out[k] = sum(k);
   return out;
 }
@@ -2194,7 +2195,14 @@ async function viewDataCoverage() {
   const seg = COV_THS.map(([k, l]) => `<button class="np-btn np-btn--sm ${DCOV_THRESH === k ? 'np-btn--primary' : ''}" onclick="window.dcovSet('${k}')">${l}</button>`).join(' ');
   const s = dcovSum(cov, DCOV_THRESH); const total = s.total || 1;
   // wpscan só se aplica a WordPress → denominador = wp_total.
-  const rows = DCOV_FIELDS.map(([k, label, cat]) => { const tot = k === 'wpscan' ? (s.wp_total || 1) : total; return { label: k === 'wpscan' ? label + ' (só WP)' : label, cat, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 }; });
+  // wpscan → só WP (wp_total). city → só sites com FONTE (loc_total = GMB/morada); os sem-fonte são N/A e saem
+  // do denominador (senão a cidade parecia ~45% quando é ~90% dos que PODEM ter). O N/A mostra-se na sub-linha.
+  const rows = DCOV_FIELDS.map(([k, label, cat]) => {
+    const tot = k === 'wpscan' ? (s.wp_total || 1) : k === 'city' ? (s.loc_total || 1) : total;
+    const r = { label: k === 'wpscan' ? label + ' (só WP)' : k === 'city' ? label + ' (c/ fonte)' : label, cat, n: s[k] || 0, total: tot, pct: Math.round(1000 * (s[k] || 0) / tot) / 10 };
+    if (k === 'city' && tot < total) r.elig = { n: tot, total, pct: Math.round(1000 * tot / total) / 10 }; // N/A = total − loc_total (sem GMB nem morada)
+    return r;
+  });
   const sorted = covSortRows(rows, 'data');
   const v = cov.verify || {};
   // Verify contact-level (filtrado pelo score): válidos (verde) + catch-all/prováveis (roxo) / contactos com email.

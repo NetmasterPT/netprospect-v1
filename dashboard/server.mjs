@@ -2694,6 +2694,13 @@ const storeBase = (req) => (process.env.STORE_PUBLIC_URL || `${req.protocol}://$
 const eur2 = (n) => (Number(n) || 0).toFixed(2).replace('.', ',');
 const _sEsc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const FREQ_LBL = { one_off: 'pagamento único', monthly: '/mês', quarterly: '/trimestre', semiannual: '/semestre', annual: '/ano' };
+// Seletor de método (só os configurados) + JS de compra que trata os vários `kind` da resposta
+// (redirect→location.href · reference→Multibanco/IBAN · push→MB WAY). Partilhado por /loja e /buy.
+const _paySelector = (methods) => (methods.length > 1
+  ? `<div style="margin:4px 0 18px"><label style="font-size:13px;color:#5f6368">Método: <select id=paymethod style="padding:7px 9px;border:1px solid #dadce0;border-radius:8px;font-size:14px">${methods.map((m) => `<option value="${m.id}">${_sEsc(m.label)}</option>`).join('')}</select></label></div>`
+  : (methods[0] ? `<input type=hidden id=paymethod value="${methods[0].id}">` : ''));
+const _payJs = (epExpr, extraExpr) => `function _payBody(id,M,ph){return Object.assign({subscriptionId:id,method:M,phone:ph},${extraExpr});}
+async function buy(id,btn){const M=(document.getElementById('paymethod')||{}).value||'stripe';let ph=null;if(M==='eupago_mbway'){ph=prompt('Nº de telemóvel MB WAY:');if(!ph)return;}btn.disabled=true;btn.textContent='A processar…';try{const r=await fetch(${epExpr},{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(_payBody(id,M,ph))}),j=await r.json();if(j.url){location.href=j.url;return;}var R=document.getElementById('result');if(j.kind==='reference'){R.innerHTML='<div class="box ok"><b>'+(j.provider==='bank'?'Transferência bancária':'Multibanco')+'</b><br>'+(j.entity?'Entidade <b>'+j.entity+'</b> · ':'')+(j.iban?'IBAN <b>'+j.iban+'</b> · ':'')+'Ref. <b>'+(j.reference||'')+'</b> · <b>€'+(j.amount||'')+'</b><br>'+(j.message||'')+'</div>';R.scrollIntoView();}else if(j.kind==='push'){R.innerHTML='<div class="box ok">'+(j.message||'Confirma na app MB WAY.')+'</div>';}else{alert(j.error||'Não foi possível iniciar.');}btn.disabled=false;btn.textContent='Subscrever';}catch(e){btn.disabled=false;btn.textContent='Subscrever';alert('Erro de rede.');}}`;
 function storeShell(inner, title = 'Loja — Netmaster') {
   return `<!doctype html><html lang=pt><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1"><title>${_sEsc(title)}</title><style>body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#f6f7f9;color:#202124;margin:0;padding:24px;line-height:1.5}.wrap{max-width:920px;margin:0 auto}h1{font-size:24px;margin:8px 0 4px}p.sub{color:#5f6368;margin:0 0 24px;font-size:15px}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}.card{background:#fff;border-radius:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);padding:22px;display:flex;flex-direction:column}.name{font-weight:800;font-size:17px}.cat{color:#5f6368;font-size:12px;text-transform:uppercase;letter-spacing:.04em}.price{font-size:26px;font-weight:800;margin:12px 0 2px}.freq{color:#5f6368;font-size:13px}ul{margin:12px 0;padding-left:18px;font-size:13.5px;color:#3c4043}li{margin:3px 0}button{margin-top:auto;padding:12px;border:0;border-radius:10px;background:#2563eb;color:#fff;font-size:15px;font-weight:700;cursor:pointer}button:hover{background:#1d4ed8}button[disabled]{opacity:.5;cursor:default}.box{border-radius:10px;padding:18px;margin:16px 0}.ok{background:#e6f4ea;border:1px solid #34a853}.err{background:#fce8e6;border:1px solid #d93025}.badge{display:inline-block;background:#fef3c7;color:#92400e;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;margin-left:8px}</style><body><div class=wrap>${inner}</div></body></html>`;
 }
@@ -2704,14 +2711,15 @@ app.get('/loja', async (req, res) => {
     if (!stripeEnabled()) return res.type('html').send(storeShell('<h1>Loja</h1><div class="box err">A loja está temporariamente indisponível.</div>'));
     const test = (process.env.STRIPE_MODE || '').toLowerCase() !== 'live';
     const subs = await d(`/items/subscriptions?filter[active][_eq]=true&sort[]=sort&limit=-1&fields=id,name,frequency,category,features,price_ex_vat,price_inc_vat,moloni_service_id`);
+    const methods = store ? await store.availableMethods().catch(() => []) : [];
     const cancel = req.query.cancelado ? '<div class="box err">Pagamento cancelado — sem cobrança.</div>' : '';
     const cards = (subs || []).filter((s) => (s.price_inc_vat ?? s.price_ex_vat) > 0).map((s) => `<div class=card>
       <div class=cat>${_sEsc(s.category || 'serviço')}</div><div class=name>${_sEsc(s.name)}</div>
       <div class=price>€${eur2(s.price_inc_vat ?? s.price_ex_vat)}</div><div class=freq>${FREQ_LBL[s.frequency] || ''} · c/ IVA</div>
       ${(s.features || []).length ? `<ul>${(s.features || []).slice(0, 6).map((f) => `<li>${_sEsc(f)}</li>`).join('')}</ul>` : '<div style="flex:1"></div>'}
       <button onclick="buy(${s.id},this)">Subscrever</button></div>`).join('') || '<div class="box">Sem pacotes disponíveis de momento.</div>';
-    res.type('html').send(storeShell(`<h1>Loja Netmaster${test ? '<span class=badge>MODO TESTE</span>' : ''}</h1><p class=sub>Escolhe um pacote — pagamento seguro via Stripe.</p>${cancel}<div class=grid>${cards}</div>
-      <script>async function buy(id,btn){btn.disabled=true;btn.textContent='A abrir…';try{const r=await fetch('/api/store/checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({subscriptionId:id})}),j=await r.json();if(j.url){location.href=j.url;}else{btn.disabled=false;btn.textContent='Subscrever';alert(j.error||'Não foi possível iniciar o checkout.');}}catch(e){btn.disabled=false;btn.textContent='Subscrever';alert('Erro de rede.');}}</script>`));
+    res.type('html').send(storeShell(`<h1>Loja Netmaster${test ? '<span class=badge>MODO TESTE</span>' : ''}</h1><p class=sub>Escolhe um pacote — pagamento seguro.</p>${cancel}${_paySelector(methods)}<div class=grid>${cards}</div><div id=result></div>
+      <script>${_payJs("'/api/store/checkout'", '{}')}</script>`));
   } catch (e) { res.type('html').send(storeShell(`<h1>Loja</h1><div class="box err">Erro: ${_sEsc(e.message)}</div>`)); }
 });
 app.post('/api/store/checkout', async (req, res) => {
@@ -2720,10 +2728,9 @@ app.post('/api/store/checkout', async (req, res) => {
     if (!id) return res.status(400).json({ error: 'subscriptionId em falta' });
     const sub = (await d(`/items/subscriptions/${id}?fields=id,name,frequency,category,price_ex_vat,price_inc_vat,active,moloni_service_id`).catch(() => null));
     if (!sub || sub.active === false) return res.status(404).json({ error: 'pacote indisponível' });
-    const store = await importStore();
-    const session = await store.createCheckoutSession(sub, { baseUrl: storeBase(req), email: (req.body?.email || '').trim() || null });
-    void captureServerEvent(req, 'store_checkout_started', posthogDistinctId(req, `store:${id}`), { subscription_id: id, mode: session.mode, sandbox: session.isSandbox });
-    res.json({ url: session.url, id: session.id });
+    const pr = await startPayment({ method: req.body?.method || 'stripe', sub, email: (req.body?.email || '').trim() || null, phone: (req.body?.phone || '').trim() || null, req });
+    void captureServerEvent(req, 'store_checkout_started', posthogDistinctId(req, `store:${id}`), { subscription_id: id, provider: pr.provider, method: pr.method });
+    res.json(pr); // { provider, method, provider_ref, kind:'redirect'|'reference'|'push', url?/entity?/reference?/iban?/message? }
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 app.get('/loja/sucesso', (req, res) => res.type('html').send(storeShell('<h1>Obrigado! 🎉</h1><div class="box ok"><b>Pagamento recebido.</b><br>Vais receber um email com os próximos passos. A equipa Netmaster entra em contacto em breve.</div>')));
@@ -2732,22 +2739,10 @@ app.get('/loja/sucesso', (req, res) => res.type('html').send(storeShell('<h1>Obr
 // IDEMPOTENTE por payments.event_id (o INSERT falha em duplicado → salta; webhook re-entregue não duplica).
 // Faz: cliente + subscrição + Moloni (flagged) + portal (token+email, entrega #2) + notify + PostHog.
 const _pJson = (s) => { try { return typeof s === 'string' ? JSON.parse(s) : (s || null); } catch { return null; } };
-async function fulfill(order, req) {
-  const base = storeBase(req);
-  let payId = null;
-  try {
-    const row = await dwrite('POST', '/items/payments', {
-      provider: order.provider, method: order.method || null, event_id: order.event_id, provider_ref: order.provider_ref || null,
-      status: 'pending', amount: order.amount ?? null, currency: order.currency || 'EUR', email: order.email || null,
-      company: order.companyId || null, subscription: order.subscriptionId || null, token: order.token || null, utm: order.utm || null,
-    });
-    payId = row?.id;
-  } catch (e) {
-    if (/unique|duplicate|RECORD_NOT_UNIQUE/i.test(JSON.stringify(e?.errors || e?.message || ''))) { console.log(`[store] fulfill dup event=${order.event_id} → salta (idempotente)`); return { skipped: true }; }
-    throw e;
-  }
-  const warn = [];
-  // empresa → cliente (companyId do /buy, ou resolve pelo domínio do email; cria se preciso)
+// Passos de fulfillment (SEM idempotência/estado — isso é do settlePayment). order = {provider,method,amount,
+// email,name,subscriptionId,companyId,token,utm,livemode}. Faz: cliente + subscrição + Moloni(flag) + portal + notify + PostHog.
+async function runFulfillment(order, req) {
+  const base = storeBase(req); const warn = [];
   let companyId = order.companyId || null;
   if (!companyId && order.email) {
     const dom = (order.email.split('@')[1] || '').toLowerCase();
@@ -2756,16 +2751,13 @@ async function fulfill(order, req) {
     else if (dom) { const cc = await dwrite('POST', '/items/companies', { org_domain: dom, name: order.name || dom, is_client: true }).catch(() => null); companyId = cc?.id || null; }
   }
   if (companyId) await dwrite('PATCH', `/items/companies/${companyId}`, { is_client: true }).catch(() => {});
-  // liga a subscrição (client_ids)
   if (order.subscriptionId && companyId) {
     const sub = await d(`/items/subscriptions/${order.subscriptionId}?fields=id,client_ids`).catch(() => null);
     const ids = Array.isArray(sub?.client_ids) ? sub.client_ids.map(Number) : [];
     if (!ids.includes(companyId)) await dwrite('PATCH', `/items/subscriptions/${order.subscriptionId}`, { client_ids: [...ids, companyId] }).catch(() => {});
   }
-  // FATURA no Moloni — atrás de STORE_MOLONI_INVOICE (bloqueado nas permissões sandbox; seam abaixo).
   if (process.env.STORE_MOLONI_INVOICE === '1' && companyId) { try { await emitMoloniInvoice(order, companyId); } catch (e) { warn.push('moloni: ' + e.message); } }
-  // portal: token + ativa + email do link (entrega #2 — onboarding automático)
-  if (companyId) {
+  if (companyId) { // portal: token + ativa + email do link (entrega #2 — onboarding automático)
     try {
       const co = await d(`/items/companies/${companyId}?fields=id,name,portal_token,general_email`).catch(() => null);
       const token = co?.portal_token || (newToken() + crypto.randomBytes(8).toString('hex'));
@@ -2774,37 +2766,87 @@ async function fulfill(order, req) {
       if (to) { const { sendEmail } = await import('./lib/mailer.js').catch(() => import('../lib/mailer.js')); await sendEmail({ to, subject: 'A tua conta Netmaster', body: `Obrigado pela tua compra! 🎉\n\nAcede à tua conta (faturas, subscrições, avenças):\n${base}/portal/${token}\n\n— Equipa Netmaster` }).catch((e) => warn.push('email: ' + e.message)); }
     } catch (e) { warn.push('portal: ' + e.message); }
   }
-  // notifica a equipa
   const notify = process.env.STORE_NOTIFY_EMAIL || '';
   if (notify) { try { const { sendEmail } = await import('./lib/mailer.js').catch(() => import('../lib/mailer.js')); await sendEmail({ to: notify, subject: `💶 Venda (${order.provider}): €${order.amount}`, body: `Cliente: ${order.name || '—'} <${order.email || '—'}>\nMétodo: ${order.method || order.provider}\nValor: €${order.amount}\nSub: ${order.subscriptionId || '—'}\nCompany: ${companyId || '—'}\n${order.livemode ? 'LIVE' : 'TESTE'}${warn.length ? '\n⚠ ' + warn.join('; ') : ''}` }); } catch { /* best-effort */ } }
   void captureServerEvent(req, 'store_purchase', posthogDistinctId(req, order.token ? `buy:${order.token}` : `store:${order.subscriptionId}`), { provider: order.provider, method: order.method, amount: order.amount, subscription_id: order.subscriptionId, sandbox: !order.livemode, ...(order.utm || {}) });
-  if (payId) await dwrite('PATCH', `/items/payments/${payId}`, { status: 'fulfilled', company: companyId || null, fulfilled_at: new Date().toISOString() }).catch(() => {});
   return { ok: true, companyId, warnings: warn };
 }
-// Emissão da fatura no Moloni (Fase 6b) — SEAM: liga a lib/moloni-write.js quando as permissões do app sandbox
-// estiverem OK (ver netprospect-integrations). Mapear order → {customer(nif/moloni_customer_id), items, type} + emitir.
-async function emitMoloniInvoice(order, companyId) {
-  console.log(`[store] Moloni (seam, a ligar): fatura company=${companyId} sub=${order.subscriptionId} €${order.amount}`);
+// Confirmação de um pagamento (QUALQUER método): procura o `payments` pendente por provider_ref → fulfillment.
+// IDEMPOTENTE por estado (pending→fulfilling→fulfilled): uma 2.ª entrega vê ≠pending e salta.
+async function settlePayment(providerRef, req, extra = {}) {
+  if (!providerRef) return { skipped: true };
+  const rows = await d(`/items/payments?filter[provider_ref][_eq]=${encodeURIComponent(providerRef)}&fields=id,status,provider,method,amount,company,subscription,token,utm,email&limit=1`).catch(() => []);
+  const pay = rows?.[0];
+  if (!pay) { console.log(`[store] settle: sem pending ref=${providerRef}`); return { skipped: true, reason: 'not-found' }; }
+  if (pay.status !== 'pending') { console.log(`[store] settle ref=${providerRef} já '${pay.status}' → salta`); return { skipped: true, reason: pay.status }; }
+  await dwrite('PATCH', `/items/payments/${pay.id}`, { status: 'fulfilling', ...(extra.eventId ? { event_id: extra.eventId } : {}) }).catch(() => {}); // trava otimista
+  const order = { provider: pay.provider, method: pay.method, amount: extra.amount ?? pay.amount, email: extra.email || pay.email, name: extra.name || '', subscriptionId: pay.subscription || null, companyId: pay.company || null, token: pay.token || null, utm: _pJson(pay.utm), livemode: !!extra.livemode };
+  let r = { warnings: [] };
+  try { r = await runFulfillment(order, req); } catch (e) { console.error('[store] fulfillment erro:', e.message); r.warnings = ['fulfillment: ' + e.message]; }
+  await dwrite('PATCH', `/items/payments/${pay.id}`, { status: 'fulfilled', fulfilled_at: new Date().toISOString(), ...(r.companyId ? { company: r.companyId } : {}) }).catch(() => {});
+  return { ok: true, ...r };
 }
+// Inicia um pagamento (QUALQUER método): createPayment (provider) + grava o `payments` pendente (contexto p/ o settle).
+async function startPayment({ method, sub, email = null, phone = null, token = null, companyId = null, utm = null, req }) {
+  const store = await importStore(); const base = storeBase(req);
+  const ref = `np-${sub.id}-${crypto.randomBytes(6).toString('hex')}`;
+  const cancel = token ? `${base}/buy/${encodeURIComponent(token)}?cancelado=1` : `${base}/loja?cancelado=1`;
+  const pr = await store.createPayment({ method, sub, email, phone, ref, baseUrl: base, cancelUrl: cancel, extraMeta: { company_id: companyId || '', buy_token: token || '', utm: JSON.stringify(utm || {}) } });
+  await dwrite('POST', '/items/payments', { provider: pr.provider, method: pr.method, provider_ref: pr.provider_ref, status: 'pending', amount: Number(sub.price_inc_vat ?? sub.price_ex_vat), currency: 'EUR', email, company: companyId || null, subscription: sub.id, token, utm }).catch((e) => console.error('[store] pending payment falhou:', e.message));
+  return pr;
+}
+// Emissão da fatura no Moloni (Fase 6b) — SEAM: liga a lib/moloni-write.js quando as permissões sandbox estiverem OK.
+async function emitMoloniInvoice(order, companyId) { console.log(`[store] Moloni (seam): fatura company=${companyId} sub=${order.subscriptionId} €${order.amount}`); }
 
-// Webhook do Stripe (raw body). Verifica a assinatura → constrói o `order` → fulfill() unificado.
+// --- Confirmações por provider → settlePayment(provider_ref) ---------------------------------------
+// Stripe (raw body + assinatura verificada). ⚠️ excluir /api/stripe/webhook do Authentik.
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   let event;
   try { const store = await importStore(); event = store.verifyWebhookEvent(req.body, req.get('stripe-signature')); }
-  catch (e) { console.error('[store] webhook inválido:', e.message); return res.status(400).send(`webhook error: ${e.message}`); }
+  catch (e) { console.error('[store] webhook Stripe inválido:', e.message); return res.status(400).send(`webhook error: ${e.message}`); }
   try {
     if (event.type === 'checkout.session.completed') {
-      const s = event.data.object; const m = s.metadata || {};
-      await fulfill({
-        provider: 'stripe', event_id: `stripe:${event.id}`, provider_ref: s.id, method: 'card',
-        amount: (s.amount_total || 0) / 100, currency: (s.currency || 'eur').toUpperCase(),
-        email: s.customer_details?.email || s.customer_email || null, name: s.customer_details?.name || '',
-        subscriptionId: parseInt(m.subscription_id || s.client_reference_id, 10) || null,
-        companyId: parseInt(m.company_id, 10) || null, token: m.buy_token || null, utm: _pJson(m.utm), livemode: !!s.livemode,
-      }, req);
+      const s = event.data.object;
+      await settlePayment(s.id, req, { eventId: `stripe:${event.id}`, email: s.customer_details?.email || s.customer_email || null, name: s.customer_details?.name || '', amount: (s.amount_total || 0) / 100, livemode: !!s.livemode });
     }
     res.json({ received: true });
-  } catch (e) { console.error('[store] fulfillment erro:', e.message); res.json({ received: true, warning: e.message }); }
+  } catch (e) { console.error('[store] settle Stripe erro:', e.message); res.json({ received: true, warning: e.message }); }
+});
+// EuPago (MB/MBWay) — callback quando o pagamento é confirmado. ⚠️ VALIDAR o formato/segredo com sandbox real.
+app.post('/api/eupago/webhook', express.urlencoded({ extended: false }), async (req, res) => {
+  try {
+    const b = { ...req.query, ...req.body };
+    if (process.env.EUPAGO_WEBHOOK_KEY && b.chave_api !== process.env.EUPAGO_WEBHOOK_KEY) return res.status(401).json({ error: 'não autorizado' });
+    if (b.estado && !/pag|paid|success|conclu/i.test(String(b.estado))) return res.json({ ok: true, ignored: b.estado });
+    const ref = String(b.referencia || b.reference || b.identificador || b.id || '');
+    await settlePayment(ref, req, { eventId: `eupago:${ref}`, amount: b.valor ? Number(b.valor) : undefined });
+    res.json({ ok: true });
+  } catch (e) { res.status(200).json({ ok: false, error: e.message }); }
+});
+// PayPal — evento de captura concluída. ⚠️ TODO: verificar a assinatura (transmission headers) + capturar a
+// order se vier APPROVED (fluxo 2-passos). VALIDAR com sandbox.
+app.post('/api/paypal/webhook', express.json(), async (req, res) => {
+  try {
+    const ev = req.body || {}; const r = ev.resource || {};
+    const ref = r.supplementary_data?.related_ids?.order_id || r.id || '';
+    if (/CAPTURE\.COMPLETED|CHECKOUT\.ORDER\.COMPLETED|CHECKOUT\.ORDER\.APPROVED/.test(ev.event_type || '')) {
+      await settlePayment(String(ref), req, { eventId: `paypal:${ev.id || ref}` });
+    }
+    res.json({ ok: true });
+  } catch (e) { res.status(200).json({ ok: false, error: e.message }); }
+});
+// CoinGate — callback de estado. ⚠️ VALIDAR o callbackSecret/formato com sandbox.
+app.post('/api/coingate/callback', express.urlencoded({ extended: false }), async (req, res) => {
+  try {
+    const b = { ...req.query, ...req.body };
+    if (String(b.status || '').toLowerCase() === 'paid') await settlePayment(String(b.id || b.order_id || ''), req, { eventId: `coingate:${b.id || b.order_id}` });
+    res.json({ ok: true });
+  } catch (e) { res.status(200).json({ ok: false, error: e.message }); }
+});
+// Transferência bancária — staff (atrás do Authentik) confirma o comprovativo → fulfillment.
+app.post('/api/store/payment/:ref/mark-paid', async (req, res) => {
+  try { const r = await settlePayment(req.params.ref, req, { eventId: `bank:${req.params.ref}` }); res.json({ ok: true, ...r }); }
+  catch (e) { res.status(502).json({ ok: false, error: e.message }); }
 });
 
 // --- /buy/:token (Fase 6b) — checkout por-link de OUTREACH + analytics UTM server-side ------------
@@ -2819,14 +2861,18 @@ app.get('/buy/:token', async (req, res) => {
     if (!em) return res.status(404).type('html').send(storeShell('<h1>Loja</h1><div class="box err">Link inválido ou expirado.</div>'));
     const utm = pickUtm(req.query);
     void captureServerEvent(req, 'buy_viewed', posthogDistinctId(req, `buy:${req.params.token}`), { ...utm, campaign_id: em.campaign?.id || null, angle: em.campaign?.angle || null, domain: em.site?.domain || null, company: em.company?.id || null });
-    const subs = await d(`/items/subscriptions?filter[active][_eq]=true&sort[]=sort&limit=-1&fields=id,name,frequency,category,features,price_ex_vat,price_inc_vat`);
+    const store = await importStore().catch(() => null);
+    const [subs, methods] = await Promise.all([
+      d(`/items/subscriptions?filter[active][_eq]=true&sort[]=sort&limit=-1&fields=id,name,frequency,category,features,price_ex_vat,price_inc_vat`),
+      store ? store.availableMethods().catch(() => []) : [],
+    ]);
     const test = (process.env.STRIPE_MODE || '').toLowerCase() !== 'live';
     const cancel = req.query.cancelado ? '<div class="box err">Pagamento cancelado — sem cobrança.</div>' : '';
     const cards = (subs || []).filter((s) => (s.price_inc_vat ?? s.price_ex_vat) > 0).map((s) => `<div class=card><div class=cat>${_sEsc(s.category || 'serviço')}</div><div class=name>${_sEsc(s.name)}</div><div class=price>€${eur2(s.price_inc_vat ?? s.price_ex_vat)}</div><div class=freq>${FREQ_LBL[s.frequency] || ''} · c/ IVA</div>${(s.features || []).length ? `<ul>${(s.features || []).slice(0, 6).map((f) => `<li>${_sEsc(f)}</li>`).join('')}</ul>` : '<div style="flex:1"></div>'}<button onclick="buy(${s.id},this)">Subscrever</button></div>`).join('') || '<div class="box">Sem pacotes disponíveis de momento.</div>';
     const hi = em.to_name ? `Olá ${_sEsc(String(em.to_name).split(' ')[0])}, ` : '';
     const tokJs = JSON.stringify(req.params.token).replace(/</g, '\\u003c'); const utmJs = JSON.stringify(utm).replace(/</g, '\\u003c');
-    res.type('html').send(storeShell(`<h1>${hi}a tua proposta Netmaster${test ? '<span class=badge>MODO TESTE</span>' : ''}</h1><p class=sub>Escolhe um pacote — pagamento seguro.</p>${cancel}<div class=grid>${cards}</div>
-      <script>const TOK=${tokJs},UTM=${utmJs};async function buy(id,btn){btn.disabled=true;btn.textContent='A abrir…';try{const r=await fetch('/api/buy/'+encodeURIComponent(TOK)+'/checkout',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({subscriptionId:id,utm:UTM})}),j=await r.json();if(j.url){location.href=j.url;}else{btn.disabled=false;btn.textContent='Subscrever';alert(j.error||'Não foi possível iniciar o checkout.');}}catch(e){btn.disabled=false;btn.textContent='Subscrever';alert('Erro de rede.');}}</script>`, 'Proposta — Netmaster'));
+    res.type('html').send(storeShell(`<h1>${hi}a tua proposta Netmaster${test ? '<span class=badge>MODO TESTE</span>' : ''}</h1><p class=sub>Escolhe um pacote — pagamento seguro.</p>${cancel}${_paySelector(methods)}<div class=grid>${cards}</div><div id=result></div>
+      <script>const TOK=${tokJs},UTM=${utmJs};${_payJs("'/api/buy/'+encodeURIComponent(TOK)+'/checkout'", '{utm:UTM}')}</script>`, 'Proposta — Netmaster'));
   } catch { res.status(500).type('html').send(storeShell('<h1>Loja</h1><div class="box err">Erro a carregar.</div>')); }
 });
 app.post('/api/buy/:token/checkout', async (req, res) => {
@@ -2838,11 +2884,9 @@ app.post('/api/buy/:token/checkout', async (req, res) => {
     const sub = await d(`/items/subscriptions/${id}?fields=id,name,frequency,category,price_ex_vat,price_inc_vat,active,moloni_service_id`).catch(() => null);
     if (!sub || sub.active === false) return res.status(404).json({ error: 'pacote indisponível' });
     const utm = pickUtm(req.body?.utm || {});
-    const store = await importStore();
-    const base = storeBase(req);
-    const session = await store.createCheckoutSession(sub, { baseUrl: base, email: em.to_email || null, cancelUrl: `${base}/buy/${encodeURIComponent(req.params.token)}?cancelado=1`, extraMeta: { company_id: em.company?.id || '', buy_token: req.params.token, utm: JSON.stringify(utm) } });
-    void captureServerEvent(req, 'buy_payment_started', posthogDistinctId(req, `buy:${req.params.token}`), { subscription_id: id, provider: 'stripe', campaign_id: em.campaign?.id || null, ...utm });
-    res.json({ url: session.url, id: session.id });
+    const pr = await startPayment({ method: req.body?.method || 'stripe', sub, email: em.to_email || null, phone: (req.body?.phone || '').trim() || null, token: req.params.token, companyId: em.company?.id || null, utm, req });
+    void captureServerEvent(req, 'buy_payment_started', posthogDistinctId(req, `buy:${req.params.token}`), { subscription_id: id, provider: pr.provider, method: pr.method, campaign_id: em.campaign?.id || null, ...utm });
+    res.json(pr);
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 

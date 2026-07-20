@@ -1,72 +1,106 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { Routes, Route, Link, useParams, useLocation, useNavigate } from 'react-router-dom';
 import ForceGraph2D from 'react-force-graph-2d';
 import content from './content.json';
+import { Chip } from './components/Chip.jsx';
 
 const TYPE_ORDER = ['explanation', 'how-to', 'tutorial', 'reference', 'incident', 'working'];
 const TYPE_LABEL = {
-  explanation: '🧠 Explanation', 'how-to': '🛠️ How-to', tutorial: '🚀 Tutorials',
-  reference: '📖 Reference', incident: '🚨 Incidents', working: '📝 Working docs',
+  explanation: 'Explanation', 'how-to': 'How-to', tutorial: 'Tutorials',
+  reference: 'Reference', incident: 'Incidents', working: 'Working docs',
 };
 const TYPE_COLOR = {
   explanation: '#a78bfa', 'how-to': '#34d399', tutorial: '#f472b6',
   reference: '#60a5fa', incident: '#f87171', working: '#fbbf24',
 };
 const bySlug = Object.fromEntries(content.pages.map((p) => [p.slug, p]));
+const Chev = ({ size = 13 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M6 9l6 6 6-6" /></svg>
+);
 
-function Sidebar() {
-  const [q, setQ] = useState('');
-  const groups = useMemo(() => {
-    const g = {};
-    for (const p of content.pages) (g[p.type] ||= []).push(p);
-    for (const k in g) g[k].sort((a, b) => a.title.localeCompare(b.title));
-    return g;
-  }, []);
+// ---------- tema ----------
+function useTheme() {
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('np-theme') || 'dark'; } catch { return 'dark'; }
+  });
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+    try { localStorage.setItem('np-theme', theme); } catch {}
+  }, [theme]);
+  return [theme, () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))];
+}
+
+function Topbar({ theme, toggleTheme, q, setQ }) {
+  return (
+    <div className="np-topbar">
+      <Link to="/" className="np-brand">
+        <span className="np-brandmark"><i /></span>
+        <span className="np-word">NetProspect</span>
+        <span className="np-pilltag">Docs</span>
+      </Link>
+      <div className="np-tsearch">
+        <span style={{ opacity: .6 }}>⌕</span>
+        <input placeholder="Procurar na documentação…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <span className="np-kbd">↩</span>
+      </div>
+      <button className="np-iconbtn np-themebtn" onClick={toggleTheme} title="Alternar tema">
+        {theme === 'dark' ? '☀️ Claro' : '🌙 Escuro'}
+      </button>
+    </div>
+  );
+}
+
+function Sidebar({ q, groups }) {
+  const [open, setOpen] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('np-docs-nav') || '[]')); } catch { return new Set(); }
+  });
+  const toggle = useCallback((name) => setOpen((s) => {
+    const n = new Set(s); n.has(name) ? n.delete(name) : n.add(name);
+    try { localStorage.setItem('np-docs-nav', JSON.stringify([...n])); } catch {}
+    return n;
+  }), []);
   const results = useMemo(() => {
     const s = q.trim().toLowerCase();
     if (!s) return null;
     return content.pages
       .map((p) => {
-        const hay = (p.title + ' ' + (p.tags || []).join(' ') + ' ' + p.text).toLowerCase();
-        let score = 0;
-        if (p.title.toLowerCase().includes(s)) score += 10;
-        if ((p.tags || []).some((t) => String(t).toLowerCase().includes(s))) score += 5;
-        if (hay.includes(s)) score += 1;
-        return { p, score };
+        let sc = 0;
+        if (p.title.toLowerCase().includes(s)) sc += 10;
+        if ((p.tags || []).some((t) => String(t).toLowerCase().includes(s))) sc += 5;
+        if ((p.title + ' ' + (p.tags || []).join(' ') + ' ' + p.text).toLowerCase().includes(s)) sc += 1;
+        return { p, sc };
       })
-      .filter((x) => x.score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 40);
+      .filter((x) => x.sc > 0).sort((a, b) => b.sc - a.sc).slice(0, 40).map((x) => x.p);
   }, [q]);
 
+  const row = (p) => (
+    <Link key={p.slug} to={'/' + p.slug} className="np-nav-row">
+      <span className="np-dot" style={{ background: TYPE_COLOR[p.type] || '#8595AB', width: 7, height: 7, borderRadius: 999, flex: '0 0 auto' }} />
+      <span>{p.title}</span>
+    </Link>
+  );
+
   return (
-    <aside className="sidebar">
-      <Link to="/" className="brand">NetProspect · <b>Docs</b></Link>
-      <div className="topnav">
-        <Link to="/graph">🕸️ Grafo do conhecimento</Link>
-        <a href="/docs/storybook/" target="_blank" rel="noreferrer">🎨 Storybook (componentes)</a>
-      </div>
-      <input className="search" placeholder="Procurar…" value={q} onChange={(e) => setQ(e.target.value)} />
+    <aside className="np-nav">
+      <Link to="/graph" className="np-nav-row" style={{ fontWeight: 700 }}>🕸️ <span>Grafo do conhecimento</span></Link>
+      <a href="/docs/storybook/" target="_blank" rel="noreferrer" className="np-nav-row" style={{ fontWeight: 700 }}>🎨 <span>Storybook</span><span className="np-nav-count">↗</span></a>
       {results ? (
-        <nav className="nav">
-          <div className="group-title">{results.length} resultado(s)</div>
-          {results.map(({ p }) => (
-            <Link key={p.slug} to={'/' + p.slug} className="nav-link">
-              {p.title} <span className="chip mini">{p.type}</span>
-            </Link>
-          ))}
-        </nav>
+        <div className="np-nav-group">
+          <div className="np-nav-head"><span>{results.length} resultado(s)</span></div>
+          <div className="np-nav-sub">{results.map(row)}</div>
+        </div>
       ) : (
-        <nav className="nav">
-          {TYPE_ORDER.filter((t) => groups[t]).map((t) => (
-            <div key={t} className="group">
-              <div className="group-title">{TYPE_LABEL[t] || t}</div>
-              {groups[t].map((p) => (
-                <Link key={p.slug} to={'/' + p.slug} className="nav-link">{p.title}</Link>
-              ))}
+        TYPE_ORDER.filter((t) => groups[t]).map((t) => {
+          const collapsed = open.has(t);
+          return (
+            <div key={t} className={`np-nav-group ${collapsed ? 'collapsed' : ''}`}>
+              <div className="np-nav-head" onClick={() => toggle(t)}>
+                <span>{TYPE_LABEL[t] || t}</span><span className="np-nav-chev"><Chev /></span>
+              </div>
+              <div className="np-nav-sub">{groups[t].map(row)}</div>
             </div>
-          ))}
-        </nav>
+          );
+        })
       )}
     </aside>
   );
@@ -77,21 +111,19 @@ function Page() {
   const location = useLocation();
   const page = bySlug[slug] || bySlug[content.home];
   useEffect(() => { window.scrollTo(0, 0); }, [location.pathname]);
-  if (!page) return <main className="content"><h1>404</h1><p>Página não encontrada.</p></main>;
+  if (!page) return <main className="np-main"><h1 className="np-h1">404</h1><p className="muted">Página não encontrada.</p></main>;
+  const badgeCls = { incident: 'warn', working: 'warn', reference: 'info', explanation: 'brand', 'how-to': 'ok' }[page.type] || 'neutral';
   return (
-    <main className="content">
-      <div className="meta">
-        <span className="chip">{page.type}</span>
-        {page.status && <span className="chip">{page.status}</span>}
-        {page.visibility === 'internal' && <span className="chip warn">interno</span>}
-        {page.updated && <span className="chip mini">atualizado {page.updated}</span>}
-        {(page.tags || []).map((t) => <span key={t} className="chip tag">#{t}</span>)}
+    <main className="np-main">
+      <div className="docmeta">
+        <span className={`np-badge ${badgeCls}`}>{page.type}</span>
+        {page.status && <Chip>{page.status}</Chip>}
+        {page.visibility === 'internal' && <span className="np-badge warn">interno</span>}
+        {page.updated && <Chip variant="mini">atualizado {page.updated}</Chip>}
+        {(page.tags || []).map((t) => <Chip key={t} variant="tag">#{t}</Chip>)}
       </div>
       <article className="prose" dangerouslySetInnerHTML={{ __html: page.html }} />
-      <footer className="pagefoot">
-        <span>{page.slug}.md</span>
-        {page.owner && <span> · owner: {page.owner}</span>}
-      </footer>
+      <footer className="pagefoot">{page.slug}.md{page.owner ? ` · owner: ${page.owner}` : ''}</footer>
     </main>
   );
 }
@@ -100,50 +132,52 @@ function GraphView() {
   const navigate = useNavigate();
   const [dim, setDim] = useState({ w: 800, h: 600 });
   useEffect(() => {
-    const fit = () => setDim({ w: Math.max(320, window.innerWidth - 330), h: Math.max(400, window.innerHeight - 190) });
-    fit(); window.addEventListener('resize', fit);
-    return () => window.removeEventListener('resize', fit);
+    const fit = () => setDim({ w: Math.max(320, window.innerWidth - 340), h: Math.max(400, window.innerHeight - 220) });
+    fit(); window.addEventListener('resize', fit); return () => window.removeEventListener('resize', fit);
   }, []);
   const data = useMemo(() => ({
     nodes: content.graph.nodes.map((n) => ({ ...n })),
     links: content.graph.links.map((l) => ({ ...l })),
   }), []);
   return (
-    <main className="content graphview">
-      <h1>Grafo do conhecimento</h1>
-      <p className="muted">{data.nodes.length} docs · {data.links.length} ligações (wikilinks). Passa o rato para ver o título; clica para abrir.</p>
-      <div className="legend">
+    <main className="np-main graphview">
+      <div className="np-head"><div><div className="np-eyebrow">Conhecimento</div><h1 className="np-h1">Grafo do conhecimento</h1>
+        <div className="np-sub">{data.nodes.length} docs · {data.links.length} ligações (wikilinks). Clica num nó para abrir.</div></div></div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, margin: '4px 0 12px', fontSize: 12, color: 'var(--np-text-3)' }}>
         {TYPE_ORDER.map((t) => (
-          <span key={t} className="leg"><i style={{ background: TYPE_COLOR[t] }} />{TYPE_LABEL[t]}</span>
+          <span key={t} style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+            <i style={{ width: 11, height: 11, borderRadius: 999, background: TYPE_COLOR[t], display: 'inline-block' }} />{TYPE_LABEL[t]}
+          </span>
         ))}
       </div>
-      <div className="graph-canvas">
-        <ForceGraph2D
-          graphData={data}
-          width={dim.w}
-          height={dim.h}
-          nodeLabel="title"
-          nodeRelSize={4}
-          nodeVal={(n) => 1 + (n.deg || 0)}
-          nodeColor={(n) => TYPE_COLOR[n.type] || '#9ca3af'}
-          linkColor={() => 'rgba(128,128,128,0.22)'}
-          linkDirectionalParticles={0}
-          cooldownTicks={120}
-          onNodeClick={(n) => navigate('/' + n.id)}
-        />
+      <div className="np-card" style={{ overflow: 'hidden' }}>
+        <ForceGraph2D graphData={data} width={dim.w} height={dim.h} nodeLabel="title" nodeRelSize={4}
+          nodeVal={(n) => 1 + (n.deg || 0)} nodeColor={(n) => TYPE_COLOR[n.type] || '#9ca3af'}
+          linkColor={() => 'rgba(128,128,128,0.22)'} cooldownTicks={120} onNodeClick={(n) => navigate('/' + n.id)} />
       </div>
     </main>
   );
 }
 
 export default function App() {
+  const [theme, toggleTheme] = useTheme();
+  const [q, setQ] = useState('');
+  const groups = useMemo(() => {
+    const g = {};
+    for (const p of content.pages) (g[p.type] ||= []).push(p);
+    for (const k in g) g[k].sort((a, b) => a.title.localeCompare(b.title));
+    return g;
+  }, []);
   return (
-    <div className="layout">
-      <Sidebar />
-      <Routes>
-        <Route path="/graph" element={<GraphView />} />
-        <Route path="/*" element={<Page />} />
-      </Routes>
-    </div>
+    <>
+      <Topbar theme={theme} toggleTheme={toggleTheme} q={q} setQ={setQ} />
+      <div className="np-shell">
+        <Sidebar q={q} groups={groups} />
+        <Routes>
+          <Route path="/graph" element={<GraphView />} />
+          <Route path="/*" element={<Page />} />
+        </Routes>
+      </div>
+    </>
   );
 }

@@ -1,5 +1,4 @@
-/** Chip de metadata do site de docs (type/status/tags/visibility). Estilo em styles.css (.chip). */
+/** Chip de metadata (design-system np-*). variantes: default / tag / mini / warn. */
 export function Chip({ children, variant = 'default' }) {
-  const extra = variant === 'default' ? '' : ` ${variant}`;
-  return <span className={`chip${extra}`}>{children}</span>;
+  return <span className={variant === 'default' ? 'np-chip' : `np-chip np-chip--${variant}`}>{children}</span>;
 }

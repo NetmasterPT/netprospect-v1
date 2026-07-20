@@ -37,6 +37,7 @@ const FORCE = argv.includes('--force');
 // industry e re-processar hoje). Seguro num enqueue de uma passagem (cada domínio 1×).
 const NO_DEDUP = argv.includes('--no-dedup');
 const BY_SCORE = argv.includes('--by-score'); // ordena lead_score DESC (leads de maior valor primeiro)
+const DRY = argv.includes('--dry-run'); // conta os sites/jobs SEM publicar (evita enfileirar por engano)
 const ONLY = flag('only', 'lighthouse,nuclei,industry').split(',').map((s) => s.trim()).filter(Boolean);
 const PAGE = 500;
 
@@ -71,7 +72,7 @@ async function main() {
 
   console.log(`Auditorias FINAS → ${ONLY.map((o) => `${o}(${JOBS[o].role})`).join(' + ')}`
     + `${MIN_SCORE != null ? ` | lead_score >= ${MIN_SCORE}` : ''}`
-    + `${FORCE ? ' (force)' : ` | resume: ${resumeField} IS NULL`}${LIMIT ? ` | limite ${LIMIT}` : ''}`);
+    + `${FORCE ? ' (force)' : ` | resume: ${resumeField} IS NULL`}${LIMIT ? ` | limite ${LIMIT}` : ''}${DRY ? '  [DRY-RUN]' : ''}`);
 
   let lastId = 0, lastScore = null, sites = 0, jobs = 0;
   for (;;) {
@@ -87,14 +88,14 @@ async function main() {
     lastId = rows[rows.length - 1].id; lastScore = rows[rows.length - 1].lead_score;
     for (const s of rows) {
       for (const o of ONLY) {
-        await publishJob(js, JOBS[o].subject, { domain: s.domain, siteId: s.id }, NO_DEDUP ? {} : { msgId: `${o}:${s.domain}` });
+        if (!DRY) await publishJob(js, JOBS[o].subject, { domain: s.domain, siteId: s.id }, NO_DEDUP ? {} : { msgId: `${o}:${s.domain}` });
         jobs++;
       }
       sites++;
     }
     console.log(`  ${sites} sites / ${jobs} jobs`);
   }
-  console.log(`Concluído. ${sites} sites, ${jobs} jobs publicados (${ONLY.join('+')}).`);
+  console.log(`Concluído. ${sites} sites, ${jobs} jobs ${DRY ? 'a publicar (DRY-RUN, nada enviado)' : 'publicados'} (${ONLY.join('+')}).`);
   await nc.drain();
 }
 

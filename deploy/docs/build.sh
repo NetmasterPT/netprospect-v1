@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # Reconstrói o site de docs (docs-site/dist) a partir do vault docs/.
-# Corre no host que serve o docs-web (np-server), via systemd timer, APÓS o git pull.
-# Necessário porque a guarda do pull-deploy.sh NÃO recria containers em commits só-.md — mas o
-# site TEM de ser reconstruído quando o conteúdo (docs/) muda. O docs-web (nginx) serve o dist novo.
+# Corre num CONTAINER node porque o host (np-server) NÃO tem node — só docker. O onnxruntime
+# fica compatível (build no mesmo linux-x64/glibc). O docs-web (nginx) serve o dist novo (bind-mount).
+# Chamado via systemd timer após o git pull. Necessário porque a guarda do pull-deploy.sh não recria
+# containers em commits só-.md — mas o site TEM de ser reconstruído quando docs/ muda.
 set -euo pipefail
-cd "$(dirname "${BASH_SOURCE[0]}")/../../docs-site"
-npm install --silent --no-audit --no-fund   # ci não serve: package-lock.json é gitignored no repo
-npm run build                               # gen:api → content → vite build
-echo "docs rebuild OK: $(date -Is)  ($(ls -1 dist/assets | wc -l) assets)"
+REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+docker run --rm -v "$REPO":/app -w /app/docs-site node:20-slim \
+  sh -c "npm install --no-audit --no-fund 2>&1 | tail -2 && npm run build 2>&1 | grep -iE 'páginas|built|error' | tail -5"
+echo "docs rebuild OK: $(date -Is)"

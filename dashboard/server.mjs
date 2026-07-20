@@ -2756,6 +2756,24 @@ async function runFulfillment(order, req) {
     const ids = Array.isArray(sub?.client_ids) ? sub.client_ids.map(Number) : [];
     if (!ids.includes(companyId)) await dwrite('PATCH', `/items/subscriptions/${order.subscriptionId}`, { client_ids: [...ids, companyId] }).catch(() => {});
   }
+  // client_mrr + client_since + stripe_customer_id (pontos 6/8). MRR = equivalente MENSAL do preço líquido da
+  // subscrição (one_off NÃO conta p/ MRR recorrente); client_since = 1.ª compra; stripe_customer_id p/ reutilização.
+  if (companyId) {
+    try {
+      const co = await d(`/items/companies/${companyId}?fields=id,client_mrr,client_since,stripe_customer_id`).catch(() => null);
+      const patch = {};
+      if (order.stripeCustomerId && !co?.stripe_customer_id) patch.stripe_customer_id = order.stripeCustomerId;
+      if (!co?.client_since) patch.client_since = new Date().toISOString();
+      if (order.subscriptionId) {
+        const sub = await d(`/items/subscriptions/${order.subscriptionId}?fields=frequency,price_ex_vat,price_inc_vat`).catch(() => null);
+        const MONTHS = { monthly: 1, quarterly: 3, semiannual: 6, annual: 12 }; // one_off ausente → sem MRR
+        const m = MONTHS[sub?.frequency];
+        const net = Number(sub?.price_ex_vat ?? (sub?.price_inc_vat ? sub.price_inc_vat / 1.23 : 0)) || 0;
+        if (m && net > 0) patch.client_mrr = Math.round(((Number(co?.client_mrr) || 0) + net / m) * 100) / 100;
+      }
+      if (Object.keys(patch).length) await dwrite('PATCH', `/items/companies/${companyId}`, patch).catch(() => {});
+    } catch (e) { warn.push('mrr: ' + e.message); }
+  }
   if (process.env.STORE_MOLONI_INVOICE === '1' && companyId) { try { await emitMoloniInvoice(order, companyId); } catch (e) { warn.push('moloni: ' + e.message); } }
   if (companyId) { // portal: token + ativa + email do link (entrega #2 — onboarding automático)
     try {
@@ -2775,12 +2793,26 @@ async function runFulfillment(order, req) {
 // IDEMPOTENTE por estado (pending→fulfilling→fulfilled): uma 2.ª entrega vê ≠pending e salta.
 async function settlePayment(providerRef, req, extra = {}) {
   if (!providerRef) return { skipped: true };
-  const rows = await d(`/items/payments?filter[provider_ref][_eq]=${encodeURIComponent(providerRef)}&fields=id,status,provider,method,amount,company,subscription,token,utm,email&limit=1`).catch(() => []);
-  const pay = rows?.[0];
-  if (!pay) { console.log(`[store] settle: sem pending ref=${providerRef}`); return { skipped: true, reason: 'not-found' }; }
-  if (pay.status !== 'pending') { console.log(`[store] settle ref=${providerRef} já '${pay.status}' → salta`); return { skipped: true, reason: pay.status }; }
-  await dwrite('PATCH', `/items/payments/${pay.id}`, { status: 'fulfilling', ...(extra.eventId ? { event_id: extra.eventId } : {}) }).catch(() => {}); // trava otimista
-  const order = { provider: pay.provider, method: pay.method, amount: extra.amount ?? pay.amount, email: extra.email || pay.email, name: extra.name || '', subscriptionId: pay.subscription || null, companyId: pay.company || null, token: pay.token || null, utm: _pJson(pay.utm), livemode: !!extra.livemode };
+  // CLAIM ATÓMICO (ponto 4): só UM processo passa pending→fulfilling (UPDATE condicional). Entregas SIMULTÂNEAS
+  // do mesmo webhook: as outras afetam 0 linhas → saltam (sem faturar 2×). Fallback Directus se o PG estiver off.
+  const pool = await pgPool();
+  let pay = null;
+  if (pool) {
+    const claim = await pool.query(
+      `UPDATE payments SET status='fulfilling'${extra.eventId ? ', event_id=$2' : ''} WHERE provider_ref=$1 AND status='pending'
+       RETURNING id, provider, method, amount, company, subscription, token, utm, email`,
+      extra.eventId ? [providerRef, extra.eventId] : [providerRef]).catch((e) => { console.error('[store] claim erro:', e.message); return null; });
+    if (!claim) return { skipped: true, reason: 'db-error' };
+    if (claim.rowCount === 0) { console.log(`[store] settle ref=${providerRef}: sem pending (já processado/inexistente) → salta`); return { skipped: true, reason: 'not-pending' }; }
+    pay = claim.rows[0];
+  } else {
+    const rows = await d(`/items/payments?filter[provider_ref][_eq]=${encodeURIComponent(providerRef)}&fields=id,status,provider,method,amount,company,subscription,token,utm,email&limit=1`).catch(() => []);
+    pay = rows?.[0];
+    if (!pay) { console.log(`[store] settle: sem pending ref=${providerRef}`); return { skipped: true, reason: 'not-found' }; }
+    if (pay.status !== 'pending') { console.log(`[store] settle ref=${providerRef} já '${pay.status}' → salta`); return { skipped: true, reason: pay.status }; }
+    await dwrite('PATCH', `/items/payments/${pay.id}`, { status: 'fulfilling', ...(extra.eventId ? { event_id: extra.eventId } : {}) }).catch(() => {});
+  }
+  const order = { provider: pay.provider, method: pay.method, amount: extra.amount ?? pay.amount, email: extra.email || pay.email, name: extra.name || '', subscriptionId: pay.subscription || null, companyId: pay.company || null, token: pay.token || null, utm: _pJson(pay.utm), livemode: !!extra.livemode, stripeCustomerId: extra.stripeCustomerId || null };
   let r = { warnings: [] };
   try { r = await runFulfillment(order, req); } catch (e) { console.error('[store] fulfillment erro:', e.message); r.warnings = ['fulfillment: ' + e.message]; }
   await dwrite('PATCH', `/items/payments/${pay.id}`, { status: 'fulfilled', fulfilled_at: new Date().toISOString(), ...(r.companyId ? { company: r.companyId } : {}) }).catch(() => {});
@@ -2807,7 +2839,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
   try {
     if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
-      await settlePayment(s.id, req, { eventId: `stripe:${event.id}`, email: s.customer_details?.email || s.customer_email || null, name: s.customer_details?.name || '', amount: (s.amount_total || 0) / 100, livemode: !!s.livemode });
+      await settlePayment(s.id, req, { eventId: `stripe:${event.id}`, email: s.customer_details?.email || s.customer_email || null, name: s.customer_details?.name || '', amount: (s.amount_total || 0) / 100, livemode: !!s.livemode, stripeCustomerId: (typeof s.customer === 'string' ? s.customer : s.customer?.id) || null });
     }
     res.json({ received: true });
   } catch (e) { console.error('[store] settle Stripe erro:', e.message); res.json({ received: true, warning: e.message }); }

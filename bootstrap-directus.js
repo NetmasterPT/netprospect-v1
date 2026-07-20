@@ -364,6 +364,7 @@ async function main() {
   await ensureField('companies', 'portal_enabled', bool(false)); // liga/desliga o portal por cliente
   // Integrações — ligação ao cliente Moloni.
   await ensureField('companies', 'moloni_customer_id', str()); // customer_id no Moloni
+  await ensureField('companies', 'stripe_customer_id', str()); // customer_id no Stripe (reutilização + base p/ Billing recorrente)
   await ensureField('companies', 'nif', str());                // NIF/VAT — chave de match c/ Moloni
   // Enriquecimento por REGISTOS de empresas oficiais (Fase 5 — lib/company-registry.js). O nº de registo é
   // extraído do site (Org.nr/VAT) e dá dimensão + CAE oficial + decisores nomeados (inseridos como contacts source='registry').
@@ -435,6 +436,7 @@ async function main() {
     const cols = await client.request(readCollections());
     if (cols.some((c) => c.collection === 'subscriptions')) {
       await ensureField('subscriptions', 'moloni_service_id', str()); // product_id (serviço) no Moloni
+      await ensureField('subscriptions', 'stripe_price_id', str());   // Price recorrente no Stripe (Billing) — opc.
     } else {
       console.log('= subscriptions ausente (criada no admin?) — salto moloni_service_id');
     }
@@ -448,6 +450,7 @@ async function main() {
   await ensureField('products', 'kind', enumS(['produto', 'servico'])); // Moloni type 1=produto / 2=serviço
   await ensureField('products', 'price', float());     // preço unitário (líquido)
   await ensureField('products', 'tax_id', int());      // tax_id Moloni do IVA aplicável
+  await ensureField('products', 'stripe_price_id', str()); // Price no Stripe (Billing recorrente) — opc.
   await ensureField('products', 'created_at', dateCreated());
 
   console.log('Campos: moloni_documents');

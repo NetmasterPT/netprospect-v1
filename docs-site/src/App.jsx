@@ -134,7 +134,7 @@ function Page() {
 }
 
 // Painel de chat de IA sobre o grafo (RAG federado). Citações acendem os nós + linkam às páginas.
-function GraphChat({ onCites, onHover }) {
+function GraphChat({ bare, onClose, onCites, onHover }) {
   const [providers, setProviders] = useState([]);
   const [provider, setProvider] = useState('');
   const [input, setInput] = useState('');
@@ -158,24 +158,37 @@ function GraphChat({ onCites, onHover }) {
   }, [input, busy, provider, onCites]);
 
   return (
-    <div className="np-card" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 420 }}>
-      <div className="np-card-h">
-        <h2 style={{ fontSize: 14 }}><Icon name="sparkles" size={15} /> Pesquisa IA no grafo</h2>
-        {providers.length > 0 && (
-          <Segmented value={provider} onChange={setProvider}
-            options={providers.map((p) => ({ value: p.id, label: p.available ? p.label.split(' · ')[0] : `${p.label} (off)` }))} />
-        )}
+    <div className={bare ? 'np-chatwrap' : 'np-card'} style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: bare ? 0 : 420 }}>
+      <div className="np-drawer-h">
+        <h2 style={{ fontSize: 15, fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <Icon name="sparkles" size={16} /> Pesquisa IA no grafo
+        </h2>
+        <div className="np-head-actions">
+          {providers.length > 0 && (
+            <Segmented value={provider} onChange={setProvider}
+              options={providers.map((p) => ({ value: p.id, label: p.available ? p.label.split(' · ')[0] : `${p.label} (off)` }))} />
+          )}
+          {onClose && (
+            <button className="np-iconbtn" onClick={onClose} aria-label="Fechar"
+              style={{ borderColor: 'var(--np-border)', color: 'var(--np-text-2)' }}><Icon name="x" size={16} /></button>
+          )}
+        </div>
       </div>
-      <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {msgs.length === 0 && <p className="muted" style={{ fontSize: 13 }}>Pergunta algo sobre a documentação. As respostas citam as fontes e acendem os nós no grafo.</p>}
+      <div ref={bodyRef} style={{ flex: 1, overflowY: 'auto', padding: 18, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {msgs.length === 0 && (
+          <div className="muted" style={{ fontSize: 13.5, maxWidth: 560, margin: '24px auto', textAlign: 'center' }}>
+            <div style={{ fontSize: 26, marginBottom: 8 }}><Icon name="sparkles" size={26} /></div>
+            Pergunta algo sobre a documentação. As respostas citam as fontes e <b>acendem os nós</b> no grafo.
+          </div>
+        )}
         {msgs.map((m, i) => (
-          <div key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'stretch', maxWidth: m.role === 'user' ? '85%' : '100%' }}>
+          <div className="np-chatmsg" key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'stretch', maxWidth: m.role === 'user' ? '85%' : '100%' }}>
             <div style={{ background: m.role === 'user' ? 'var(--np-brand-soft)' : 'var(--np-surface-2)', color: m.role === 'user' ? 'var(--np-brand-ink)' : 'var(--np-text)',
-              border: '1px solid var(--np-border)', borderRadius: 'var(--np-radius)', padding: '9px 12px', fontSize: 13.5, whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
-              {m.text || (m.role === 'assistant' && busy ? '…' : '')}
+              border: '1px solid var(--np-border)', borderRadius: 'var(--np-radius)', padding: '10px 13px', fontSize: 14, whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
+              {m.text || (m.role === 'assistant' && busy ? '▋' : '')}
             </div>
             {m.cites && m.cites.length > 0 && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
                 {m.cites.map((c) => (
                   <Link key={c.slug} to={'/' + c.slug} className="np-chip" style={{ cursor: 'pointer' }}
                     onMouseEnter={() => onHover && onHover(c.slug)} onMouseLeave={() => onHover && onHover(null)}
@@ -189,14 +202,12 @@ function GraphChat({ onCites, onHover }) {
           </div>
         ))}
       </div>
-      <div style={{ borderTop: '1px solid var(--np-divider)', padding: 10, display: 'flex', gap: 8 }}>
+      <div style={{ borderTop: '1px solid var(--np-divider)', padding: 12, display: 'flex', gap: 8 }}>
         <input className="np-input" placeholder="Perguntar à documentação…" value={input}
-          onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && ask()} disabled={busy} />
+          onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && ask()} disabled={busy} autoFocus />
         <Button variant="primary" onClick={ask} disabled={busy || !input.trim()}><Icon name="send" size={15} /></Button>
-      </div>
-      <div style={{ padding: '0 10px 10px' }}>
         <Button size="sm" onClick={() => window.open('/notebook/', '_blank')} title="Aprofundar no Open Notebook (Fase 3)">
-          <Icon name="ext" size={13} /> Aprofundar no Notebook
+          <Icon name="ext" size={14} />
         </Button>
       </div>
     </div>
@@ -206,14 +217,15 @@ function GraphChat({ onCites, onHover }) {
 function GraphView() {
   const content = useContent();
   const navigate = useNavigate();
-  const [dim, setDim] = useState({ w: 640, h: 600 });
+  const [dim, setDim] = useState({ w: 800, h: 600 });
   const [hi, setHi] = useState(() => new Set());     // slugs acesos (citações)
   const [hover, setHover] = useState(null);
+  const [chatOpen, setChatOpen] = useState(false);
   const wrapRef = useRef(null);
   useEffect(() => {
     const fit = () => {
-      const w = wrapRef.current?.clientWidth || (window.innerWidth - 340);
-      setDim({ w: Math.max(320, w - 2), h: Math.max(420, window.innerHeight - 240) });
+      const w = wrapRef.current?.clientWidth || (window.innerWidth - 60);
+      setDim({ w: Math.max(300, w - 2), h: Math.max(440, window.innerHeight - 250) });
     };
     fit(); window.addEventListener('resize', fit); return () => window.removeEventListener('resize', fit);
   }, []);
@@ -226,23 +238,29 @@ function GraphView() {
   const nodeColor = (n) => {
     const base = TYPE_COLOR[n.type] || '#9ca3af';
     if (!active) return base;
-    return isOn(n.id) ? base : 'rgba(128,128,128,0.18)';   // dim os não-citados
+    return isOn(n.id) ? base : 'rgba(128,128,128,0.16)';   // dim os não-citados
   };
   return (
-    <main className="np-main graphview" style={{ maxWidth: 1280 }}>
-      <div className="np-head"><div><div className="np-eyebrow">Conhecimento</div><h1 className="np-h1">Grafo do conhecimento</h1>
-        <div className="np-sub">{data.nodes.length} docs · {data.links.length} ligações. Pergunta à IA (direita) — as citações acendem os nós.</div></div></div>
-      <div style={{ display: 'flex', gap: 16, alignItems: 'stretch', flexWrap: 'wrap' }}>
-        <div ref={wrapRef} className="np-card" style={{ overflow: 'hidden', flex: '1 1 560px', minWidth: 320 }}>
-          <ForceGraph2D graphData={data} width={dim.w} height={dim.h} nodeLabel="title" nodeRelSize={4}
-            nodeVal={(n) => 1 + (n.deg || 0)} nodeColor={nodeColor}
-            linkColor={() => active ? 'rgba(128,128,128,0.10)' : 'rgba(128,128,128,0.22)'}
-            cooldownTicks={120} onNodeClick={(n) => navigate('/' + n.id)} />
-        </div>
-        <div style={{ flex: '1 1 360px', minWidth: 300, maxWidth: 460 }}>
-          <GraphChat onCites={(slugs) => setHi(new Set(slugs))} onHover={setHover} />
+    <main className="np-main graphview" style={{ maxWidth: 1180 }}>
+      <div className="np-head">
+        <div><div className="np-eyebrow">Conhecimento</div><h1 className="np-h1">Grafo do conhecimento</h1>
+          <div className="np-sub">{data.nodes.length} docs · {data.links.length} ligações. Abre a pesquisa IA para conversar — as citações acendem os nós.</div></div>
+        <div className="np-head-actions">
+          <Button variant="primary" onClick={() => setChatOpen(true)}><Icon name="sparkles" size={15} /> Pesquisa IA</Button>
         </div>
       </div>
+      <div ref={wrapRef} className="np-card" style={{ overflow: 'hidden' }}>
+        <ForceGraph2D graphData={data} width={dim.w} height={dim.h} nodeLabel="title" nodeRelSize={4}
+          nodeVal={(n) => 1 + (n.deg || 0)} nodeColor={nodeColor}
+          linkColor={() => active ? 'rgba(128,128,128,0.08)' : 'rgba(128,128,128,0.22)'}
+          cooldownTicks={120} onNodeClick={(n) => navigate('/' + n.id)} />
+      </div>
+
+      {/* Chat como drawer largo (~70%) da direita, animado */}
+      <div className={`np-scrim${chatOpen ? ' open' : ''}`} onClick={() => setChatOpen(false)} />
+      <aside className={`np-drawer np-drawer--wide${chatOpen ? ' open' : ''}`} role="dialog" aria-hidden={!chatOpen}>
+        {chatOpen && <GraphChat bare onClose={() => setChatOpen(false)} onCites={(slugs) => setHi(new Set(slugs))} onHover={setHover} />}
+      </aside>
     </main>
   );
 }

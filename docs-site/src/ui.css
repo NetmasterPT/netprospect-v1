@@ -45,7 +45,7 @@
   font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--np-chrome-text-2); cursor: pointer;
   user-select: none; border-radius: var(--np-radius); }
 .np-nav-head:hover { color: var(--np-chrome-text); background: var(--np-chrome-2); }
-.np-nav-head span { flex: 1; }
+.np-nav-head > span:first-child { flex: 1; }   /* só o label flexiona (senão o chevron ia p/ o meio) */
 .np-nav-chev { margin-left: auto; display: inline-flex; opacity: .55; transition: transform .15s var(--np-ease); }
 .np-nav-group.collapsed .np-nav-chev { transform: rotate(-90deg); }
 .np-nav-group.collapsed .np-nav-sub { display: none; }

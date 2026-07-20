@@ -88,6 +88,8 @@ function Sidebar({ q, groups, navOpen, onCloseNav, onSearch, onGraph }) {
         <button className="np-iconbtn" onClick={onSearch} title="Pesquisar"><Icon name="search" size={16} /></button>
         <button className="np-iconbtn" onClick={onGraph} title="Grafo do conhecimento"><Icon name="activity" size={16} /></button>
         <a href="/docs/storybook/" target="_blank" rel="noreferrer" className="np-iconbtn" title="Storybook"><Icon name="sparkles" size={16} /></a>
+        <a href="/notebook/" target="_blank" rel="noreferrer" className="np-iconbtn" title="Open Notebook"><Icon name="star" size={16} /></a>
+        <a href="/obsidian/" target="_blank" rel="noreferrer" className="np-iconbtn" title="Obsidian"><Icon name="shield" size={16} /></a>
       </div>
       {results ? (
         <div className="np-nav-group">
@@ -237,7 +239,7 @@ function GraphChat({ bare, onClose, onCites, onHover }) {
       </div>
       <div style={{ borderTop: '1px solid var(--np-divider)', padding: 12, display: 'flex', gap: 8 }}>
         <input className="np-input" placeholder="Perguntar à documentação…" value={input}
-          onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && ask()} disabled={busy} autoFocus />
+          onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && ask()} disabled={busy} />
         <Button variant="primary" onClick={ask} disabled={busy || !input.trim()}><Icon name="send" size={15} /></Button>
         <Button size="sm" onClick={() => window.open('/notebook/', '_blank')} title="Aprofundar no Open Notebook (Fase 3)"><Icon name="ext" size={14} /></Button>
       </div>
@@ -254,7 +256,7 @@ function GraphDrawer({ open, onClose }) {
   const [hover, setHover] = useState(null);
   const [chatOpen, setChatOpen] = useState(false);
   const wrapRef = useRef(null);
-  useEffect(() => { if (!open) { setChatOpen(false); } }, [open]);
+  // NÃO reiniciar o chat ao fechar o drawer — a conversa persiste (fica montado, escondido pela sheet).
   useEffect(() => {
     if (!open) return;
     const fit = () => { const el = wrapRef.current; if (el) setDim({ w: Math.max(280, el.clientWidth - 2), h: Math.max(320, el.clientHeight - 2) }); };
@@ -289,8 +291,9 @@ function GraphDrawer({ open, onClose }) {
               <Icon name="sparkles" size={15} /> Pesquisa IA
             </Button>
           )}
+          {/* sempre montado → a conversa não se perde ao fechar/reabrir (a sheet só desliza) */}
           <div className="np-sheet" data-open={chatOpen ? 'true' : 'false'}>
-            {chatOpen && <GraphChat bare onClose={() => setChatOpen(false)} onCites={(slugs) => setHi(new Set(slugs))} onHover={setHover} />}
+            <GraphChat bare onClose={() => setChatOpen(false)} onCites={(slugs) => setHi(new Set(slugs))} onHover={setHover} />
           </div>
         </div>
       </aside>

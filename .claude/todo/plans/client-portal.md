@@ -1,76 +1,81 @@
-# Plano — Client Portal (Fase 6a, read-only, sem pagamentos)
+# Plano — Fase 6: Client Portal + Store/Checkout + Sell
 
-> A fatia SEGURA e de arranque da Fase 6 ([[phase6-store-stripe-portal-plan]]): um portal **só-leitura**
-> onde cada cliente vê a sua conta (subscrições, avenças, faturas) sem tocar em pagamentos nem em dados de
-> cartão. Reutiliza o padrão token-gated de `/r/:token` e `/book/:token`. NÃO overwrite — plano próprio.
+> Plano completo da Fase 6 (substitui o âmbito só-portal). 6a (portal read-only) é a base SEGURA; 6b (checkout
+> Stripe) e 6c (sell) são a camada de pagamentos — construídas a seguir, com Stripe **hosted** (o cartão nunca
+> passa pelo nosso servidor) e a **fatura fiscal sempre no Moloni** (SAF-T PT). Não overwrite — plano próprio.
+> ⚠️ Segurança: o Claude CONSTRÓI o código; **nunca executa pagamentos reais**; 6b só em **Stripe test mode**
+> até o gpedro validar. Ver [[phase6-store-stripe-portal-plan]], [[netprospect-integrations]].
 
-## Contexto / objetivo
+## Dados — já existem (auditado)
+`moloni_documents` (faturas: number/date/net/vat/total/status/document_type, `.company` m2o) ·
+`moloni_avencas` (recorrências: name/amount/period/next_date/active, `.company` m2o) · `subscriptions`
+(name/frequency/price_inc_vat/features/`client_ids` m2m/`moloni_service_id`) · `products` (Moloni: name/price/
+tax_id/kind) · `companies` (is_client/name/nif/client_since/client_mrr/general_email/moloni_customer_id) ·
+`lib/moloni-write.js` (emite documentos) · `lib/stripe.js` (stub) · `GET /api/moloni/documents/:id/pdf`.
 
-67 empresas `is_client`. Hoje não têm forma de ver o seu estado (subscrições/faturas) — só o staff, no
-dashboard atrás do Authentik. Um portal público **token-gated** dá-lhes isso, com zero risco (read-only) e
-prepara o terreno para o checkout (6b) mais tarde. É também um sinal de profissionalismo para fechar/reter clientes.
+## ⚠️ Decisões de negócio a CONFIRMAR (recomendação já proposta — ajusta no review)
+1. **O que se vende + a quem:** os serviços do Moloni (manutenção, alojamento, projetos) a **prospetos**
+   (converter lead→cliente) **e** upsell a clientes. → *recomendo: catálogo = `products` (Moloni) + pacotes em `subscriptions`.*
+2. **One-time vs recorrente:** **ambos.** One-time (setup/projetos) = Stripe Checkout `mode=payment`. Recorrente
+   (avenças) = **Stripe Billing** `mode=subscription` (cartão em ficheiro) **e** o Moloni emite a fatura/avença
+   fiscal via webhook. → *recomendo isto; alternativa = manter a recorrência 100% no Moloni e Stripe só one-time.*
+3. **Fonte da fatura:** **Moloni** (legal/SAF-T). Stripe = cobrança do cartão; webhook `paid` → `moloni-write` emite. ✅ fixo.
 
-## Dados — já existem todos (auditado)
+## 6a — Client Portal (read-only, SEM pagamentos) — construir 1.º
+Página token-gated (padrão `/r/`,`/book/`) onde o cliente vê a sua conta. Zero escrita, zero cartão.
+- **Schema:** `companies.portal_token` (aleatório, `crypto.randomBytes(24).hex`) + `companies.portal_enabled` (bool).
+- **Rotas:** `GET /portal/:token` (HTML self-contained, estilo `bookHtml`: resumo do cliente + subscrições +
+  avenças + faturas c/ estado) · `GET /api/portal/:token` (JSON) · `GET /api/portal/:token/document/:id/pdf`
+  (**wrapper token-scoped** — valida `moloni_documents.company == empresa-do-token` ANTES de servir).
+- **Isolamento:** TODAS as queries filtram `company = <id do token>`. `portal_enabled=false`/não-cliente → 404.
+- **Excluir `/portal/*` + `/api/portal/*` do Authentik** (NPMplus) — como `/r/*`,`/t/*`.
 
-| O quê | Fonte | Ligação ao cliente |
-|---|---|---|
-| Faturas/recibos/NC | `moloni_documents` (number, date, net, vat, total, status, document_type) | `moloni_documents.company` (m2o) |
-| Avenças/recorrências | `moloni_avencas` (name, amount, period, next_date, active) | `moloni_avencas.company` (m2o) |
-| Subscrições (oferta) | `subscriptions` (name, frequency, price_inc_vat, features, category) | `subscriptions.client_ids` (m2m) |
-| Cliente | `companies` (name, nif, client_since, client_mrr, general_email) | a própria empresa |
-| PDF da fatura | `GET /api/moloni/documents/:id/pdf` (já existe; staff) | precisa de wrapper token-scoped (ver segurança) |
+### Entrega do link — TODAS as 3 (pedido do gpedro)
+1. **Manual (staff):** botão "gerar/copiar link do portal" no drawer do cliente → `POST /api/portal/:companyId/link`
+   (gera/roda o token, devolve o URL). O staff envia à mão.
+2. **Auto-email no onboarding:** ao marcar `is_client=true` (`POST /api/clients/:companyId`) → gera o token +
+   envia email de boas-vindas com o link (via `lib/mailer.js`). Idempotente (não re-envia se já tem token+enabled).
+3. **No rodapé das faturas:** ao emitir um documento no Moloni (`lib/moloni-write.js`), incluir o URL do portal
+   no campo de observações/notas do documento → aparece na fatura. (Fallback: incluir no email de envio da fatura.)
 
-## Design
+## 6b — Store / Checkout (Stripe **hosted**) — depois de 6a + decisões 1/2
+- **`lib/stripe.js`:** `createCheckoutSession({ lineItems|priceId, mode, successUrl, cancelUrl, clientReferenceId,
+  customerEmail })` + `verifyWebhook(rawBody, sig)` (assinatura obrigatória, `STRIPE_WEBHOOK_SECRET`). Hosted →
+  PCI fica na Stripe.
+- **`POST /api/checkout`** (staff, atrás do Authentik): gera o link de checkout p/ um `product`/`subscription` +
+  um cliente/prospeto (`client_reference_id = companyId`). Devolve o URL.
+- **`POST /api/stripe/webhook`** (público, **excluir do Authentik**, verificar assinatura): em
+  `checkout.session.completed` / `invoice.paid` → (a) `moloni-write` emite a fatura/recibo (liga por
+  `moloni_customer_id`), (b) marca `is_client=true` + atualiza `client_mrr`/`subscriptions`, (c) gera/ativa o
+  portal_token + email (reusa 6a-2). Idempotente por `event.id` (guardar processados).
+- **Schema:** `subscriptions.stripe_price_id` + `products.stripe_price_id` (link ao preço Stripe); `companies.stripe_customer_id`.
+- **Teste:** só `STRIPE_TEST_SECRET_KEY` + cartões de teste + webhook via Stripe CLI. Nunca live sem validação do gpedro.
 
-### Schema (`bootstrap-directus.js`) — mínimo
-- `companies.portal_token` (str, único) — gerado 1× por cliente; é a chave de acesso ao portal.
-- `companies.portal_enabled` (bool, default false) — permite ligar/desligar o portal por cliente.
+## 6c — Sell / conversão — depois de 6b
+- Botão "Vender" no drawer do site/empresa (directório) → escolhe produto/subscrição → cria o checkout (6b)
+  pré-preenchido; ao pagar (webhook) → conversão automática (cliente + avença/fatura Moloni + portal).
+- Página pública opcional `GET /buy/:token` (checkout self-service a partir de um link de outreach) — token do
+  email, como `/book/`. (Opcional; decidir se o self-service é desejado ou se o checkout é sempre iniciado pelo staff.)
 
-### Auth = token (padrão `/r/`,`/book/`)
-- `GET /portal/:token` → resolve a empresa por `portal_token` (+ `portal_enabled` + `is_client`). Token longo
-  aleatório (crypto). Sem password. **Excluir `/portal/*` e `/api/portal/*` do Authentik no NPMplus** (como `/r/*`,`/t/*`).
-- **Geração do link:** ação no drawer/página do cliente (staff) — `POST /api/clients/:companyId` (já existe;
-  acrescentar) OU um `POST /api/portal/:companyId/link` que gera/roda o token e devolve o URL para o staff copiar/enviar.
-
-### Rotas
-- `GET /portal/:token` — página HTML self-contained (estilo `bookHtml`): cabeçalho (nome + cliente desde),
-  **subscrições ativas** (nome/preço/frequência/features), **avenças** (valor/período/próxima data), **faturas**
-  (nº/data/total/estado + link PDF). Tema claro, responsivo, sem deps externas.
-- `GET /api/portal/:token` — JSON com os dados acima (a página pode ser server-rendered e dispensar este, mas
-  fica útil p/ refresh). Junta por `company = <id do token>`.
-- `GET /api/portal/:token/document/:docId/pdf` — **wrapper token-scoped** do PDF: VALIDA que
-  `moloni_documents.id=docId AND company=<id do token>` antes de servir (senão um cliente via o PDF de outro).
-  Reusa a lógica do `/api/moloni/documents/:id/pdf` existente.
-
-### Renderer
-Reutilizar o padrão `bookHtml` (shell + inline CSS + `_bEsc`), sem JS pesado (é read-only; um `<a>` para cada PDF).
-
-## Segurança (crítico — é público)
-- Token = única credencial → **longo + aleatório** (`crypto.randomBytes(24).toString('hex')`), rotável.
-- **Read-only** absoluto: nenhuma escrita, nenhum pagamento, nenhum dado de cartão.
-- **Isolamento por cliente:** TODAS as queries filtram `company = <id resolvido do token>`. O PDF valida o
-  `company` do documento (senão enumera faturas alheias). NUNCA expor o endpoint staff `/api/moloni/documents/:id/pdf`
-  ao público — só o wrapper token-scoped.
-- `portal_enabled=false` ou `is_client=false` → 404 (não vaza existência).
-- Excluir `/portal/*` + `/api/portal/*` do Authentik (senão bate no login).
+## Segurança (é público + dinheiro)
+- Portal: token longo aleatório, rotável; read-only; isolamento por `company`; PDF valida o dono; nunca expor o
+  endpoint staff do PDF. Checkout: **hosted** (sem cartão no servidor); webhook **com assinatura**; **test mode**
+  até validação; idempotência por `event.id`. Fatura fiscal = **Moloni**, não a Stripe.
 
 ## Ficheiros
-`bootstrap-directus.js` (portal_token, portal_enabled) · `dashboard/server.mjs` (rotas + renderer + geração do
-token; reusar `d`/`dwrite`/o padrão `_bLookup`/`bookHtml` de `/book/`) · `docs/reference/http-api.md` +
-`TODO-KEYS.md` (nota de exclusão Authentik) · (nav opcional: botão "Portal" no drawer do cliente em `index.html`).
+`bootstrap-directus.js` (portal_token/enabled, stripe_* nas 3 coleções, stripe_customer_id, webhook-events dedup) ·
+`dashboard/server.mjs` (rotas portal + checkout + webhook + geração de token/link + auto-email) · `lib/stripe.js`
+(checkout+webhook) · `lib/moloni-write.js` (reusar p/ a fatura) · `lib/mailer.js` (email do portal) ·
+`docs/reference/http-api.md` + `TODO-KEYS.md` (excluir `/portal/*`, `/api/portal/*`, `/api/stripe/webhook` do
+Authentik; + `STRIPE_*` keys) · `index.html` (botões "Portal"/"Vender" nos drawers).
+
+## Sequência de construção
+6a portal (seguro, entrega já) → link nas 3 vias → 6b checkout+webhook (test mode) → 6c sell. Commitar cada
+fatia com `git commit -- <paths>` (repo multi-sessão — ver [[multi-session-verify-plan]]).
 
 ## Verificação
-1. `node bootstrap-directus.js` → os 2 campos existem.
-2. Gerar token p/ 1 cliente real com faturas/avenças; abrir `/portal/:token` → vê subscrições/avenças/faturas.
-3. **Segurança:** token errado → 404; PDF de uma fatura de OUTRO cliente via este token → 403; `/api/moloni/...`
-   staff continua atrás do Authentik.
-4. Confirmar responsivo (telemóvel) + sem chamadas externas.
-
-## Fora de âmbito (fica para 6b/6c)
-Checkout Stripe, webhooks, pagamentos, self-service de compra, geração de fatura — tudo isso é a fatia
-sensível (precisa das decisões de negócio em [[phase6-store-stripe-portal-plan]]). Este plano é **só o portal read-only**.
-
-## Decisão aberta (1)
-**Como é que o cliente recebe o link?** (a) staff gera e envia à mão (mais simples — recomendado p/ começar);
-(b) auto-email no onboarding; (c) no rodapé das faturas. Começar por (a) — o botão "gerar link do portal" no
-drawer do cliente — e evoluir depois.
+- 6a: gerar token dum cliente real → `/portal/:token` mostra subscrições/avenças/faturas; token errado→404;
+  PDF de outro cliente→403; as 3 vias de entrega do link funcionam.
+- 6b: em test mode, checkout dum produto → cartão de teste → webhook → fatura criada no Moloni + portal ativado;
+  assinatura de webhook inválida → rejeitada; re-entrega do mesmo `event.id` → idempotente (não duplica).
+- 6c: botão "Vender" → checkout → pago → cliente convertido + avença/portal.

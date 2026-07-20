@@ -434,6 +434,11 @@ async function viewSubscriptions() {
   if (!subs.length) { $('#view').innerHTML = head + `<div class="np-empty">Ainda não há pacotes. Cria o primeiro com “+ Novo pacote”.</div>`; return; }
   $('#view').innerHTML = head + `<div class="np-grid" style="grid-template-columns:repeat(auto-fill,minmax(320px,1fr))">${subs.map(subCardHtml).join('')}</div>`;
 }
+function subMolChip(s) {
+  if (!s.moloni_service_id) return `<span class="np-chip" style="height:18px;border-color:var(--np-warn,#d97706);color:var(--np-warn,#d97706)" title="sem produto Moloni — não fatura">sem produto Moloni</span>`;
+  const p = (SUB.refs.products || []).find((x) => String(x.moloni_id) === String(s.moloni_service_id));
+  return `<span class="np-chip" style="height:18px;border-color:var(--np-ok-mark,#16a34a);color:var(--np-ok-mark,#16a34a)" title="produto/serviço Moloni ligado (faturação)">Moloni: ${esc(p?.name || ('#' + s.moloni_service_id))}</span>`;
+}
 function subCardHtml(s) {
   const feats = (s.features || []).slice(0, 5);
   const rel = (arr, label) => (arr && arr.length ? `<span class="np-chip" style="height:18px">${arr.length} ${label}</span>` : '');
@@ -441,7 +446,7 @@ function subCardHtml(s) {
     <div style="display:flex;justify-content:space-between;align-items:start;gap:8px"><div><div style="font-weight:800;font-size:15px">${esc(s.name)}</div><div class="muted" style="font-size:11.5px">${subFreqLabel(s.frequency)}${s.category ? ' · ' + esc(s.category) : ''}${s.active === false ? ' · inativo' : ''}</div></div>
       <span style="text-align:right"><div style="font-weight:800">${eur(s.price_ex_vat)}</div><div class="muted" style="font-size:10.5px">${eur(s.price_inc_vat)} c/IVA</div></span></div>
     ${feats.length ? `<ul style="margin:10px 0 0;padding-left:16px;font-size:12px;color:var(--np-text-2)">${feats.map((f) => `<li>${esc(f)}</li>`).join('')}${(s.features || []).length > 5 ? `<li class="muted">+${s.features.length - 5}…</li>` : ''}</ul>` : ''}
-    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:10px">${rel(s.icps, 'ICP')}${rel(s.segment_ids, 'seg')}${rel(s.client_ids, 'clientes')}${rel(s.campaign_ids, 'camp')}${rel(s.email_templates, 'templates')}</div>
+    <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:10px">${rel(s.icps, 'ICP')}${rel(s.segment_ids, 'seg')}${rel(s.client_ids, 'clientes')}${rel(s.campaign_ids, 'camp')}${rel(s.email_templates, 'templates')}${subMolChip(s)}</div>
     <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap"><button class="np-btn np-btn--sm" onclick="subEdit(${s.id})">Editar</button>${(s.segment_ids || []).length ? `<button class="np-btn np-btn--sm np-btn--primary" onclick="subCampaign(${s.id})">${ic('send', 12)} Criar campanha</button>` : ''}<button class="np-btn np-btn--sm" onclick="subDelete(${s.id},'${esc((s.name || '').replace(/'/g, ''))}')">Apagar</button></div>
   </div></section>`;
 }
@@ -458,6 +463,16 @@ function subEditorHtml() {
   const camps = relBox('Campanhas', SUB.refs.campaigns || [], s.campaign_ids || [], 'campaign_ids', (it) => esc(it.name) + (it.angle ? ` <span class="muted">(${esc(it.angle)})</span>` : ''), 'subToggle');
   const tplSel = relBox('Templates de email (da colecção)', SUB.refs.templates || [], s.template_ids || [], 'template_ids', (it) => esc(it.name), 'subToggle');
   const sec = (t, inner) => `<div style="margin-top:16px"><div class="np-sec-t" style="margin:0 0 8px">${t}</div>${inner}</div>`;
+  // Produto/serviço Moloni (faturação): escolher um sincronizado OU criar a partir desta subscrição.
+  const prods = SUB.refs.products || [];
+  const molOpts = ['<option value="">— sem produto —</option>'].concat(prods.map((p) =>
+    `<option value="${p.moloni_id}" ${String(s.moloni_service_id ?? '') === String(p.moloni_id) ? 'selected' : ''}>${esc(p.name || ('#' + p.moloni_id))}${p.reference ? ' · ' + esc(p.reference) : ''}${p.price != null ? ' · €' + p.price : ''}</option>`)).join('');
+  const molBox = `<div class="muted" style="font-size:11px;margin-bottom:8px">A subscrição fatura por este produto/serviço Moloni — necessário para gerar a VD/avença. <a href="#/moloni-produtos" style="color:var(--np-brand-ink)">Ver produtos</a></div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select class="np-input" id="sub-moloni" style="min-width:320px">${molOpts}</select>
+      <button class="np-btn np-btn--sm" type="button" onclick="subCreateMoloniProduct()">Criar no Moloni a partir desta subscrição</button>
+      <span id="sub-mol-msg" class="muted" style="font-size:11px"></span></div>
+    ${s.moloni_service_id ? '' : '<div class="np-badge warn" style="height:auto;padding:4px 8px;margin-top:8px;font-size:11px">Sem produto Moloni — não poderá gerar faturação até ligar um.</div>'}`;
   return `<div class="np-card"><div class="np-card-b" style="max-width:840px">
     <div style="display:grid;grid-template-columns:1fr 150px 190px;gap:10px">
       <div><label class="muted" style="font-size:11px">Nome do pacote</label><input class="np-input" id="sub-name" value="${esc(s.name || '')}" placeholder="ex.: Manutenção WordPress" style="width:100%"></div>
@@ -465,6 +480,7 @@ function subEditorHtml() {
       <div><label class="muted" style="font-size:11px">Categoria</label>${catSel}</div>
     </div>
     ${sec('Preço', price)}
+    ${sec('Produto Moloni (faturação)', molBox)}
     ${sec('Pontos / funcionalidades', `<textarea class="np-input" id="sub-features" rows="5" placeholder="Um ponto por linha…" style="width:100%;font-size:12.5px">${esc((s.features || []).join('\n'))}</textarea>`)}
     ${sec('Relações', `<div class="muted" style="font-size:11px;margin-bottom:8px">ICPs e templates vêm das <a href="#/icps" style="color:var(--np-brand-ink)">páginas respetivas</a> — cria-os lá e liga-os aqui.</div><div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${segs}${icpSel}${cls}${camps}${tplSel}</div>`)}
     ${sec('Notas', `<textarea class="np-input" id="sub-notes" rows="2" style="width:100%">${esc(s.notes || '')}</textarea><label style="display:flex;gap:6px;align-items:center;margin-top:8px;font-size:12.5px"><input type="checkbox" id="sub-active" ${s.active !== false ? 'checked' : ''}> Ativo</label>`)}
@@ -474,6 +490,24 @@ function subEditorHtml() {
 window.subNew = () => { SUB.edit = { frequency: 'monthly', features: [], segment_ids: [], client_ids: [], campaign_ids: [], icp_ids: [], template_ids: [], active: true }; viewSubscriptions(); };
 window.subEdit = async (id) => { const data = await api('/api/subscriptions'); SUB.refs = data.refs || SUB.refs; const s = (data.subscriptions || []).find((x) => x.id === id); if (!s) return; SUB.edit = { ...s, features: s.features || [], segment_ids: s.segment_ids || [], client_ids: s.client_ids || [], campaign_ids: s.campaign_ids || [], icp_ids: s.icp_ids || [], template_ids: s.template_ids || [] }; viewSubscriptions(); };
 window.subCancel = () => { SUB.edit = null; viewSubscriptions(); };
+// Cria um produto/serviço no Moloni a partir do nome+preço da subscrição e liga-o (moloni_service_id).
+window.subCreateMoloniProduct = async () => {
+  subReadDom(); const s = SUB.edit;
+  const setMsg = (t) => { const m = document.getElementById('sub-mol-msg'); if (m) m.textContent = t; };
+  if (!s.name) return setMsg('Falta o nome da subscrição.');
+  if (s.price_ex_vat == null || s.price_ex_vat === '') return setMsg('Falta o preço s/IVA.');
+  setMsg('a criar no Moloni…');
+  try {
+    const ref = ((s.category || 'SUB') + '-' + s.name).replace(/\s+/g, '-').slice(0, 30);
+    const r = await api('/api/moloni/products', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: s.name, price: s.price_ex_vat, type: 'servico', reference: ref }) });
+    const pid = r.result?.product_id;
+    if (!pid) throw new Error('sem product_id na resposta');
+    s.moloni_service_id = String(pid);
+    (SUB.refs.products = SUB.refs.products || []).push({ moloni_id: pid, name: s.name, reference: ref, price: s.price_ex_vat, kind: 'service' });
+    subRerender();
+    const m = document.getElementById('sub-mol-msg'); if (m) m.textContent = 'produto criado (#' + pid + ') e ligado — Guarda para persistir.';
+  } catch (e) { setMsg('erro: ' + e.message); }
+};
 function subReadDom() {
   const s = SUB.edit; if (!s) return; const g = (id) => document.getElementById(id);
   if (g('sub-name')) s.name = g('sub-name').value.trim();
@@ -484,6 +518,7 @@ function subReadDom() {
   if (g('sub-inc')) s.price_inc_vat = g('sub-inc').value === '' ? null : parseFloat(g('sub-inc').value);
   if (g('sub-notes')) s.notes = g('sub-notes').value;
   if (g('sub-active')) s.active = g('sub-active').checked;
+  if (g('sub-moloni')) s.moloni_service_id = g('sub-moloni').value || null;
 }
 function subRerender() { const el = document.getElementById('sub-editor'); if (el) el.innerHTML = subEditorHtml(); }
 window.subCalcVat = (fromInc) => { const ex = document.getElementById('sub-ex'), inc = document.getElementById('sub-inc'); const r2 = (v) => Math.round(v * 100) / 100; if (fromInc) { const v = parseFloat(inc.value); ex.value = isNaN(v) ? '' : r2(v / 1.23); } else { const v = parseFloat(ex.value); inc.value = isNaN(v) ? '' : r2(v * 1.23); } };
@@ -496,7 +531,7 @@ window.subSave = async () => {
   subReadDom(); const s = SUB.edit; const msg = document.getElementById('sub-msg');
   if (!s.name) { if (msg) msg.textContent = 'Falta o nome.'; return; }
   if (msg) msg.textContent = 'a guardar…';
-  const body = { name: s.name, frequency: s.frequency, category: s.category, features: s.features, price_ex_vat: s.price_ex_vat, price_inc_vat: s.price_inc_vat, segment_ids: s.segment_ids, client_ids: s.client_ids, campaign_ids: s.campaign_ids, icp_ids: s.icp_ids, template_ids: s.template_ids, active: s.active, notes: s.notes };
+  const body = { name: s.name, frequency: s.frequency, category: s.category, features: s.features, price_ex_vat: s.price_ex_vat, price_inc_vat: s.price_inc_vat, segment_ids: s.segment_ids, client_ids: s.client_ids, campaign_ids: s.campaign_ids, icp_ids: s.icp_ids, template_ids: s.template_ids, active: s.active, notes: s.notes, moloni_service_id: s.moloni_service_id ?? null };
   try {
     if (s.id) await api('/api/subscriptions/' + s.id, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     else await api('/api/subscriptions', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });

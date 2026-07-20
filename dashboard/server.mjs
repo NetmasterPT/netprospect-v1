@@ -552,7 +552,7 @@ app.delete('/api/segments/:id', async (req, res) => {
 
 // --- Subscrições (produtos Netmaster: pacotes + preço IVA + ICPs + segmentos/clientes/campanhas/templates) ---
 const SUB_FREQ = ['one_off', 'monthly', 'quarterly', 'semiannual', 'annual'];
-const SUB_FIELDS = 'id,name,frequency,category,features,price_ex_vat,price_inc_vat,icps,segment_ids,client_ids,campaign_ids,email_templates,active,notes,sort,date_created';
+const SUB_FIELDS = 'id,name,frequency,category,features,price_ex_vat,price_inc_vat,icps,segment_ids,client_ids,campaign_ids,email_templates,active,notes,sort,date_created,moloni_service_id';
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 function subClean(b) {
   const o = {};
@@ -563,6 +563,9 @@ function subClean(b) {
   if (typeof b.active === 'boolean') o.active = b.active;
   if (typeof b.notes === 'string') o.notes = b.notes;
   if (b.sort != null) o.sort = parseInt(b.sort, 10) || null;
+  // Ligação ao produto/serviço Moloni (moloni_id do produto, campo string): p/ a geração de VD/faturação da
+  // avença. Aceita null (desligar) ou um id. Uma subscrição DEVIA ter sempre um produto (a UI avisa se faltar).
+  if ('moloni_service_id' in b) o.moloni_service_id = b.moloni_service_id == null || b.moloni_service_id === '' ? null : String(b.moloni_service_id).slice(0, 32);
   // IVA 23%: entra o preço s/IVA (ou c/IVA) e calcula-se o outro.
   if (b.price_ex_vat != null && b.price_ex_vat !== '') { o.price_ex_vat = round2(b.price_ex_vat); o.price_inc_vat = round2(o.price_ex_vat * 1.23); }
   else if (b.price_inc_vat != null && b.price_inc_vat !== '') { o.price_inc_vat = round2(b.price_inc_vat); o.price_ex_vat = round2(o.price_inc_vat / 1.23); }
@@ -571,15 +574,17 @@ function subClean(b) {
 const CLIENTS_REF_URL = '/items/companies?filter[is_client][_eq]=true&limit=-1&fields=id,name,org_domain';
 app.get('/api/subscriptions', async (req, res) => {
   try {
-    const [subscriptions, segments, campaigns, clients, icps, templates] = await Promise.all([
+    const [subscriptions, segments, campaigns, clients, icps, templates, products] = await Promise.all([
       d(`/items/subscriptions?sort[]=sort&sort[]=-id&limit=-1&fields=${SUB_FIELDS},icp_ids,template_ids`),
       d('/items/segments?limit=-1&fields=id,name,accent').catch(() => []),
       d('/items/campaigns?limit=-1&fields=id,name,angle,status').catch(() => []),
       d(CLIENTS_REF_URL).catch(() => []),
       d('/items/icps?limit=-1&fields=id,name,description').catch(() => []),
       d('/items/email_templates?limit=-1&fields=id,name,subject').catch(() => []),
+      // Produtos/serviços Moloni sincronizados → seletor de ligação da subscrição (moloni_service_id = moloni_id).
+      d('/items/products?fields=id,moloni_id,name,reference,kind,price&sort[]=name&limit=-1').catch(() => []),
     ]);
-    res.json({ subscriptions, refs: { segments, campaigns, clients, icps, templates } });
+    res.json({ subscriptions, refs: { segments, campaigns, clients, icps, templates, products } });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 app.post('/api/subscriptions', async (req, res) => {

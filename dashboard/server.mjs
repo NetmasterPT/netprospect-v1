@@ -1458,7 +1458,7 @@ app.get('/api/config', async (req, res) => {
           eupago: { enabled: has('EUPAGO_API_KEY') },
           coingate: { enabled: has('COINGATE_SANDBOX_API_TOKEN') || has('COINGATE_LIVE_API_TOKEN') },
           wise: { enabled: has('WISE_SANDBOX_API_TOKEN') || has('WISE_LIVE_API_TOKEN') },
-          bank_transfer: { enabled: has('BANK_TRANSFER_IBAN') },
+          bank_transfer: { enabled: has('STORE_IBAN') },
         }; })(),
       },
     });

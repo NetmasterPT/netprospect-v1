@@ -146,11 +146,14 @@ services:
     restart: unless-stopped
     environment:
       CONTAINERS: "1"        # acesso à API /containers (necessário p/ o path do restart)
-      ALLOW_RESTARTS: "1"    # permite APENAS POST /containers/<id>/restart
-      # tudo o resto fica no default (0 = negado): sem create/exec/kill/images/networks/etc.
+      POST: "1"              # o template 0.3.0 nega POST ANTES do ALLOW_RESTARTS → precisa de POST=1
+      ALLOW_RESTARTS: "1"    # (redundante com POST=1, mantido por documentação)
+      # POST=1+CONTAINERS=1 abriria outros POST de containers NO PROXY — mas o gate real é a rede
+      # isolada `ctl` (só o docs-ctl lá chega; open-notebook/obsidian/kb-http ficam fora) + a
+      # whitelist do docs-ctl (que só emite /restart de nomes exatos). Nada mais alcança este proxy.
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-    # sem `ports:` — interno à rede npdocs
+    networks: [ctl]          # SÓ nesta rede isolada — nunca publicado no host
 
   # docs-ctl: endpoint minúsculo (node built-ins, sem deps) — whitelist de restart + serve o overlay.js.
   # O NPMplus faz proxy de /ctl/ (nos proxy hosts do obsidian/notebook) para aqui; atrás de Authentik.
@@ -165,9 +168,14 @@ services:
     volumes:
       - ../..:/app:ro
     depends_on: [docker-socket-proxy]
+    networks: [ctl]                                   # SÓ ctl (fala com o socket-proxy); a porta publicada é à parte
     ports:
       - "${TAILNET_IP:-127.0.0.1}:8097:8097"          # alcançável pelo NPMplus na tailnet
       - "127.0.0.1:8097:8097"
+
+networks:
+  ctl:
+    driver: bridge          # rede isolada docs-ctl↔socket-proxy (fora do alcance dos containers de terceiros)
 
 volumes:
   qdrant-data:

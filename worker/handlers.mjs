@@ -422,10 +422,10 @@ export function makeFineHandlers(ctx, js) {
   }
 
   // ---- SCORE (convergência: qualify + lead score; dispara auditorias) -------
-  const SCORE_FIELDS = ['id', 'domain', 'primary_platform.slug', 'is_cpanel', 'spf_status', 'dmarc_status', 'security_findings', 'security_severity', 'gmb', 'seo_score', 'has_email', 'has_valid_email', 'has_phone', 'has_decision_maker', 'load_bucket', 'traffic_bucket', 'ssl_days_left', 'expiring_soon', 'cms_outdated', 'qualified', 'audit_checked_at'];
+  const SCORE_FIELDS = ['id', 'domain', 'primary_platform.slug', 'is_cpanel', 'spf_status', 'dmarc_status', 'security_findings', 'security_severity', 'gmb', 'seo_score', 'has_email', 'has_valid_email', 'has_valid_corp_email', 'has_phone', 'has_decision_maker', 'load_bucket', 'traffic_bucket', 'ssl_days_left', 'expiring_soon', 'cms_outdated', 'qualified', 'audit_checked_at'];
   async function handleScore(job) {
     const s = await siteRow(job.siteId, SCORE_FIELDS); if (!s) return 'ack';
-    const sig = { slug: s.primary_platform?.slug, is_cpanel: s.is_cpanel, spf_status: s.spf_status, dmarc_status: s.dmarc_status, security_findings: s.security_findings, security_severity: s.security_severity, gmb: s.gmb, seo_score: s.seo_score, has_email: s.has_email, has_valid_email: s.has_valid_email, has_phone: s.has_phone, has_decision_maker: s.has_decision_maker, load_bucket: s.load_bucket, traffic_bucket: s.traffic_bucket, ssl_days_left: s.ssl_days_left, expiring_soon: s.expiring_soon, cms_outdated: s.cms_outdated };
+    const sig = { slug: s.primary_platform?.slug, is_cpanel: s.is_cpanel, spf_status: s.spf_status, dmarc_status: s.dmarc_status, security_findings: s.security_findings, security_severity: s.security_severity, gmb: s.gmb, seo_score: s.seo_score, has_email: s.has_email, has_valid_email: s.has_valid_email, has_valid_corp_email: s.has_valid_corp_email, has_phone: s.has_phone, has_decision_maker: s.has_decision_maker, load_bucket: s.load_bucket, traffic_bucket: s.traffic_bucket, ssl_days_left: s.ssl_days_left, expiring_soon: s.expiring_soon, cms_outdated: s.cms_outdated };
     const q = qualify(sig); const ls = scoreSite(sig);
     const wasQualified = s.qualified;
     await client.request(updateItem('sites', job.siteId, { qualified: q.qualified, qualified_reasons: q.reasons, lead_score: ls.score, lead_score_breakdown: ls.breakdown, lead_score_at: new Date().toISOString() }));
@@ -617,7 +617,17 @@ export function makeFineHandlers(ctx, js) {
     // Rollup p/ o lead score: ≥1 email entregável neste domínio → has_valid_email no site + re-score (sinal forte).
     const siteId = contacts[0]?.site;
     if (counts.valid > 0 && siteId) {
-      try { await client.request(updateItem('sites', siteId, { has_valid_email: true })); await pub(SUBJECTS.score, { domain, siteId }, `score:${domain}`); }
+      const patch = { has_valid_email: true };
+      // + se algum entregável for de MX corporativo (mail_provider='corp', já persistido pelo verifyDomain)
+      // → has_valid_corp_email (sinal B2B mais forte que free-provider). Query leve, fail-soft.
+      try {
+        const corp = await client.request(readItems('contacts', {
+          filter: { _and: [{ email_status: { _eq: 'valid' } }, { mail_provider: { _eq: 'corp' } }, { company: { org_domain: { _eq: domain } } }] },
+          fields: ['id'], limit: 1,
+        }));
+        if (corp.length) patch.has_valid_corp_email = true;
+      } catch { /* fail-soft: mantém só has_valid_email */ }
+      try { await client.request(updateItem('sites', siteId, patch)); await pub(SUBJECTS.score, { domain, siteId }, `score:${domain}`); }
       catch { /* fail-soft: o rollup é bónus, não bloqueia o ack do verify */ }
     }
     return 'ack';

@@ -30,6 +30,7 @@ function signalSql(sig, ids) {
     case 'has_decision_maker': return 'has_decision_maker = true';
     case 'has_email': return 'has_email = true';
     case 'has_valid_email': return 'has_valid_email = true';
+    case 'has_valid_corp_email': return 'has_valid_corp_email = true';
     case 'has_phone': return 'has_phone = true';
     case 'spf_problem': return `spf_status IN ('missing','weak','invalid')`;
     case 'dmarc_problem': return `dmarc_status IN ('missing','weak','invalid')`;

@@ -190,6 +190,7 @@ async function main() {
   // Contactos (rollup)
   await ensureField('sites', 'has_email', bool(false));
   await ensureField('sites', 'has_valid_email', bool(false)); // rollup do verify: ≥1 contacto email_status='valid' (entregável) — sinal forte no lead score
+  await ensureField('sites', 'has_valid_corp_email', bool(false)); // rollup: ≥1 contacto valid E mail_provider='corp' (email corporativo entregável) — sinal B2B mais forte que free-provider
   await ensureField('sites', 'has_phone', bool(false));
   // Localidade do negócio (do GMB quando existe, senão on-site)
   await ensureField('sites', 'business_city', str());

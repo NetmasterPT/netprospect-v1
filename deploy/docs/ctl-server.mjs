@@ -14,22 +14,23 @@ const ALLOW = new Set((process.env.CTL_ALLOW || 'npdocs-obsidian-web-1,npdocs-op
 
 // overlay.js: injeta um botão flutuante e mapeia o hostname → container a reiniciar.
 const OVERLAY_JS = `(function(){
-  if (window.top !== window.self) return;              // não em iframes internos
+  try { console.log('[np-restart] overlay carregado em', location.hostname, 'top=' + (window.top === window.self)); } catch (e) {}
   var MAP = {
     'netprospect.obsidian.netmaster.pt': 'npdocs-obsidian-web-1',
     'netprospect.notebook.netmaster.pt': 'npdocs-open-notebook-1'
   };
   var CONTAINER = MAP[location.hostname];
-  if (!CONTAINER) return;                              // host não mapeado → não injeta
-  function mount(){
-    if (document.getElementById('np-restart-btn')) return;
+  if (!CONTAINER) { try { console.log('[np-restart] hostname não mapeado — sem botão'); } catch (e) {} return; }
+  function ensure(){
+    if (window.top !== window.self) return;             // só no frame de topo
+    if (!document.body || document.getElementById('np-restart-btn')) return;
     var b = document.createElement('button');
-    b.id = 'np-restart-btn'; b.textContent = '⟳'; b.title = 'Reiniciar esta app (se travar)';
-    b.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:2147483647;width:44px;height:44px;'
-      + 'border-radius:50%;border:none;background:#EA0B2A;color:#fff;font:20px/1 sans-serif;cursor:pointer;'
-      + 'box-shadow:0 2px 8px rgba(0,0,0,.35);opacity:.45;transition:opacity .2s';
+    b.id = 'np-restart-btn'; b.type = 'button'; b.textContent = '⟳'; b.title = 'Reiniciar esta app (se travar)';
+    b.style.cssText = 'position:fixed!important;bottom:16px;right:16px;z-index:2147483647;width:48px;height:48px;'
+      + 'border-radius:50%;border:2px solid #fff;background:#EA0B2A;color:#fff;font:22px/1 sans-serif;'
+      + 'cursor:pointer;box-shadow:0 2px 10px rgba(0,0,0,.4);opacity:.55;transition:opacity .2s';
     b.onmouseenter = function(){ b.style.opacity = 1; };
-    b.onmouseleave = function(){ b.style.opacity = .45; };
+    b.onmouseleave = function(){ b.style.opacity = .55; };
     b.onclick = async function(){
       if (!confirm('Reiniciar esta app? Vais perder o estado não-guardado.')) return;
       b.disabled = true; b.textContent = '…';
@@ -41,8 +42,11 @@ const OVERLAY_JS = `(function(){
       } catch (e) { alert('Erro: ' + e.message); b.disabled = false; b.textContent = '⟳'; }
     };
     document.body.appendChild(b);
+    try { console.log('[np-restart] botão montado'); } catch (e) {}
   }
-  if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
+  ensure();
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', ensure);
+  setInterval(ensure, 2000);                            // re-monta se a app (KasmVNC/Streamlit) substituir o DOM
 })();`;
 
 const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };

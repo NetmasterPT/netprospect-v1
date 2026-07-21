@@ -1519,13 +1519,30 @@ app.post('/api/clients/:companyId', async (req, res) => {
     if (b.client_mrr !== undefined) patch.client_mrr = b.client_mrr === '' || b.client_mrr == null ? null : Number(b.client_mrr);
     if (b.client_notes !== undefined) patch.client_notes = b.client_notes || null;
     const company = await dwrite('PATCH', `/items/companies/${encodeURIComponent(req.params.companyId)}`, patch);
+    // Onboarding automático: ao marcar cliente, provisiona o portal + envia o link do portal (Fase 6, entrega #2).
+    // Só no PRIMEIRO onboarding (sem portal_token/enabled) → não re-envia em patches seguintes. Opt-out: send_portal_email:false.
+    let portalLink = null;
+    if (patch.is_client) {
+      try {
+        const co = await d(`/items/companies/${encodeURIComponent(req.params.companyId)}?fields=id,portal_token,portal_enabled,general_email`).catch(() => null);
+        const isNew = !co?.portal_token || !co?.portal_enabled;
+        const token = co?.portal_token || (newToken() + crypto.randomBytes(8).toString('hex'));
+        if (isNew) await dwrite('PATCH', `/items/companies/${encodeURIComponent(req.params.companyId)}`, { portal_token: token, portal_enabled: true }).catch(() => {});
+        portalLink = `${storeBase(req)}/portal/${token}`;
+        const to = b.email || co?.general_email;
+        if (isNew && to && b.send_portal_email !== false) {
+          const { sendEmail } = await import('./lib/mailer.js').catch(() => import('../lib/mailer.js'));
+          await sendEmail({ to, subject: 'A tua conta Netmaster', body: `Bem-vindo! 🎉\n\nAcede à tua conta (faturas, subscrições, avenças):\n${portalLink}\n\n— Equipa Netmaster` }).catch(() => {});
+        }
+      } catch { /* best-effort */ }
+    }
     void captureServerEvent(req, 'client_status_updated', posthogDistinctId(req, `company:${req.params.companyId}`), {
       company_id: req.params.companyId,
       is_client: patch.is_client,
       has_mrr: patch.client_mrr != null,
       has_notes: !!patch.client_notes,
     });
-    res.json({ ok: true, company });
+    res.json({ ok: true, company, portalLink });
   } catch (e) { res.status(502).json({ error: e.message }); }
 });
 // Live search de empresas por nome/domínio OU por nome de contacto (p/ marcar cliente).

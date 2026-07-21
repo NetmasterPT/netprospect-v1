@@ -3,8 +3,8 @@
 // Corre no HOST (onde a lib/ + @directus/sdk existem), como os enqueue-*.js.
 //
 // Uso:   node moloni-sync.js [customers|products|documents|avencas|all]
-// Cron (moloni-sync-cron), a cada 30 min:
-//   */30 * * * *  cd /root/Github/netprospect-v1 && node moloni-sync.js all >> /var/log/moloni-sync.log 2>&1
+// Cron (moloni-sync-cron), diário às 05:00 UTC (registado em dashboard/server.mjs):
+//   0 5 * * *  cd /root/Github/netprospect-v1 && node moloni-sync.js all >> /var/log/moloni-sync.log 2>&1
 import { syncEntity, syncAll } from './lib/moloni-sync.js';
 
 const entity = (process.argv[2] || 'all').toLowerCase();

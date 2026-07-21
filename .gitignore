@@ -31,6 +31,10 @@ deploy/agent/*.log
 deploy/reacher/.env
 deploy/reacher/.proxy-pass
 
+# NPMplus (reverse-proxy) — segredos do stack (OIDC/CrowdSec/Tailscale/Authentik/openappsec).
+# O .env real vive em /opt/.env NA BOX hel1-npm, nunca no git (só o .env.example é committado).
+deploy/npmplus/.env
+
 # Chaves de service-account / credenciais (nunca committar)
 google.service-account.json
 *.service-account.json

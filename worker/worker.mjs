@@ -230,13 +230,17 @@ function makeHeavyFineHandlers(ctx, audit, js) {
         try { const { matchWpscanVulns } = await import('../lib/wordfence.js'); const wf = await matchWpscanVulns(r.report); if (wf) { vulnCount = wf.vulnCount; report = { ...r.report, wordfence_vulns: wf.vulns }; } }
         catch { /* Wordfence indisponível → mantém o keyless simples */ }
       }
-      await client.request(updateItem('sites', site.id, { wp_vuln_count: vulnCount }));
+      await client.request(updateItem('sites', site.id, { wp_vuln_count: vulnCount, wpscan_checked_at: new Date().toISOString() }));
       await upsertReport(client, site.id, 'wpscan', { score: vulnCount, summary: { vulnCount }, report });
     } catch (e) {
-      // Igual ao nuclei/lighthouse: 'retry' em vez de ack silencioso sem escrever (subcontava + nunca re-corria).
-      if (/não instalado|not installed/i.test(e.message)) throw e;
-      log(`wpscan ${site.domain}: ${e.message}`);
-      return 'retry';
+      if (/não instalado|not installed/i.test(e.message)) throw e; // erro de infra → re-tentar (não marcar)
+      // wpscan PENDURA/falha em sites com WAF/anti-bot/proxy lento (ex.: alguns .nl) → runWpscan rejeita
+      // (timeout 240s, err && !stdout). É PERSISTENTE e caro → marca "correu" (sem vuln-data) e DESISTE (ack)
+      // em vez de re-tentar para sempre. Antes 'retry' → loop infinito + nunca marcava (os 2 órfãos presos).
+      // O on-demand keyed ("Auditar agora") re-scana quando o utilizador quiser.
+      log(`wpscan ${site.domain}: ${e.message} → marca checked + ack (desiste)`);
+      await client.request(updateItem('sites', site.id, { wpscan_checked_at: new Date().toISOString() })).catch(() => {});
+      return 'ack';
     }
     return 'ack';
   }

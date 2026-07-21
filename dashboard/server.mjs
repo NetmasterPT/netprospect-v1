@@ -1926,7 +1926,7 @@ SELECT
   count(*) FILTER (WHERE s.lighthouse_mobile_checked_at IS NOT NULL)::int AS lighthouse_mobile,
   count(*) FILTER (WHERE s.lighthouse_desktop_checked_at IS NOT NULL)::int AS lighthouse_desktop,
   count(*) FILTER (WHERE s.security_findings IS NOT NULL)::int AS nuclei,
-  count(*) FILTER (WHERE s.wp_vuln_count IS NOT NULL)::int AS wpscan,
+  count(*) FILTER (WHERE s.wpscan_checked_at IS NOT NULL)::int AS wpscan,
   count(*) FILTER (WHERE s.gmb_checked_at IS NOT NULL)::int AS gmb
 -- Denominador = leads QUALIFICADOS e VIVOS. Sites mortos (is_live=false) ou desqualificados não podem
 -- completar os jobs (tal como os não-WP não podem ter wpscan → wp_total), logo não contam para a % de
@@ -1984,7 +1984,7 @@ SELECT
   count(*) FILTER (WHERE perf_desktop IS NOT NULL)::int AS lighthouse_desktop,
   count(*) FILTER (WHERE seo_score IS NOT NULL)::int AS seo,
   count(*) FILTER (WHERE security_findings IS NOT NULL AND security_findings::text NOT IN ('null','[]','{}'))::int AS security,
-  count(*) FILTER (WHERE wp_vuln_count IS NOT NULL)::int AS wpscan,
+  count(*) FILTER (WHERE wpscan_checked_at IS NOT NULL)::int AS wpscan,
   count(*) FILTER (WHERE domain_expiry IS NOT NULL)::int AS whois
 -- Mesmo denominador da cobertura de jobs: só leads qualificados e vivos (ver COVERAGE_SQL).
 FROM sites WHERE qualified AND is_live GROUP BY bucket`;

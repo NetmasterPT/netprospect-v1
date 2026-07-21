@@ -240,6 +240,7 @@ async function main() {
   await ensureField('sites', 'lighthouse_desktop_checked_at', ts());
   await ensureField('sites', 'mobile_friendly', bool(false));
   await ensureField('sites', 'wp_vuln_count', int());
+  await ensureField('sites', 'wpscan_checked_at', ts()); // marcador "wpscan correu" (mesmo scan falhado/pendurado)
   await ensureField('sites', 'security_findings', int());
   await ensureField('sites', 'security_severity', enumS(['info', 'low', 'medium', 'high', 'critical']));
   await ensureField('sites', 'audit_status', { type: 'string', meta: { interface: 'select-dropdown', options: { choices: ['pending', 'queued', 'running', 'done', 'error', 'skipped'].map((v) => ({ text: v, value: v })) } }, schema: { default_value: 'pending' } });

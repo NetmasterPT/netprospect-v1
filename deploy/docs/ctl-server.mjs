@@ -1,0 +1,67 @@
+// deploy/docs/ctl-server.mjs — controlo mínimo para o botão flutuante de restart.
+// Sem deps (node http + fetch nativo). Fala com o docker-socket-proxy (que só expõe restart),
+// e serve o overlay.js injetado por sub_filter do NPMplus nas páginas do Obsidian/Notebook.
+//
+// Segurança em camadas: (1) só escuta na tailnet/localhost; (2) só é alcançável via NPMplus
+// (idealmente atrás de Authentik nesses proxy hosts); (3) WHITELIST de nomes exatos; (4) o
+// socket-proxy só permite POST /containers/<id>/restart (ALLOW_RESTARTS), nada mais.
+import http from 'node:http';
+
+const PROXY = process.env.DOCKER_PROXY_URL || 'http://docker-socket-proxy:2375';
+const PORT = Number(process.env.CTL_PORT || 8097);
+// Nomes EXATOS dos containers que o botão pode reiniciar (host→container é resolvido no overlay.js).
+const ALLOW = new Set((process.env.CTL_ALLOW || 'npdocs-obsidian-web-1,npdocs-open-notebook-1').split(',').map((s) => s.trim()).filter(Boolean));
+
+// overlay.js: injeta um botão flutuante e mapeia o hostname → container a reiniciar.
+const OVERLAY_JS = `(function(){
+  if (window.top !== window.self) return;              // não em iframes internos
+  var MAP = {
+    'netprospect.obsidian.netmaster.pt': 'npdocs-obsidian-web-1',
+    'netprospect.notebook.netmaster.pt': 'npdocs-open-notebook-1'
+  };
+  var CONTAINER = MAP[location.hostname];
+  if (!CONTAINER) return;                              // host não mapeado → não injeta
+  function mount(){
+    if (document.getElementById('np-restart-btn')) return;
+    var b = document.createElement('button');
+    b.id = 'np-restart-btn'; b.textContent = '⟳'; b.title = 'Reiniciar esta app (se travar)';
+    b.style.cssText = 'position:fixed;bottom:16px;right:16px;z-index:2147483647;width:44px;height:44px;'
+      + 'border-radius:50%;border:none;background:#EA0B2A;color:#fff;font:20px/1 sans-serif;cursor:pointer;'
+      + 'box-shadow:0 2px 8px rgba(0,0,0,.35);opacity:.45;transition:opacity .2s';
+    b.onmouseenter = function(){ b.style.opacity = 1; };
+    b.onmouseleave = function(){ b.style.opacity = .45; };
+    b.onclick = async function(){
+      if (!confirm('Reiniciar esta app? Vais perder o estado não-guardado.')) return;
+      b.disabled = true; b.textContent = '…';
+      try {
+        var r = await fetch('/ctl/restart/' + CONTAINER, { method: 'POST' });
+        var j = await r.json().catch(function(){ return {}; });
+        if (r.ok && j.ok) { b.textContent = '✓'; b.style.background = '#1a7f37'; setTimeout(function(){ location.reload(); }, 7000); }
+        else { alert('Restart falhou: ' + (j.error || ('HTTP ' + r.status))); b.disabled = false; b.textContent = '⟳'; }
+      } catch (e) { alert('Erro: ' + e.message); b.disabled = false; b.textContent = '⟳'; }
+    };
+    document.body.appendChild(b);
+  }
+  if (document.body) mount(); else document.addEventListener('DOMContentLoaded', mount);
+})();`;
+
+const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(obj)); };
+
+http.createServer(async (req, res) => {
+  try {
+    if (req.method === 'GET' && (req.url === '/overlay.js' || req.url === '/ctl/overlay.js')) {
+      res.writeHead(200, { 'Content-Type': 'application/javascript; charset=utf-8', 'Cache-Control': 'no-store' });
+      return res.end(OVERLAY_JS);
+    }
+    if (req.method === 'GET' && req.url === '/health') { res.writeHead(200); return res.end('ok'); }
+    const m = req.url.match(/^\/restart\/([a-zA-Z0-9._-]+)$/);
+    if (req.method === 'POST' && m) {
+      const name = m[1];
+      if (!ALLOW.has(name)) return json(res, 403, { ok: false, error: 'container não permitido' });
+      const r = await fetch(`${PROXY}/containers/${encodeURIComponent(name)}/restart?t=3`, { method: 'POST' });
+      // Docker devolve 204 No Content em sucesso.
+      return json(res, r.status === 204 ? 200 : 502, { ok: r.status === 204, status: r.status });
+    }
+    res.writeHead(404); res.end('not found');
+  } catch (e) { json(res, 502, { ok: false, error: e.message }); }
+}).listen(PORT, () => console.log(`docs-ctl em :${PORT} — allow: ${[...ALLOW].join(', ')} → ${PROXY}`));

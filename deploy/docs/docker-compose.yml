@@ -138,6 +138,37 @@ services:
       - "${TAILNET_IP:-127.0.0.1}:8091:3001"        # KasmVNC exige HTTPS (contexto seguro) → porto 3001 (self-signed)
       - "127.0.0.1:8091:3001"
 
+  # --- Botão flutuante de restart (overlay nas apps Obsidian/Notebook) ---
+  # docker-socket-proxy: expõe SÓ o endpoint de restart de containers (ALLOW_RESTARTS); nega tudo o resto.
+  # Não é publicado no host — só alcançável na rede npdocs pelo docs-ctl.
+  docker-socket-proxy:
+    image: tecnativa/docker-socket-proxy:0.3.0
+    restart: unless-stopped
+    environment:
+      CONTAINERS: "1"        # acesso à API /containers (necessário p/ o path do restart)
+      ALLOW_RESTARTS: "1"    # permite APENAS POST /containers/<id>/restart
+      # tudo o resto fica no default (0 = negado): sem create/exec/kill/images/networks/etc.
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    # sem `ports:` — interno à rede npdocs
+
+  # docs-ctl: endpoint minúsculo (node built-ins, sem deps) — whitelist de restart + serve o overlay.js.
+  # O NPMplus faz proxy de /ctl/ (nos proxy hosts do obsidian/notebook) para aqui; atrás de Authentik.
+  docs-ctl:
+    image: node:20-slim
+    restart: unless-stopped
+    command: ["node", "/app/deploy/docs/ctl-server.mjs"]
+    environment:
+      DOCKER_PROXY_URL: http://docker-socket-proxy:2375
+      CTL_PORT: "8097"
+      CTL_ALLOW: ${CTL_ALLOW:-npdocs-obsidian-web-1,npdocs-open-notebook-1}
+    volumes:
+      - ../..:/app:ro
+    depends_on: [docker-socket-proxy]
+    ports:
+      - "${TAILNET_IP:-127.0.0.1}:8097:8097"          # alcançável pelo NPMplus na tailnet
+      - "127.0.0.1:8097:8097"
+
 volumes:
   qdrant-data:
   hf-cache:

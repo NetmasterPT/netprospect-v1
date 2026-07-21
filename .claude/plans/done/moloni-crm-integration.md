@@ -205,3 +205,21 @@ usam `d()`/`dwrite()`. Mantém-se `isXConfigured()`. Tokens rotativos → cache 
 - **Portar ≠ feature:** os clients ficam prontos; cada integração nova (Gmail/Drive/Mailchimp/n8n/…) precisa de caso de uso.
 - **Deploy:** `npm run bootstrap` cria colecções; dashboard+cron recriam-se pelo pull-agent; creds no store `fleet-env/np-server`;
   commit+push ao main. `up -d --force-recreate` ao mudar `.env`.
+
+## Fecho de pendentes de código (2026-07-19, commit f7e12b7)
+
+- **Escrita VD (Vendas a Dinheiro) — NÃO suportada por design.** A VD foi descontinuada pela AT em 2013 e
+  substituída pela Fatura-Recibo; a conta tem **0 docs VD** e o Moloni não expõe `insert` de VD. O
+  `createDocument` dá agora um erro claro ("usar fatura_recibo"). O read-side (sync) mantém o mapa `VD→venda_dinheiro`
+  para eventuais docs históricos. → **fechado (decisão, não feature morta).**
+- **Ponte avenças↔subscriptions — domínios diferentes; ligação é a nível-cliente (já feita).** Confirmado por dados:
+  `subscriptions` (1 linha, sem `moloni_service_id`) vive em **Prospecção** = catálogo de ofertas/planos p/ outreach
+  (segments/ICPs/campanhas/templates); `moloni_avencas` (119, **todas** com `company`, 46 empresas) vive em
+  **Contabilidade** = faturação recorrente real. A ponte útil é `avença.company` (119/119, já visível na página de
+  Avenças via `company.name`). O elo a "planos" seria especulativo → **não implementado**. `subscription.moloni_service_id`
+  fica como link manual opcional. → **fechado (decisão).**
+- **EuPago — client v1 estava PARTIDO (JSON) → corrigido para form-urlencoded + `smokeEuPago()`.** O port enviava
+  `application/json`, mas a API v1 legacy exige `x-www-form-urlencoded` (a v2 JSON rejeita todos os shapes — confirmado
+  no netmaster). Corrigido. O smoke (sandbox cria ref MB inofensiva; live só valida config) revelou **"Chave de API
+  inválida"** em sandbox → a `EUPAGO_API_KEY` do store é provavelmente a **live** do netmaster (falta `EUPAGO_MODE=live`)
+  ou está errada. → **código fechado; config é item do user** (pôr `EUPAGO_MODE=live` se a chave for live, ou meter chave sandbox válida).

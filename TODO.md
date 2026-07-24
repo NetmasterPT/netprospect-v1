@@ -122,9 +122,10 @@ Em pausa por decisão do gpedro; retomar quando ele disser. Detalhe operacional 
 - [ ] **Fechar o `/api` ao público:** `npm.netmaster.pt` está em IP público e o `/api` está exposto (o OIDC só
   gateia a UI). Restringir o `/api`+admin ao **tailnet+localhost** (allow/deny no nginx do admin ou DNS só-tailnet);
   `/api` do NPMplus **e** do Authentik só a tokens **admin** válidos. Nós acedemos de dentro da VPN por `127.0.0.1`.
-- [ ] **Write por API** (create/edit/delete de proxy hosts): bloqueado por `Permission Denied` do AJV do NPMplus
-  com tokens de password (a UI usa sessão OIDC). Entretanto o **write é por SQLite** (`npmplus-routes`). Investigar
-  se precisarmos mesmo do write-por-API.
+- [x] **Write por API** (create/edit/delete de proxy hosts): **FUNCIONA** ✅ (o "Permission Denied" era falso —
+  login com password errada → token vazio). CRUD E2E validado. Falta ligar o modo `api` ao `npmplus-routes`
+  (preferível ao SQLite: regenera o nginx sem restart).
+- [ ] **Ligar o modo `api` ao `npmplus-routes`** (`NPMPLUS_ROUTES_METHOD=api|sqlite`) usando o user de API + cookie.
 
 ### Plataforma de docs (subdomínios)
 - [ ] **Notebook** (`notebook.netmaster.pt`→:8502) e **Obsidian** (`obsidian.netmaster.pt`→:8091) **não carregam**: backends up mas HTTP 400 (host/protocolo). Streamlit → WebSocket + XSRF/baseUrlPath; KasmVNC → proxy **https** + skip-cert + WebSocket. Config no NPMplus (hel1-npm) + args dos containers (np-server). Entretanto os URLs Tailscale Serve funcionam.

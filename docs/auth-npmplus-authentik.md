@@ -53,16 +53,16 @@
 
 | Op | Via API (token local) | Via SQLite direto |
 |---|:-:|:-:|
-| **Ler** (list/get) | ✅ funciona (com `user_permission`) | ✅ |
-| **Criar/Editar/Apagar** | ❌ **`Permission Denied`** (ver abaixo) | ✅ (feito: `deploy/npmplus/npmplus-routes.*`) |
+| **Ler** (list/get) | ✅ | ✅ |
+| **Criar / Editar / Apagar** | ✅ **funciona** | ✅ (`deploy/npmplus/npmplus-routes.*`) |
 
-⚠️ **Open item — create/write por API:** com um user local (`visibility=all`, tudo `manage`), a **leitura**
-funciona mas o **create** é sempre negado (`[Access] ✖ proxy_hosts:create … Permission Denied`, mais um
-`TypeError reading 'debug'` secundário no logging). Testado com `roles=["admin"]` E `roles=[]` — ambos falham,
-apesar de o schema `proxy_hosts-create.json` (anyOf admin/manage) aparentar ser satisfeito. A UI (gpedro, via
-**sessão OIDC**) cria sem problema → a hipótese é que **tokens de password têm scope/tipo insuficiente para
-escrita** (vs sessão OIDC), ou o AJV do contexto de create resolve de forma diferente. **A investigar** se
-precisarmos mesmo do write-por-API; entretanto o **write é por SQLite** (provado, idempotente).
+✅ **CRUD completo por API — CONFIRMADO (não há bug no NPMplus).** Testado E2E: `POST` cria (id=42), `PUT` edita,
+`DELETE` apaga (de volta a 35 hosts). O que exige: user local com `roles=["admin"]` **e** linha `user_permission`
+(`visibility=all`, tudo `manage`) **e** login válido (o token vai em cookie). **⚠️ Lição/gotcha que me enganou
+horas:** se o **login falha** (password errada → HTTP 400), o cookie fica vazio e o `access.js` `init()` lança
+`PermissionError("Permission Denied")` — que **parece** um erro de permissão de escrita mas é só **token ausente**.
+Confirmar sempre `login=200` antes de diagnosticar permissões. Definir a password pelo comando **oficial**:
+`docker exec npmplus password-reset.js <EMAIL> <PASSWORD>` (evita mismatches de bcrypt/estado).
 
 ## ⚠️ Segurança (a fechar)
 
@@ -91,15 +91,14 @@ proxy host pôr o **forward hostname = `cu_<nome>`** e o **forward port vazio**.
   NPMplus usa o SEU próprio token (cookie), não aceita Bearer OIDC. Logo o write-por-API do NPMplus **não** se
   resolve pelo Authentik; a UI escreve por **sessão OIDC** (fluxo authorization-code → callback → cookie do NPMplus).
 
-## ⚠️ Write por API — conclusão (open item)
+## Write por API — RESOLVIDO ✅
 
-Testado exaustivamente: com user local (`roles=["admin"]`/`[]`, `manage`, `visibility=all`) e token de password
-(default `["user"]` ou `?scope=admin`), o **create/update/delete dá sempre `Permission Denied`**. Pela leitura do
-`access.js` (o `data` validado tem `scope=["user"]`, `roles=["admin","user"]`, `permission=manage`) o schema
-`proxy_hosts-create.json` (branch admin) **devia** validar — e não valida. Junto com o `TypeError: reading 'debug'`
-que o próprio error-handler lança, a leitura mais provável é um **bug do NPMplus v2.14.0 no create-via-API** (só a
-sessão OIDC da UI escreve). **Decisão: o write é por SQLite** (`npmplus-routes`, CRUD completo provado); a **API só
-para read**. Reabrir se: (a) upgrade do NPMplus corrigir, ou (b) implementarmos o fluxo OIDC programático.
+Confirmado que a **escrita por API funciona** (create/update/delete). A confusão anterior ("Permission Denied")
+era um **falso positivo por login falhado** (password de teste desatualizada → token vazio → `init()` lança
+"Permission Denied"). Validado com a replicação AJV standalone (o schema `proxy_hosts-create.json` VALIDA com
+`scope=["user"]`+`roles=["admin","user"]`+`manage`) e depois E2E com login OK. → Podemos gerir os hosts pela **API
+OU por SQLite** (`npmplus-routes` — ganha o modo `NPMPLUS_ROUTES_METHOD`). A API é preferível (regenera o nginx
+corretamente, sem restart); o SQLite fica de fallback.
 
 ## Como criar o nosso user de API (por código)
 

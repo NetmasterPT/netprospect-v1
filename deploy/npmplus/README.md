@@ -73,6 +73,37 @@ sh deploy/npmplus/npmplus-routes.sh apply     # upsert por domínio + restart np
   garante que uma edição no servidor (UI/DB) **não se sobrepõe ao nosso código nem chega a `main` por acidente**.
   Mais guardrails a construir; este é o básico e é inegociável.
 
+### Dois métodos: `sqlite` (default) e `api`
+
+O `npmplus-routes` fala com a Camada B por **dois métodos**, escolhidos por `NPMPLUS_ROUTES_METHOD` (default
+**`sqlite`**, por segurança). Ambos produzem/consomem o **mesmo `routes.json`** (shape idêntico, byte-a-byte):
+
+```sh
+# método SQLite (default) — escreve a DB direto; restart do npmplus só se mudou
+sh deploy/npmplus/npmplus-routes.sh export
+sh deploy/npmplus/npmplus-routes.sh apply
+
+# método API — usa a REST API do NPMplus (login local → cookie); a API valida `nginx -t` + reload (SEM restart)
+NPMPLUS_ROUTES_METHOD=api sh deploy/npmplus/npmplus-routes.sh export
+NPMPLUS_ROUTES_METHOD=api sh deploy/npmplus/npmplus-routes.sh apply
+```
+
+- **sqlite**: container `node:24` com a DB SQLite montada (node:sqlite nativo, `--experimental-sqlite`). `apply`
+  faz `docker restart npmplus` **só se mudou** (o NPMplus regenera o nginx da DB no arranque).
+- **api**: container `node:24` com **`--network host`** (chega a `127.0.0.1:443` do host); **sem** DB montada e
+  **sem** restart. Login `POST /api/tokens` (user LOCAL do NPM) → o JWT vem num **cookie** (Bearer não funciona);
+  todas as chamadas levam `Host: npm.netmaster.pt` (senão caem no default server → 302) e TLS ignorado (mismatch
+  em 127.0.0.1). Credenciais por env: `NPMPLUS_API_EMAIL` / `NPMPLUS_API_PASSWORD` (+ opcionais `NPMPLUS_API_URL`,
+  `NPMPLUS_API_HOST`), lidas do `/opt/.env`. `apply` é upsert por `domain_names` (`POST` cria / `PUT` edita /
+  skip se igual, **nunca apaga**).
+- **Verificado E2E:** `export` (api) é **byte-idêntico** ao `export` (sqlite) e ao `routes.json` committado (35
+  hosts); write round-trip `POST`→`PUT`→`DELETE` limpo; `apply` do `routes.json` real dá **NOCHANGE** (idempotente).
+- ⚠️ **`meta` é gerido pelo NPMplus** (ex.: `nginx_online`): no método `api`, um `meta` placeholder (`{}`) escrito à
+  mão é reposto pelo servidor → re-`PUT` até convergir. Com um `routes.json` exportado (meta = valor real) o `apply`
+  é idempotente. O método `sqlite` escreve o `meta` literal.
+- ⚠️ Requer o `NPMPLUS_API_EMAIL` populado no `/opt/.env` (o password já lá está); o método default (`sqlite`) não
+  precisa de credenciais.
+
 ## Backup / rollback
 
 - **Ficheiros:** `tar czf /root/npmplus-<ts>.tar.gz -C /opt compose.yaml npmplus ...` (Camada A + B DB).

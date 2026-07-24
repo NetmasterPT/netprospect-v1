@@ -87,7 +87,7 @@ scrape_configs:
     static_configs:
       - {targets: ['100.108.94.126:9100'], labels: {host: 'hel1-docker'}}
       - {targets: ['100.114.17.74:9100'], labels: {host: 'np-server'}}
-      - {targets: ['100.89.244.50:9100'], labels: {host: 'hel1-npm'}}     # reverse-proxy (NPMplus+Authentik), Alpine CT
+      - {targets: ['100.119.63.18:9100'], labels: {host: 'hel1-npm'}}     # reverse-proxy (NPMplus+Authentik), VM Debian VMID 103
       - {targets: ['100.120.43.49:9100'], labels: {host: 'hel1-analytics'}}
       - {targets: ['100.124.43.117:9100'], labels: {host: 'de-minio'}}
       - {targets: ['100.120.214.45:9100'], labels: {host: 'np-wk-de1'}}
@@ -106,7 +106,7 @@ scrape_configs:
     static_configs:
       - {targets: ['100.108.94.126:8098'], labels: {host: 'hel1-docker'}}
       - {targets: ['100.114.17.74:8098'], labels: {host: 'np-server'}}
-      - {targets: ['100.89.244.50:8098'], labels: {host: 'hel1-npm'}}
+      - {targets: ['100.119.63.18:8098'], labels: {host: 'hel1-npm'}}
       - {targets: ['100.120.43.49:8098'], labels: {host: 'hel1-analytics'}}
       - {targets: ['100.124.43.117:8098'], labels: {host: 'de-minio'}}
       - {targets: ['100.120.214.45:8098'], labels: {host: 'np-wk-de1'}}

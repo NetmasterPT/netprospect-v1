@@ -67,6 +67,11 @@ sh deploy/npmplus/npmplus-routes.sh apply     # upsert por domínio + restart np
 - ⚠️ **Workflow:** editar na UI é livre; para PERSISTIR/versionar, correr `export` + commit. Editar o
   `routes.json` e dar push → o `deploy.sh` aplica (git ganha para os domínios listados). *(Integração
   dashboard↔NPMplus = trabalho futuro.)*
+- 🔒 **GUARDRAIL de sync (one-way):** o fluxo automático é **SÓ `main → hel1-npm`** (o cron faz `git pull` +
+  `apply`). O sentido inverso — `hel1-npm → main` (o `export` → commit → push) — é **SEMPRE manual, por um
+  humano** (o host só faz `git pull` anónimo, nunca `push`; o `deploy.sh` NÃO exporta nem committa). Isto
+  garante que uma edição no servidor (UI/DB) **não se sobrepõe ao nosso código nem chega a `main` por acidente**.
+  Mais guardrails a construir; este é o básico e é inegociável.
 
 ## Backup / rollback
 

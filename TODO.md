@@ -95,3 +95,38 @@
   - [ ] **FF (fatura de fornecedor)** — só leitura/sync (é documento recebido/compras); NÃO suportar escrita.
   - [ ] Páginas dedicadas para tipos extra (guia_remessa/proforma/…) se surgirem documentos desses tipos.
   - [ ] (opcional) Documenso/Google atrás de domínio público + reverse proxy; `google.service-account.json` no np-server só se precisar de Google além do Calendar.
+
+---
+
+## ⏸️ Adiado — o que falta fechar (nota 2026-07-20)
+
+Em pausa por decisão do gpedro; retomar quando ele disser. Detalhe operacional em `TODO-KEYS.md`.
+
+### Stripe / Loja
+- [ ] **Test-sale no browser** (cartão test `4242…`) → loop completo checkout→webhook→fulfill. *(Criação de sessão + webhook JÁ validados server-side; falta o clique final no cartão.)*
+- [ ] **Go-live:** rodar as keys live (foram partilhadas em texto simples) → colocá-las no store + `STRIPE_MODE=live`. Hoje o store está em **TEST**.
+- [ ] (opcional) handler `invoice.paid` p/ renovações de subscrição recorrente (hoje só `checkout.session.completed`).
+
+### Moloni (fatura da loja)
+- [ ] Decidir a **empresa Demo** (o `getAll` LIVE só vê a Netmaster 207752) → depois ligar `emitMoloniInvoice` ao `createDocument` real, em RASCUNHO.
+
+### Meios de pagamento (sandbox → E2E, EM CONJUNTO)
+- [ ] **EuPago / PayPal / CoinGate / Transferência**: creds sandbox no store + webhook/callback + teste E2E (venda→confirmação→fulfill 1×). Fixes de código antes (validação EuPago/CoinGate, capture PayPal) — ver `TODO-KEYS.md §6d`.
+- [ ] **`STORE_IBAN`** (transferência) em falta no store.
+
+### NPMplus (reverse-proxy) — routing versionado + API + segurança
+- [ ] **Load-balancing:** a UI do NPMplus **não** faz upstream-LB. Quando precisarmos, fazer à medida —
+  custom-nginx (`upstream {}` + `least_conn`/`ip_hash` via `advanced_config` por host) OU a nossa própria camada
+  (gerida do dashboard). **Não passar despercebido.** Ver [auth-npmplus-authentik](docs/auth-npmplus-authentik.md).
+- [ ] **Fechar o `/api` ao público:** `npm.netmaster.pt` está em IP público e o `/api` está exposto (o OIDC só
+  gateia a UI). Restringir o `/api`+admin ao **tailnet+localhost** (allow/deny no nginx do admin ou DNS só-tailnet);
+  `/api` do NPMplus **e** do Authentik só a tokens **admin** válidos. Nós acedemos de dentro da VPN por `127.0.0.1`.
+- [ ] **Write por API** (create/edit/delete de proxy hosts): bloqueado por `Permission Denied` do AJV do NPMplus
+  com tokens de password (a UI usa sessão OIDC). Entretanto o **write é por SQLite** (`npmplus-routes`). Investigar
+  se precisarmos mesmo do write-por-API.
+
+### Plataforma de docs (subdomínios)
+- [ ] **Notebook** (`notebook.netmaster.pt`→:8502) e **Obsidian** (`obsidian.netmaster.pt`→:8091) **não carregam**: backends up mas HTTP 400 (host/protocolo). Streamlit → WebSocket + XSRF/baseUrlPath; KasmVNC → proxy **https** + skip-cert + WebSocket. Config no NPMplus (hel1-npm) + args dos containers (np-server). Entretanto os URLs Tailscale Serve funcionam.
+
+### Verify (FECHADO ✅)
+- [x] 2.º IP Reacher (val2 `65.108.120.25`) operacional; MAIL FROM por-IP (cada host o seu domínio, sem misturas). Sem mais IPs de datacenter com PTR de momento.

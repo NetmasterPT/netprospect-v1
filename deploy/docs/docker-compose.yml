@@ -40,8 +40,9 @@ services:
       OLLAMA_URL: ${OLLAMA_URL:-http://100.126.196.112:11434}   # chat (gemma3:4b); só o /chat o usa
       OLLAMA_MODEL: ${OLLAMA_MODEL:-gemma3:4b}
       DOCS_OLLAMA_ENABLED: ${DOCS_OLLAMA_ENABLED:-1}             # flag: 0/off desliga o provider ollama
-      # Escalada Open Notebook (F3): backend→API pela rede npdocs; deep-link = URL público (browser). '' desliga.
-      OPEN_NOTEBOOK_API_URL: ${OPEN_NOTEBOOK_API_URL:-http://open-notebook:5055}
+      # Escalada Open Notebook (F3): kb-http→API pela rede npdocs (nome de serviço interno, NÃO o
+      # OPEN_NOTEBOOK_API_URL do .env que é o API_URL ts.net do browser); deep-link = URL público.
+      OPEN_NOTEBOOK_INTERNAL_URL: ${OPEN_NOTEBOOK_INTERNAL_URL:-http://open-notebook:5055}
       OPEN_NOTEBOOK_PUBLIC_URL: ${OPEN_NOTEBOOK_PUBLIC_URL:-https://netprospect.notebook.netmaster.pt}
       POSTHOG_PUBLIC_KEY: ${POSTHOG_PUBLIC_KEY:-}                # $ai + /posthog-config p/ o SPA (fail-soft se vazio)
       POSTHOG_PUBLIC_HOST: ${POSTHOG_PUBLIC_HOST:-https://eu.i.posthog.com}

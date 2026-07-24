@@ -2,7 +2,9 @@
 // O kb-http fala com a API pela rede npdocs (OPEN_NOTEBOOK_API_URL=http://open-notebook:5055); o deep-link
 // é o URL PÚBLICO (netprospect.notebook.netmaster.pt). Semeia a pergunta+resposta+citações num notebook
 // canónico e devolve o link para o utilizador aprofundar na UI (que já tem os modelos configurados).
-const API = () => (process.env.OPEN_NOTEBOOK_API_URL || '').replace(/\/$/, '');
+// URL INTERNA (kb-http→open-notebook pela rede npdocs) — distinta do OPEN_NOTEBOOK_API_URL do .env,
+// que é o API_URL do BROWSER (ts.net) e um container não alcança bem.
+const API = () => (process.env.OPEN_NOTEBOOK_INTERNAL_URL || 'http://open-notebook:5055').replace(/\/$/, '');
 const PUBLIC = () => (process.env.OPEN_NOTEBOOK_PUBLIC_URL || 'https://netprospect.notebook.netmaster.pt').replace(/\/$/, '');
 const NB_NAME = () => process.env.OPEN_NOTEBOOK_NAME || 'NetProspect Docs';
 

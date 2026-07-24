@@ -1,5 +1,13 @@
 # Plano — migrar a stack NPMplus de LXC → VM/Docker + upgrade tratado
 
+> ✅ **EXECUTADO (2026-07-24).** Cutover feito (opção A: VMID 103 exato). VM Debian/Docker (VMID 103, hostname
+> `npm.netmaster.pt`, LAN `10.10.10.5`, IP público preservado), imagem `2026-07-24-r1`, WAF openappsec ON, 35 hosts,
+> `/api` externo 403, gitops (cron `*/5`) + obs (node-exporter+cadvisor, IP tailnet novo `100.119.63.18`). CT LXC
+> destruído (vzdump em pbs-local = rollback). **Follow-ups por fazer:** (1) fechar a `:81` do admin exposta no DNAT
+> (`NPM_LISTEN_LOCALHOST=true` ou remover a regra); (2) agente de métricas da página Servidores + Alloy (logs) na VM;
+> (3) atualizar runbook-npm-hel1.md + docs/auth ("Alpine CT"→VM); (4) investigar backends em baixo no hel1-docker
+> (directus/app/api/storybook — pré-existente, não é do proxy). Detalhe em [[npmplus-gitops-deploy]].
+
 > Tirar o NPMplus do LXC (CT 103, o README oficial desrecomenda LXC) para uma **VM Debian com Docker**, na mesma
 > altura que se faz o **upgrade tratado** para a última versão oficial, **mantendo o mesmo VMID (103), hostname
 > (`npm.netmaster.pt`) e IPs** (LAN `10.10.10.5` + tailnet `100.89.244.50` + forwarding do IP público

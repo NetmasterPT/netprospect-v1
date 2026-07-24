@@ -210,7 +210,7 @@ async function applyRoutesApi(routesPath) {
 }
 
 // ──────────────────────────────────── dispatch ────────────────────────────────────
-const METHOD = (process.env.NPMPLUS_ROUTES_METHOD || 'sqlite').toLowerCase();
+const METHOD = (process.env.NPMPLUS_ROUTES_METHOD || 'api').toLowerCase();
 const [cmd, arg] = process.argv.slice(2);
 try {
   if (cmd === 'export') {

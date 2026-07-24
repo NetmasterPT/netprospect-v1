@@ -73,19 +73,21 @@ sh deploy/npmplus/npmplus-routes.sh apply     # upsert por domínio + restart np
   garante que uma edição no servidor (UI/DB) **não se sobrepõe ao nosso código nem chega a `main` por acidente**.
   Mais guardrails a construir; este é o básico e é inegociável.
 
-### Dois métodos: `sqlite` (default) e `api`
+### Dois métodos: `api` (default) e `sqlite` (fallback)
 
-O `npmplus-routes` fala com a Camada B por **dois métodos**, escolhidos por `NPMPLUS_ROUTES_METHOD` (default
-**`sqlite`**, por segurança). Ambos produzem/consomem o **mesmo `routes.json`** (shape idêntico, byte-a-byte):
+O `npmplus-routes` fala com a Camada B por **dois métodos**, escolhidos por `NPMPLUS_ROUTES_METHOD` (**default
+`api`**; cai automaticamente para `sqlite` se as credenciais da API faltarem). Ambos produzem/consomem o **mesmo
+`routes.json`** (shape idêntico, byte-a-byte). O wrapper faz **source do `/opt/.env`** sozinho (o `deploy.sh`
+chama-o sem exportar o env), por isso as `NPMPLUS_API_*` chegam sem trabalho extra:
 
 ```sh
-# método SQLite (default) — escreve a DB direto; restart do npmplus só se mudou
+# método API (default) — usa a REST API do NPMplus (login local → cookie); a API valida `nginx -t` + reload (SEM restart)
 sh deploy/npmplus/npmplus-routes.sh export
 sh deploy/npmplus/npmplus-routes.sh apply
 
-# método API — usa a REST API do NPMplus (login local → cookie); a API valida `nginx -t` + reload (SEM restart)
-NPMPLUS_ROUTES_METHOD=api sh deploy/npmplus/npmplus-routes.sh export
-NPMPLUS_ROUTES_METHOD=api sh deploy/npmplus/npmplus-routes.sh apply
+# método SQLite (fallback/override) — escreve a DB direto; restart do npmplus só se mudou
+NPMPLUS_ROUTES_METHOD=sqlite sh deploy/npmplus/npmplus-routes.sh export
+NPMPLUS_ROUTES_METHOD=sqlite sh deploy/npmplus/npmplus-routes.sh apply
 ```
 
 - **sqlite**: container `node:24` com a DB SQLite montada (node:sqlite nativo, `--experimental-sqlite`). `apply`
@@ -101,8 +103,9 @@ NPMPLUS_ROUTES_METHOD=api sh deploy/npmplus/npmplus-routes.sh apply
 - ⚠️ **`meta` é gerido pelo NPMplus** (ex.: `nginx_online`): no método `api`, um `meta` placeholder (`{}`) escrito à
   mão é reposto pelo servidor → re-`PUT` até convergir. Com um `routes.json` exportado (meta = valor real) o `apply`
   é idempotente. O método `sqlite` escreve o `meta` literal.
-- ⚠️ Requer o `NPMPLUS_API_EMAIL` populado no `/opt/.env` (o password já lá está); o método default (`sqlite`) não
-  precisa de credenciais.
+- O `NPMPLUS_API_EMAIL` está populado no `/opt/.env` (**`gpedro@netmaster.pt`**, user LOCAL admin do NPM; o password
+  já lá estava e foi alinhado a esta conta). Se por algum motivo faltar email/password, o wrapper faz fallback para
+  `sqlite` (que não precisa de credenciais) — o cron gitops nunca parte por creds em falta.
 
 ## Backup / rollback
 

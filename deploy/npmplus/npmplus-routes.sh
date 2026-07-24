@@ -1,6 +1,6 @@
 #!/usr/bin/env sh
 # npmplus-routes.sh — versionamento da Camada B do NPMplus (proxy hosts / routing).
-# Dois métodos (env NPMPLUS_ROUTES_METHOD=api|sqlite, default sqlite por segurança):
+# Dois métodos (env NPMPLUS_ROUTES_METHOD=api|sqlite, default api; sqlite é o fallback se faltarem creds):
 #   • sqlite — escreve a DB SQLite direto (a UI/API é OIDC-gated para o browser). Container node:24 com a DB
 #              montada (node:sqlite nativo — o host é Alpine sem node). Em `apply`, faz restart do npmplus SÓ se mudou.
 #   • api    — usa a REST API do NPMplus (login local → cookie). Container node:24 com --network host (para
@@ -15,7 +15,16 @@ set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 DB_DIR="${NPMPLUS_DB_DIR:-/opt/npmplus/npmplus}"
 IMG="${NODE_IMG:-node:24-slim}"
-METHOD="$(printf %s "${NPMPLUS_ROUTES_METHOD:-sqlite}" | tr '[:upper:]' '[:lower:]')"
+# Segredos da API (NPMPLUS_API_*) vivem em /opt/.env fora do git — carregá-los se existirem, para o
+# wrapper ser auto-suficiente (o deploy.sh chama-nos sem exportar o env). Valores são shell-safe.
+ENVF="${NPMPLUS_ENV_FILE:-/opt/.env}"
+[ -f "$ENVF" ] && { set -a; . "$ENVF"; set +a; }
+METHOD="$(printf %s "${NPMPLUS_ROUTES_METHOD:-api}" | tr '[:upper:]' '[:lower:]')"
+# Fallback seguro: se o método for api mas faltarem credenciais, cai para sqlite (não parte o cron gitops).
+if [ "$METHOD" = "api" ] && { [ -z "${NPMPLUS_API_EMAIL:-}" ] || [ -z "${NPMPLUS_API_PASSWORD:-}" ]; }; then
+  echo "npmplus-routes: método=api sem NPMPLUS_API_EMAIL/PASSWORD → fallback para sqlite" >&2
+  METHOD="sqlite"
+fi
 
 if [ "$METHOD" = "api" ]; then
   # Método API: --network host + credenciais por env. Sem DB montada, sem restart (a API regenera o nginx).

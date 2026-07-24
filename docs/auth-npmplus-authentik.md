@@ -64,14 +64,29 @@ horas:** se o **login falha** (password errada → HTTP 400), o cookie fica vazi
 Confirmar sempre `login=200` antes de diagnosticar permissões. Definir a password pelo comando **oficial**:
 `docker exec npmplus password-reset.js <EMAIL> <PASSWORD>` (evita mismatches de bcrypt/estado).
 
-## ⚠️ Segurança (a fechar)
+## Segurança — `/api` do NPMplus FECHADO ao público ✅
 
-- **`npm.netmaster.pt` resolve para IP PÚBLICO** (Hetzner, não a tailnet) e o **`/api` está exposto à internet**
-  (`/api/schema`→200 público; o OIDC só protege a UI). Ou seja: qualquer um pode sondar/brute-forçar o `/api`,
-  protegido só pelo token local. **A fazer:** restringir o `/api` (e o admin) ao **tailnet + localhost** (allow/
-  deny no nginx do admin ou DNS só-tailnet), mantendo o nosso acesso interno por `127.0.0.1`+Host+token.
-- **Meta:** `/api` (NPMplus e Authentik) só a **tokens válidos com permissão de admin**; nós acedemos de dentro da
-  VPN com segredos nossos (`/opt/.env`: `NPMPLUS_API_EMAIL`/`NPMPLUS_API_PASSWORD`), env-configuráveis.
+`npm.netmaster.pt` está em **IP público** (Hetzner) e o `/api` estava exposto à internet (o OIDC só protege a UI).
+**Fechado** assim: o `npm.netmaster.pt` é o **proxy_host #35** (encaminha tudo → `https://127.0.0.1:81`, o admin);
+acrescentei ao `advanced_config` dele um `location /api` com **`allow 127.0.0.1; ::1; 100.64.0.0/10;
+fd7a:115c:a1e0::/48; deny all;`** + o mesmo proxy p/ o admin. Verificado: `/api` externo → **403**; `/api` de
+localhost/tailnet → funciona; a **UI (`/`) continua pública** (OIDC). Aplicado **pela API** (PUT ao proxy_host 35 —
+o NPMplus valida `nginx -t` + reload, sem restart) e **versionado no `routes.json`** (Camada B). Admins acedem pela
+**VPN**; a automação por `127.0.0.1`+Host+token (segredo no `/opt/.env`: `NPMPLUS_API_EMAIL`/`NPMPLUS_API_PASSWORD`).
+
+**Authentik — NÃO se restringe o `/api` a nível de rede.** ⚠️ o **login do Authentik executa via `/api/v3/flows/`**
+(AJAX do browser durante o login) — bloquear `/api` partiria a autenticação de TODA a frota. A gestão do Authentik
+(`/api/v3/core/*` etc.) já é protegida pelo **RBAC próprio** (sessão/token admin); os endpoints OIDC
+(`/application/o/`) e forward-auth (`/outpost.goauthentik.io/`) TÊM de ser públicos. Hardening extra = restringir
+**paths de gestão específicos** (não o `/api/` inteiro) — follow-up.
+
+## ⚠️ Versão — PINADA à 2.14.0 (o :latest parte o stack)
+
+Update tentado (2026-07-24) `docker compose pull` → trouxe a **v2.15.1** que **removeu o env
+`AUTH_REQUEST_AUTHENTIK_DOMAIN`** (+ breaking changes) → nginx não serviu (outage breve, ~2 min). **Rollback** à
+imagem boa (`sha256:40f7cfb4…` = 2026-02-19-r3) + **pin ao digest** no `compose.yaml` (evita re-pull do latest
+partido). **⚠️ falta o fix de segurança do 2026-04-10-r2 (privesc não-admin→admin)** — o upgrade tem de ser feito
+**tratando os breaking changes** do compose + testar (com backup). Backup: `vzdump 103 --mode snapshot` (feito).
 
 ## Load balancing (NPMplus, oficial)
 

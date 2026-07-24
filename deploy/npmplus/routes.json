@@ -508,7 +508,7 @@
     "trust_forwarded_proto": 0,
     "access_list_id": 0,
     "certificate_id": 65,
-    "advanced_config": "",
+    "advanced_config": "location /api {\n    allow 127.0.0.1;\n    allow ::1;\n    allow 100.64.0.0/10;\n    allow fd7a:115c:a1e0::/48;\n    deny all;\n    include noindex-nofollow.conf;\n    set $upstream 127.0.0.1;\n    include proxy-headers.conf;\n    proxy_pass https://$upstream:81$request_uri;\n}",
     "locations": "[]",
     "meta": "{\"nginx_online\":true,\"nginx_err\":null}",
     "npmplus_proxy_request_buffering": 0,

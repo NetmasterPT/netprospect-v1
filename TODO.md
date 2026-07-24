@@ -119,9 +119,14 @@ Em pausa por decisão do gpedro; retomar quando ele disser. Detalhe operacional 
   `upstream cu_<nome> {}` em `custom_nginx/http_top.conf` + host com forward=`cu_<nome>` e porta vazia. Versionar em
   `deploy/npmplus/custom_nginx/` (Camada B). OU a nossa camada, gerida do dashboard. **Não passar despercebido.**
   Ver [auth-npmplus-authentik](docs/auth-npmplus-authentik.md).
-- [ ] **Fechar o `/api` ao público:** `npm.netmaster.pt` está em IP público e o `/api` está exposto (o OIDC só
-  gateia a UI). Restringir o `/api`+admin ao **tailnet+localhost** (allow/deny no nginx do admin ou DNS só-tailnet);
-  `/api` do NPMplus **e** do Authentik só a tokens **admin** válidos. Nós acedemos de dentro da VPN por `127.0.0.1`.
+- [x] **Fechar o `/api` do NPMplus ao público:** FEITO ✅ — `location /api` (allow localhost+tailnet, deny resto)
+  no `advanced_config` do proxy_host 35 (npm.netmaster.pt), versionado no `routes.json`. Externo→403, UI pública,
+  nosso acesso interno OK. **Authentik NÃO se restringe** (o login usa `/api/v3/flows/`; RBAC próprio já protege).
+- [ ] **Upgrade do NPMplus** (v2.14.0→2.15.1+): **tratar breaking changes** (removeu `AUTH_REQUEST_AUTHENTIK_DOMAIN`
+  + ver CHANGELOG) + testar. ⚠️ **prioridade: falta o fix de segurança 2026-04-10-r2 (privesc não-admin→admin).**
+  Imagem PINADA ao digest da 2.14.0 até lá (evita o :latest partido). Ver [auth-npmplus-authentik](docs/auth-npmplus-authentik.md).
+- [ ] **Migração LXC→VM/Docker** (o README desrecomenda NPMplus em LXC): planear (dados /opt + Authentik +
+  forwarding vmbr1 + identidade Tailscale). Manter hostname `npm.netmaster.pt`; IP tailnet muda salvo transferência.
 - [x] **Write por API** (create/edit/delete de proxy hosts): **FUNCIONA** ✅ (o "Permission Denied" era falso —
   login com password errada → token vazio). CRUD E2E validado. Falta ligar o modo `api` ao `npmplus-routes`
   (preferível ao SQLite: regenera o nginx sem restart).

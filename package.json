@@ -21,10 +21,26 @@
     "geoip": "node update-geoip.js",
     "geoip:force": "node update-geoip.js --force",
     "build:dash": "cd docker && docker compose build dashboard && docker compose up -d dashboard",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "docs:api": "typedoc",
+    "api:test": "hopp test hopp/netprospect.json -e hopp/env.local.json"
+  },
+  "devDependencies": {
+    "@hoppscotch/cli": "^0.31.3",
+    "@types/node": "^22.10.0",
+    "@vitest/coverage-v8": "^2.1.8",
+    "typedoc": "^0.27.6",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   },
   "dependencies": {
     "@directus/sdk": "^23.0.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.52.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.54.0",
+    "@opentelemetry/sdk-node": "^0.54.0",
     "chrome-launcher": "^1.2.1",
     "imapflow": "^1.4.7",
     "libphonenumber-js": "^1.13.8",
@@ -42,9 +58,6 @@
     "socks": "^2.8.9",
     "tldts": "^7.4.7",
     "undici": "^8.7.0",
-    "whoiser": "^2.0.0-beta.10",
-    "@opentelemetry/sdk-node": "^0.54.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.52.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.54.0"
+    "whoiser": "^2.0.0-beta.10"
   }
 }

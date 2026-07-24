@@ -38,3 +38,6 @@ deploy/npmplus/.env
 # Chaves de service-account / credenciais (nunca committar)
 google.service-account.json
 *.service-account.json
+coverage/
+api-reference/
+.vitest/

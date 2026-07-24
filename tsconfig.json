@@ -1,0 +1,19 @@
+{
+  "//": "Base TS para o monorepo JS/ESM. allowJs+checkJs=false → adoção INCREMENTAL: mete `// @ts-check` no topo de um ficheiro (ou checkJs:true por pasta) para ligar a verificação. `npm run typecheck` = tsc --noEmit.",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowJs": true,
+    "checkJs": false,
+    "noEmit": true,
+    "strict": false,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": ["lib/**/*.js", "worker/**/*.mjs", "docs-site/mcp/**/*.mjs", "docs-site/kb/**/*.mjs"],
+  "exclude": ["node_modules", "dist", "out", "**/node_modules", "coverage"]
+}

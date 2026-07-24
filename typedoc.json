@@ -1,0 +1,14 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["lib", "docs-site/mcp", "docs-site/kb"],
+  "entryPointStrategy": "expand",
+  "out": "api-reference",
+  "readme": "none",
+  "name": "NetProspect — API Reference",
+  "includeVersion": true,
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "skipErrorChecking": true,
+  "tsconfig": "tsconfig.json",
+  "exclude": ["**/*.test.*", "**/node_modules/**"]
+}

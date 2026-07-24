@@ -1,0 +1,19 @@
+{
+  "features": [
+    { "id": "ai-credits", "flag": "feat_ai_credits", "unit": "credits" },
+    { "id": "contacts-extracted", "flag": null, "unit": "contacts" }
+  ],
+  "plans": {
+    "base": {
+      "modules": ["core", "dashboard/*"],
+      "limits": {
+        "ai-credits": { "amount": 100, "period": "monthly" },
+        "contacts-extracted": { "amount": null, "period": "monthly" }
+      }
+    },
+    "pro": {
+      "modules": ["@base", "servers/*"],
+      "limits": { "ai-credits": { "amount": 1000, "period": "monthly" } }
+    }
+  }
+}

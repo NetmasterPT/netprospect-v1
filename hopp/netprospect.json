@@ -1,0 +1,90 @@
+{
+  "v": 2,
+  "name": "NetProspect API",
+  "folders": [],
+  "auth": { "authType": "none", "authActive": true },
+  "headers": [],
+  "requests": [
+    {
+      "v": "3",
+      "name": "kb-http · health",
+      "method": "GET",
+      "endpoint": "<<KB_BASE>>/health",
+      "params": [],
+      "headers": [],
+      "requestVariables": [],
+      "auth": { "authType": "none", "authActive": true },
+      "body": { "body": null, "contentType": null },
+      "preRequestScript": "",
+      "testScript": "pw.test(\"200 OK\", () => pw.expect(pw.response.status).toBe(200))\npw.test(\"ok:true\", () => pw.expect(pw.response.body.ok).toBe(true))"
+    },
+    {
+      "v": "3",
+      "name": "kb-http · chat providers",
+      "method": "GET",
+      "endpoint": "<<KB_BASE>>/chat/providers",
+      "params": [],
+      "headers": [],
+      "requestVariables": [],
+      "auth": { "authType": "none", "authActive": true },
+      "body": { "body": null, "contentType": null },
+      "preRequestScript": "",
+      "testScript": "pw.test(\"200 OK\", () => pw.expect(pw.response.status).toBe(200))\npw.test(\"tem modelo retrieval\", () => pw.expect(JSON.stringify(pw.response.body.models)).toInclude(\"retrieval\"))\npw.test(\"escalada notebook (boolean)\", () => pw.expect(typeof pw.response.body.notebook).toBe(\"boolean\"))"
+    },
+    {
+      "v": "3",
+      "name": "kb-http · modules",
+      "method": "GET",
+      "endpoint": "<<KB_BASE>>/modules",
+      "params": [],
+      "headers": [],
+      "requestVariables": [],
+      "auth": { "authType": "none", "authActive": true },
+      "body": { "body": null, "contentType": null },
+      "preRequestScript": "",
+      "testScript": "pw.test(\"200 OK\", () => pw.expect(pw.response.status).toBe(200))\npw.test(\"tem modules[]\", () => pw.expect(Array.isArray(pw.response.body.modules)).toBe(true))"
+    },
+    {
+      "v": "3",
+      "name": "kb-http · search",
+      "method": "GET",
+      "endpoint": "<<KB_BASE>>/search?q=reacher&limit=3",
+      "params": [
+        { "key": "q", "value": "reacher", "active": true },
+        { "key": "limit", "value": "3", "active": true }
+      ],
+      "headers": [],
+      "requestVariables": [],
+      "auth": { "authType": "none", "authActive": true },
+      "body": { "body": null, "contentType": null },
+      "preRequestScript": "",
+      "testScript": "pw.test(\"200 OK\", () => pw.expect(pw.response.status).toBe(200))\npw.test(\"array de hits\", () => pw.expect(Array.isArray(pw.response.body)).toBe(true))"
+    },
+    {
+      "v": "3",
+      "name": "kb-http · notebook escalate",
+      "method": "POST",
+      "endpoint": "<<KB_BASE>>/notebook/escalate",
+      "params": [],
+      "headers": [],
+      "requestVariables": [],
+      "auth": { "authType": "none", "authActive": true },
+      "body": { "contentType": "application/json", "body": "{\n  \"question\": \"smoke test do Hoppscotch\",\n  \"answer\": \"resposta de exemplo\",\n  \"citations\": []\n}" },
+      "preRequestScript": "",
+      "testScript": "pw.test(\"200 OK\", () => pw.expect(pw.response.status).toBe(200))\npw.test(\"ok + deepLink\", () => { pw.expect(pw.response.body.ok).toBe(true); pw.expect(pw.response.body.deepLink).toInclude(\"http\") })"
+    },
+    {
+      "v": "3",
+      "name": "dashboard · config",
+      "method": "GET",
+      "endpoint": "<<DASH_BASE>>/api/config",
+      "params": [],
+      "headers": [],
+      "requestVariables": [],
+      "auth": { "authType": "none", "authActive": true },
+      "body": { "body": null, "contentType": null },
+      "preRequestScript": "",
+      "testScript": "pw.test(\"200 OK\", () => pw.expect(pw.response.status).toBe(200))"
+    }
+  ]
+}

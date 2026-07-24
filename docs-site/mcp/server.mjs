@@ -4,6 +4,7 @@ import express from 'express';
 import { searchDocs, getDoc, listRelated, meta } from './tools.mjs';
 import { modulesView } from '../kb/registry.mjs';
 import { chatProviders, answer } from './chat.mjs';
+import { escalate, notebookEnabled } from './notebook.mjs';
 
 const app = express();
 app.use(express.json());
@@ -38,7 +39,16 @@ app.get('/posthog-config', (_req, res) => res.json({
 }));
 
 // Chat de docs. GET /chat/providers lista os disponíveis; POST /chat faz stream SSE (event: cite|token|done).
-app.get('/chat/providers', (_req, res) => res.json(chatProviders()));
+app.get('/chat/providers', (_req, res) => res.json({ ...chatProviders(), notebook: notebookEnabled() }));
+
+// Escalada para o Open Notebook (Fase 3): semeia a pergunta+resposta+citações num notebook e devolve o deep-link.
+app.post('/notebook/escalate', async (req, res) => {
+  const { question, answer: ans, citations } = req.body || {};
+  if (!question) return res.status(400).json({ ok: false, error: 'question em falta' });
+  try {
+    res.json(await escalate({ question, answer: ans, citations }));
+  } catch (e) { res.status(502).json({ ok: false, error: e.message }); }
+});
 app.post('/chat', async (req, res) => {
   const { query, profile, source, model, provider, distinctId } = req.body || {};
   if (!query) return res.status(400).json({ error: 'query em falta' });

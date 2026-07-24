@@ -6,7 +6,34 @@ import { Chip, Button, Segmented } from './ui/primitives.jsx';
 import { Brandmark, SearchBox, ThemeToggleButton } from './ui/shell.jsx';
 import { ProfileMenu } from './ui/overlays.jsx';
 import { Icon } from './ui/icons.jsx';
-import { kbChatStream, kbProviders, initPosthog } from './kb.js';
+import { kbChatStream, kbProviders, kbEscalateNotebook, initPosthog } from './kb.js';
+
+// URLs públicos das apps de conhecimento (subdomínios NPMplus deste deploy).
+const NOTEBOOK_URL = 'https://netprospect.notebook.netmaster.pt';
+const OBSIDIAN_URL = 'https://netprospect.obsidian.netmaster.pt';
+
+// Botão "Aprofundar no Notebook" (Fase 3): semeia a pergunta+resposta num caderno do Open Notebook e abre-o.
+function EscalateBtn({ question, answer, cites }) {
+  const [st, setSt] = useState('idle'); // idle | busy | done | err
+  const go = async () => {
+    if (st === 'busy') return;
+    setSt('busy');
+    try {
+      const r = await kbEscalateNotebook({ question, answer, citations: cites });
+      if (r?.ok && r.deepLink) { setSt('done'); window.open(r.deepLink, '_blank', 'noopener'); }
+      else setSt('err');
+    } catch { setSt('err'); }
+    setTimeout(() => setSt('idle'), 3000);
+  };
+  const label = st === 'busy' ? 'A semear…' : st === 'done' ? 'Aberto no Notebook ✓' : st === 'err' ? 'Falhou — tenta de novo' : 'Aprofundar no Notebook';
+  return (
+    <button className="np-chip" onClick={go} disabled={st === 'busy'}
+      style={{ marginTop: 8, cursor: 'pointer', border: '1px dashed var(--np-border)', background: 'transparent' }}
+      title="Cria um caderno no Open Notebook com esta pergunta + resposta e abre-o para aprofundares (pesquisa profunda, notas, podcast…)">
+      <Icon name="star" size={13} /> {label}
+    </button>
+  );
+}
 
 const TYPE_ORDER = ['explanation', 'how-to', 'tutorial', 'reference', 'incident', 'working'];
 const TYPE_LABEL = {
@@ -89,8 +116,8 @@ function Sidebar({ q, groups, navOpen, onCloseNav, onSearch, onGraph }) {
         <Link to="/chat" className="np-iconbtn" onClick={onCloseNav} title="Chat de IA"><Icon name="sparkles" size={16} /></Link>
         <button className="np-iconbtn" onClick={onGraph} title="Grafo do conhecimento"><Icon name="activity" size={16} /></button>
         <a href="/docs/storybook/" target="_blank" rel="noreferrer" className="np-iconbtn" title="Storybook"><Icon name="sliders" size={16} /></a>
-        <a href="/notebook/" target="_blank" rel="noreferrer" className="np-iconbtn" title="Open Notebook"><Icon name="star" size={16} /></a>
-        <a href="/obsidian/" target="_blank" rel="noreferrer" className="np-iconbtn" title="Obsidian"><Icon name="shield" size={16} /></a>
+        <a href={NOTEBOOK_URL} target="_blank" rel="noreferrer" className="np-iconbtn" title="Open Notebook"><Icon name="star" size={16} /></a>
+        <a href={OBSIDIAN_URL} target="_blank" rel="noreferrer" className="np-iconbtn" title="Obsidian"><Icon name="shield" size={16} /></a>
       </div>
       {results ? (
         <div className="np-nav-group">
@@ -181,8 +208,9 @@ function GraphChat({ bare, onClose, onCites, onHover }) {
   const [input, setInput] = useState('');
   const [msgs, setMsgs] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [nbOn, setNbOn] = useState(false);
   const bodyRef = useRef(null);
-  useEffect(() => { kbProviders().then((p) => { const ms = (p.models || []).filter((m) => m.available); setProviders(ms); if (ms[0]) setProvider(ms[0].id); }); }, []);
+  useEffect(() => { kbProviders().then((p) => { const ms = (p.models || []).filter((m) => m.available); setProviders(ms); if (ms[0]) setProvider(ms[0].id); setNbOn(!!p.notebook); }); }, []);
   useEffect(() => { if (bodyRef.current) bodyRef.current.scrollTop = bodyRef.current.scrollHeight; }, [msgs]);
   const ask = useCallback(async () => {
     const query = input.trim(); if (!query || busy) return;
@@ -235,6 +263,9 @@ function GraphChat({ bare, onClose, onCites, onHover }) {
                 ))}
               </div>
             )}
+            {m.role === 'assistant' && m.text && nbOn && (
+              <EscalateBtn question={msgs[i - 1]?.text} answer={m.text} cites={m.cites} />
+            )}
           </div>
         ))}
       </div>
@@ -242,7 +273,6 @@ function GraphChat({ bare, onClose, onCites, onHover }) {
         <input className="np-input" placeholder="Perguntar à documentação…" value={input}
           onChange={(e) => setInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && ask()} disabled={busy} />
         <Button variant="primary" onClick={ask} disabled={busy || !input.trim()}><Icon name="send" size={15} /></Button>
-        <Button size="sm" onClick={() => window.open('/notebook/', '_blank')} title="Aprofundar no Open Notebook (Fase 3)"><Icon name="ext" size={14} /></Button>
       </div>
     </div>
   );
@@ -379,6 +409,9 @@ function ChatPage() {
                       </Link>
                     ))}
                   </div>
+                )}
+                {m.role === 'assistant' && m.text && prov.notebook && (
+                  <EscalateBtn question={msgs[i - 1]?.text} answer={m.text} cites={m.cites} />
                 )}
               </div>
             ))}

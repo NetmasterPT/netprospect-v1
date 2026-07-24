@@ -18,6 +18,16 @@ export async function kbSearch(query, { profile, limit = 8 } = {}) {
   return r.ok ? r.json() : [];
 }
 
+// Escalada (Fase 3): semeia a pergunta+resposta+citações num notebook do Open Notebook → { ok, deepLink }.
+export async function kbEscalateNotebook({ question, answer, citations }) {
+  const r = await fetch(`${BASE}/notebook/escalate`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, answer, citations }),
+  });
+  if (!r.ok) throw new Error(`escalate HTTP ${r.status}`);
+  return r.json();
+}
+
 // Stream do chat via SSE (fetch + reader; EventSource não faz POST). Callbacks: onCite/onToken/onDone/onError.
 export async function kbChatStream({ query, profile, source, model, provider, distinctId }, { onCite, onToken, onDone, onError } = {}) {
   let res;

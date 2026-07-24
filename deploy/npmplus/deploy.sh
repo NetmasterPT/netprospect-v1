@@ -22,7 +22,7 @@ dc(){ docker compose --project-directory /opt -f "$LIVE" --env-file "$ENVF" "$@"
 [ -f "$ENVF" ] || { log "ERRO $ENVF em falta (segredos) — abortado"; exit 1; }
 [ -f "$SRC" ]  || { log "ERRO $SRC em falta (repo clonado em $REPO?) — abortado"; exit 1; }
 
-changed=0
+changed=0; routes_changed=0
 # 1) CÓDIGO — git fetch + fast-forward. Só conta como alteração se mexeu em deploy/npmplus/
 #    (qualquer outro commit da frota faz pull na mesma mas não recria — evita churn no proxy).
 if git -C "$REPO" fetch --quiet origin main 2>>"$LOG"; then
@@ -32,6 +32,8 @@ if git -C "$REPO" fetch --quiet origin main 2>>"$LOG"; then
     if git -C "$REPO" pull --ff-only --quiet 2>>"$LOG"; then
       if printf '%s\n' "$FILES" | grep -q '^deploy/npmplus/'; then changed=1; log "git ${L:0:7}->${R:0:7} (npmplus mudou)"
       else log "git ${L:0:7}->${R:0:7} (sem npmplus)"; fi
+      # Camada B (routing): só o routes.json → aplica na DB, NÃO recria a stack (evita churn do compose).
+      printf '%s\n' "$FILES" | grep -q '^deploy/npmplus/routes\.json$' && routes_changed=1
     else log "AVISO git pull falhou (working tree suja?) — a saltar"; fi
   fi
 else log "AVISO git fetch falhou (offline?) — a saltar"; fi
@@ -50,3 +52,9 @@ if [ "$changed" = 1 ]; then
   fi
   if dc up -d >>"$LOG" 2>&1; then log "deploy OK"; else log "ERRO up -d falhou — ver acima"; fi
 else log "sem alterações"; fi
+
+# 4) ROUTING (Camada B) — proxy hosts versionados em routes.json → upsert na DB + regen (só se mudou).
+#    Idempotente (NOCHANGE se a DB já bate); nunca apaga hosts extra criados na UI. Ver npmplus-routes.sh.
+if [ "$routes_changed" = 1 ]; then
+  if OUT=$(sh "$REPO/deploy/npmplus/npmplus-routes.sh" apply 2>&1); then log "routes: $OUT"; else log "AVISO routes apply falhou: $OUT"; fi
+fi

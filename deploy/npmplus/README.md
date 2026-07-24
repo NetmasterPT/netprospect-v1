@@ -11,11 +11,12 @@ proxy de tudo em `*.netmaster.pt`. Corre no CT **hel1-npm** (`npm.netmaster.pt`,
 | Camada | O quê | Onde | Gerido por |
 |---|---|---|---|
 | **A — motor/global** | TLS/ACME, portas, IPs, OIDC, segredos, WAF, timezone | `compose.yaml` (env vars) + `/opt/.env` | **git** (este dir) |
-| **B — routing** | proxy hosts (`X.netmaster.pt → backend`), custom nginx (ex.: `location /docs/`), certs, access-lists | DB SQLite `/opt/npmplus/npmplus/database.sqlite` + `/opt/npmplus/custom_nginx/` | **UI/API** do NPMplus |
+| **B — routing** | proxy hosts (`X.netmaster.pt → backend`), custom nginx (`advanced_config`), certs, access-lists | DB SQLite `/opt/npmplus/npmplus/database.sqlite` | **UI** do NPMplus **+ git** (`routes.json`) |
 
-**Variáveis de ambiente só resolvem a Camada A.** A Camada B vive na base de dados do NPMplus — não é
-declarável por env; reproduz-se por backup do CT (vzdump) ou pela API REST. Nunca editar os ficheiros
-gerados do nginx à mão (o NPMplus sobrepõe-nos) — usar sempre a UI/API.
+**A Camada A** (motor) é declarável por env no `compose.yaml`. **A Camada B** (routing) vive na DB do
+NPMplus e continua **editável na UI**, mas está agora **versionada em `routes.json`** e reconciliada com a
+DB pelos scripts abaixo (a API é OIDC-gated → escrevemos a DB direto). Nunca editar os ficheiros gerados do
+nginx à mão (o NPMplus sobrepõe-nos) — editar na UI **ou** no `routes.json`.
 
 ## Como funciona o deploy (PULL)
 
@@ -44,6 +45,28 @@ NPMPLUS_REPO=/opt/netprospect-v1 /opt/netprospect-v1/deploy/npmplus/deploy.sh
 ( crontab -l 2>/dev/null; echo "*/5 * * * * NPMPLUS_REPO=/opt/netprospect-v1 /opt/netprospect-v1/deploy/npmplus/deploy.sh" ) | crontab -
 # (em hosts com systemd, pode usar-se antes um .timer equivalente)
 ```
+
+## Versionamento do routing (Camada B) — `routes.json`
+
+Os 35+ proxy hosts estão em **`routes.json`** (export declarativo da DB). O `deploy.sh` aplica-o
+automaticamente quando muda num push. Continua tudo **editável na UI** — o modelo é bidirecional:
+
+```sh
+# UI → git (capturar edições da UI para versionar): correr numa máquina com push
+sh deploy/npmplus/npmplus-routes.sh export > deploy/npmplus/routes.json
+git add deploy/npmplus/routes.json && git commit && git push     # git fica o espelho versionado
+
+# git → DB (aplicar; corre no host, chamado pelo deploy.sh quando routes.json muda num push)
+sh deploy/npmplus/npmplus-routes.sh apply     # upsert por domínio + restart npmplus (regen do nginx)
+```
+
+- **`npmplus-routes.mjs`** (node:sqlite, corre num container `node:24`): `export` (DB→stdout) / `apply`
+  (routes.json→DB, upsert por `domain_names`, **idempotente**, **nunca apaga** hosts extra da UI).
+- `apply` faz `docker restart npmplus` **só se algo mudou** (o NPMplus regenera os confs do nginx da DB no
+  arranque) — blip de segundos, nunca em no-op.
+- ⚠️ **Workflow:** editar na UI é livre; para PERSISTIR/versionar, correr `export` + commit. Editar o
+  `routes.json` e dar push → o `deploy.sh` aplica (git ganha para os domínios listados). *(Integração
+  dashboard↔NPMplus = trabalho futuro.)*
 
 ## Backup / rollback
 

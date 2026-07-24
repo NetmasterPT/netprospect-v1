@@ -24,11 +24,12 @@ services:
   # ───────────────────────────────────────────────────────────────────────────
   npmplus:
     container_name: npmplus
-    # PIN à versão boa 2026-02-19-r3 (v2.14.0). O :latest (v2.15.1+, 2026-07-24) tem BREAKING CHANGES —
-    # removeu o env AUTH_REQUEST_AUTHENTIK_DOMAIN (+ mais) → parte o stack. Atualizar SÓ depois de tratar os
-    # breaking changes do compose + testar (ver docs/auth-npmplus-authentik.md). ⚠️ falta o fix de segurança
-    # do 2026-04-10-r2 (privesc não-admin→admin) — priorizar o upgrade tratado.
-    image: docker.io/zoeyvid/npmplus@sha256:40f7cfb4ed21a03397138acbf9eee5458ea365632bc9507db21ccd0963323eb7
+    # Versão 2026-07-24-r1 (NPMplus usa tags de DATA, não semver). Traz o fix privesc 2026-04-10-r2
+    # (não-admin→admin) + 2 fixes de segurança de 07-23/07-24. Breaking change tratado no upgrade: o env
+    # AUTH_REQUEST_AUTHENTIK_DOMAIN foi REMOVIDO (o forward-auth authentik passou a single-application mode
+    # via embedded outpost /outpost.goauthentik.io/). Migrado do CT LXC 103 → esta VM (VMID 103) em 2026-07-24;
+    # upgrade ensaiado numa VM isolada antes do cutover. Ver docs/auth-npmplus-authentik.md.
+    image: docker.io/zoeyvid/npmplus:2026-07-24-r1
     restart: unless-stopped
     network_mode: host
     ipc: host # required when you want to use the openappsec attachment module
@@ -132,8 +133,9 @@ services:
 #      - "AUTH_REQUEST_TINYAUTH_UPSTREAM=http://127.0.0.1:3000" # scheme + ip/hostname/domain (+ port) to internal tinyauth, without path, this is unrelated to OIDC
 #      - "AUTH_REQUEST_TINYAUTH_DOMAIN=tinyauth.example.org" # domain/ip (+ port) to public tinyauth, without scheme and without path, this is unrelated to OIDC
 #      - "AUTH_REQUEST_AUTHELIA_UPSTREAM=http://127.0.0.1:9091" # scheme + ip/hostname/domain (+ port) to internal authelia, without path, this is unrelated to OIDC
-      - AUTH_REQUEST_AUTHENTIK_UPSTREAM=https://127.0.0.1:9443 # scheme + ip/hostname/domain (+ port) to internal authentik, without path, currently only works with embedded outpost, this is unrelated to OIDC (PORT WAS 9443)
-      - AUTH_REQUEST_AUTHENTIK_DOMAIN=auth.netmaster.pt # domain/ip (+ port) to public authentik, without scheme and without path, currently only works with embedded outpost, this is unrelated to OIDC
+      - AUTH_REQUEST_AUTHENTIK_UPSTREAM=https://127.0.0.1:9443 # scheme + ip/hostname/domain (+ port) to internal authentik, without path, currently only works with embedded outpost, this is unrelated to OIDC
+      # NOTA: AUTH_REQUEST_AUTHENTIK_DOMAIN foi REMOVIDO no upgrade 2026-07-24-r1 (descontinuado em 2026-04-10-r1;
+      # o "domain level mode" deu lugar ao single-application mode via embedded outpost). NÃO re-adicionar.
     depends_on:
       - crowdsec
 

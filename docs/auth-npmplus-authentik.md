@@ -73,7 +73,41 @@ precisarmos mesmo do write-por-API; entretanto o **write é por SQLite** (provad
 - **Meta:** `/api` (NPMplus e Authentik) só a **tokens válidos com permissão de admin**; nós acedemos de dentro da
   VPN com segredos nossos (`/opt/.env`: `NPMPLUS_API_EMAIL`/`NPMPLUS_API_PASSWORD`), env-configuráveis.
 
+## Load balancing (NPMplus, oficial)
+
+A UI **não** faz upstream-LB, mas o NPMplus suporta-o por **custom-nginx**: definir um bloco `upstream cu_<nome>
+{ … }` em `/opt/npmplus/custom_nginx/http_top.conf` (o prefixo **`cu_`** é obrigatório p/ o NPMplus detetar), e no
+proxy host pôr o **forward hostname = `cu_<nome>`** e o **forward port vazio**. → versionável no nosso repo
+(`deploy/npmplus/custom_nginx/`) + deployado como a Camada B. É a via para o LB quando lá chegarmos.
+
+## API do Authentik (para a futura integração dashboard)
+
+- Base: `https://auth.netmaster.pt/api/v3/`; schema OpenAPI em `/api/v3/schema/`; browser embutido em `/api/v3/`.
+- **Auth:** **API token** de um **service account** (criar em Directory → Users → Service account → gera token) →
+  header `Authorization: Bearer <token>`. Gere providers/apps/outposts (`/providers/*`, `/core/applications/*`,
+  `/outposts/*`).
+- **M2M:** Authentik faz **client-credentials** no token endpoint `/application/o/token/` (client_id+secret, scopes
+  `openid` + `goauthentik.io/api`). NB: isto dá um token da **API do Authentik**, NÃO uma sessão do NPMplus — o
+  NPMplus usa o SEU próprio token (cookie), não aceita Bearer OIDC. Logo o write-por-API do NPMplus **não** se
+  resolve pelo Authentik; a UI escreve por **sessão OIDC** (fluxo authorization-code → callback → cookie do NPMplus).
+
+## ⚠️ Write por API — conclusão (open item)
+
+Testado exaustivamente: com user local (`roles=["admin"]`/`[]`, `manage`, `visibility=all`) e token de password
+(default `["user"]` ou `?scope=admin`), o **create/update/delete dá sempre `Permission Denied`**. Pela leitura do
+`access.js` (o `data` validado tem `scope=["user"]`, `roles=["admin","user"]`, `permission=manage`) o schema
+`proxy_hosts-create.json` (branch admin) **devia** validar — e não valida. Junto com o `TypeError: reading 'debug'`
+que o próprio error-handler lança, a leitura mais provável é um **bug do NPMplus v2.14.0 no create-via-API** (só a
+sessão OIDC da UI escreve). **Decisão: o write é por SQLite** (`npmplus-routes`, CRUD completo provado); a **API só
+para read**. Reabrir se: (a) upgrade do NPMplus corrigir, ou (b) implementarmos o fluxo OIDC programático.
+
 ## Como criar o nosso user de API (por código)
+
+> Preferir o comando **oficial** para a password: `docker exec -it npmplus password-reset.js <EMAIL> <PASSWORD>`
+> (em vez de inserir o bcrypt à mão). O user + `user_permission` continuam a criar-se por SQL (a UI/API não os cria
+> sem sessão). Password no `/opt/.env`.
+
+
 
 `user`+`auth`(bcrypt via `htpasswd -bnBC 10`)+`user_permission`(all/manage) na DB; password no `/opt/.env`. Ver o
 script de bootstrap (a versionar em `deploy/npmplus/`). Verificar: `POST /api/tokens` (cookie) → `GET /api/nginx/

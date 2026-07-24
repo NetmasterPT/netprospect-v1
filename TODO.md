@@ -115,9 +115,10 @@ Em pausa por decisão do gpedro; retomar quando ele disser. Detalhe operacional 
 - [ ] **`STORE_IBAN`** (transferência) em falta no store.
 
 ### NPMplus (reverse-proxy) — routing versionado + API + segurança
-- [ ] **Load-balancing:** a UI do NPMplus **não** faz upstream-LB. Quando precisarmos, fazer à medida —
-  custom-nginx (`upstream {}` + `least_conn`/`ip_hash` via `advanced_config` por host) OU a nossa própria camada
-  (gerida do dashboard). **Não passar despercebido.** Ver [auth-npmplus-authentik](docs/auth-npmplus-authentik.md).
+- [ ] **Load-balancing:** a UI do NPMplus **não** faz upstream-LB, mas é possível por **custom-nginx** (oficial):
+  `upstream cu_<nome> {}` em `custom_nginx/http_top.conf` + host com forward=`cu_<nome>` e porta vazia. Versionar em
+  `deploy/npmplus/custom_nginx/` (Camada B). OU a nossa camada, gerida do dashboard. **Não passar despercebido.**
+  Ver [auth-npmplus-authentik](docs/auth-npmplus-authentik.md).
 - [ ] **Fechar o `/api` ao público:** `npm.netmaster.pt` está em IP público e o `/api` está exposto (o OIDC só
   gateia a UI). Restringir o `/api`+admin ao **tailnet+localhost** (allow/deny no nginx do admin ou DNS só-tailnet);
   `/api` do NPMplus **e** do Authentik só a tokens **admin** válidos. Nós acedemos de dentro da VPN por `127.0.0.1`.

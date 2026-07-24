@@ -24,7 +24,11 @@ services:
   # ───────────────────────────────────────────────────────────────────────────
   npmplus:
     container_name: npmplus
-    image: docker.io/zoeyvid/npmplus:latest # or ghcr.io/zoeyvid/npmplus:latest
+    # PIN à versão boa 2026-02-19-r3 (v2.14.0). O :latest (v2.15.1+, 2026-07-24) tem BREAKING CHANGES —
+    # removeu o env AUTH_REQUEST_AUTHENTIK_DOMAIN (+ mais) → parte o stack. Atualizar SÓ depois de tratar os
+    # breaking changes do compose + testar (ver docs/auth-npmplus-authentik.md). ⚠️ falta o fix de segurança
+    # do 2026-04-10-r2 (privesc não-admin→admin) — priorizar o upgrade tratado.
+    image: docker.io/zoeyvid/npmplus@sha256:40f7cfb4ed21a03397138acbf9eee5458ea365632bc9507db21ccd0963323eb7
     restart: unless-stopped
     network_mode: host
     ipc: host # required when you want to use the openappsec attachment module

@@ -5,8 +5,11 @@
 > `/api` externo 403, gitops (cron `*/5`) + obs (node-exporter+cadvisor, IP tailnet novo `100.119.63.18`). CT LXC
 > destruído (vzdump em pbs-local = rollback). **Follow-ups por fazer:** (1) fechar a `:81` do admin exposta no DNAT
 > (`NPM_LISTEN_LOCALHOST=true` ou remover a regra); (2) agente de métricas da página Servidores + Alloy (logs) na VM;
-> (3) atualizar runbook-npm-hel1.md + docs/auth ("Alpine CT"→VM); (4) investigar backends em baixo no hel1-docker
-> (directus/app/api/storybook — pré-existente, não é do proxy). Detalhe em [[npmplus-gitops-deploy]].
+> **Follow-ups CONCLUÍDOS (2026-07-24):** (1) ✅ DNAT pública da :81 removida (admin só por tailnet/OIDC; 80/443
+> intactas); (2) ✅ obs completo (node-exporter+cadvisor+Alloy+agente Servidores); (3) ✅ runbook-npm-hel1.md
+> reescrito (doc completo da máquina); version-bump→rebuild na VM VERIFICADO E2E. **Aberto:** backends em baixo no
+> hel1-docker (directus/app/api/storybook — pré-existente, NÃO é do proxy; user pediu para ignorar por agora).
+> Detalhe em [[npmplus-gitops-deploy]].
 
 > Tirar o NPMplus do LXC (CT 103, o README oficial desrecomenda LXC) para uma **VM Debian com Docker**, na mesma
 > altura que se faz o **upgrade tratado** para a última versão oficial, **mantendo o mesmo VMID (103), hostname

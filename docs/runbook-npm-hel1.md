@@ -65,14 +65,14 @@ Todos os segredos vivem em **`/opt/.env`** (perms 600, fora do git, nunca saem d
 |---|---|---|---|
 | **443** | todas | **pública** (DNAT) | HTTPS proxy (+ HTTP/3 UDP) |
 | **80** | todas | **pública** (DNAT) | HTTP (redirect + ACME challenge) |
-| **81** | todas | ⚠️ **pública** (DNAT) | **admin backend NPMplus** — *FOLLOW-UP: fechar* (bypassa o lockdown do /api) |
+| **81** | todas | **tailnet/LAN** (não pública) | **admin backend NPMplus** — a DNAT pública da :81 foi removida (2026-07-24); admin só por VPN/tailnet |
 | 9100 | todas | tailnet | node-exporter (Prometheus) |
 | 8098 | tailnet IP | tailnet | cadvisor (Prometheus) |
 | 9000 / 9443 | `127.0.0.1` | local | Authentik server (o npmplus faz proxy p/ localhost) |
 
-> ⚠️ **Segurança a tratar:** a `:81` (admin) está DNAT'd direto ao IP público → contorna o lockdown do `/api` que é
-> feito no 443. Fechar via `NPM_LISTEN_LOCALHOST=true` no compose (bind do admin a localhost) **ou** remover a regra
-> DNAT da `:81` no hel1-pve.
+> ✅ **Segurança (resolvido 2026-07-24):** a `:81` (admin) já **não** está exposta ao público — removida a regra DNAT
+> `65.108.120.25:81 → 10.10.10.5:81` no hel1-pve (`/etc/network/interfaces`, só as linhas `--dport 81`; 80/443
+> intactas). O admin continua acessível pela **Tailnet** (`100.119.63.18:81`) e pelo painel OIDC (443).
 
 ## Endpoints de API
 
